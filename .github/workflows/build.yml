@@ -25,11 +25,12 @@ jobs:
             rid: win-x64
           - os: ubuntu-latest
             rid: linux-x64
-          # Both Mac builds are made on an Apple silicon runner. The Intel one runs there
-          # through Rosetta.
+          # Each Mac build is made and tested on the kind of Mac it is for: an Apple silicon
+          # runner and an Intel one. The Intel build does run on Apple silicon, through
+          # Rosetta, but that tests Apple's translator as much as it tests the build.
           - os: macos-latest
             rid: osx-arm64
-          - os: macos-latest
+          - os: macos-15-intel
             rid: osx-x64
     runs-on: ${{ matrix.os }}
     steps:
@@ -103,11 +104,7 @@ jobs:
           app="dist/${{ matrix.rid }}/DeskDancer.app"
           plutil -lint "$app/Contents/Info.plist"
           codesign --verify --deep --strict --verbose=2 "$app"
-          # This runner is an Apple silicon Mac, which only runs the Intel build through Rosetta.
-          if [ "${{ matrix.rid }}" = osx-x64 ] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
-            echo "::warning::Rosetta is not installed on this runner, so the Intel build was made but not run"
-            exit 0
-          fi
+          echo "This Mac: macOS $(sw_vers -productVersion), $(uname -m)"
           mkdir -p smoke
           # --screenshots: the test takes screenshots of the real desktop and reads them, to
           # check that the mate is visible and the rest of its window see-through. They are
@@ -121,7 +118,6 @@ jobs:
             "$app/Contents/MacOS/DeskDancer" --smoke-test --screenshots --seconds 20 --out "$PWD/smoke" &
             pid=$!
             # If the app hangs, stop it so the job fails here and not on a timeout hours later.
-            # Under Rosetta it can take 20 seconds just to appear.
             ( sleep 180; kill -9 "$pid" ) >/dev/null 2>&1 &
             watchdog=$!
             disown 2>/dev/null || true    # or bash reports stopping it, below, as "Terminated"
