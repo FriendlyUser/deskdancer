@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DeskDancer on Android: the same engine, characters and drawing as the desktop program,
+    hosted in a "display over other apps" overlay run by a foreground service. Avalonia
+    draws each frame off-screen; a plain Android view shows it (see StageCanvas.cs). The shared
+    code is compiled in from ../DeskDancer rather than referenced, so the desktop project
+    stays as it is. Building this needs the Android workload: dotnet workload install android
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <RootNamespace>DeskDancer.Droid</RootNamespace>
+    <AssemblyName>DeskDancer.Android</AssemblyName>
+
+    <ApplicationId>io.github.friendlyuser.deskdancer</ApplicationId>
+    <ApplicationTitle>DeskDancer</ApplicationTitle>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
+
+    <!-- Phones are arm64; the x64 build is for the emulator the CI test runs on. -->
+    <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Android" Version="12.2.0" />
+  </ItemGroup>
+
+  <!-- The platform-neutral part of the desktop program. -->
+  <ItemGroup>
+    <Compile Include="..\DeskDancer\Engine\*.cs" Link="Shared\Engine\%(Filename)%(Extension)" />
+    <Compile Include="..\DeskDancer\Characters\*.cs" Link="Shared\Characters\%(Filename)%(Extension)" />
+    <Compile Include="..\DeskDancer\Platform\FrameMemory.cs;..\DeskDancer\Platform\FreedMemory.cs" Link="Shared\Platform\%(Filename)%(Extension)" />
+    <Compile Include="..\DeskDancer\Ui\MateRenderer.cs;..\DeskDancer\Ui\MateView.cs" Link="Shared\Ui\%(Filename)%(Extension)" />
+    <Compile Include="..\DeskDancer\Settings.cs" Link="Shared\Settings.cs" />
+  </ItemGroup>
+
+  <!--
+    Character packs that ship inside the APK, one line each. They are copied out of it into
+    the app's own storage on first start, because the pack loader reads ordinary files.
+    Remix, the robot drawn in code, needs no files.
+  -->
+  <ItemGroup>
+    <AndroidAsset Include="..\..\characters\mochi\**\*" Exclude="..\..\characters\mochi\_source\**"
+                  Link="Assets\characters\mochi\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

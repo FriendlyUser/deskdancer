@@ -1,0 +1,117 @@
+name: android
+
+# Builds the Android APK (unsigned for the store: it is signed with a throwaway debug key,
+# for installing by hand) and runs it in an emulator to check the mate really appears over
+# the home screen, dances and can be dragged.
+
+on:
+  push:
+    paths: ["src/**", "characters/**", ".github/workflows/android.yml", ".github/android/**"]
+  pull_request:
+    paths: ["src/**", "characters/**", ".github/workflows/android.yml", ".github/android/**"]
+  workflow_dispatch:
+  # The release workflow runs this one, with the version to stamp on the APK.
+  workflow_call:
+    inputs:
+      version:
+        description: Version for the APK, like 1.0.0. Left empty, the APK is a test build.
+        type: string
+        default: ""
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  AVALONIA_TELEMETRY_OPTOUT: 1
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install the Android workload
+        run: dotnet workload install android
+
+      - name: Install the Android SDK parts the build needs
+        run: >
+          dotnet build src/DeskDancer.Android -t:InstallAndroidDependencies
+          -p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME"
+          -p:AcceptAndroidSDKLicenses=True
+
+      # Signed with the repository's own key when it has one, so that a new release installs
+      # over the last; see "Signing the Android app" in the README. Without it the APK is
+      # signed with a key made up for this build, and a newer one has to replace it by hand.
+      - name: Build the APK
+        env:
+          VERSION: ${{ inputs.version }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          props=(-p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME")
+          if [ -n "$VERSION" ]; then
+            IFS=. read -r major minor patch <<< "$VERSION"
+            props+=(-p:ApplicationDisplayVersion="$VERSION" -p:ApplicationVersion=$(( major * 10000 + minor * 100 + patch )))
+          fi
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/deskdancer.keystore"
+            props+=(-p:AndroidKeyStore=true -p:AndroidSigningKeyStore="$RUNNER_TEMP/deskdancer.keystore"
+                    -p:AndroidSigningKeyAlias="$ANDROID_KEY_ALIAS"
+                    -p:AndroidSigningStorePass=env:ANDROID_KEYSTORE_PASSWORD
+                    -p:AndroidSigningKeyPass=env:ANDROID_KEY_PASSWORD)
+            echo "Signing with the repository's key"
+          else
+            echo "No signing key in the repository's secrets: signing with a key made for this build"
+          fi
+          dotnet publish src/DeskDancer.Android -c Release -o dist/android "${props[@]}"
+
+      - name: Name the APK
+        run: |
+          ls -la dist/android
+          mkdir -p dist/apk
+          cp dist/android/*-Signed.apk dist/apk/DeskDancer.apk
+          ls -la dist/apk
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: DeskDancer-android
+          path: dist/apk/DeskDancer.apk
+
+      # The emulator needs hardware virtualisation, which the runner has but does not open up.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Tools for checking the screenshots
+        run: python3 -m pip install --quiet pillow numpy
+
+      - name: Smoke test in an emulator (Android 14)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          # A phone-sized screen, so the mate is scaled the way it is on a real phone.
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash .github/android/smoke.sh dist/apk/DeskDancer.apk smoke-android
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: smoke-android
+          path: smoke-android
+          if-no-files-found: ignore
