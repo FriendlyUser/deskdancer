@@ -301,6 +301,31 @@ public static class SmokeTest
                 if (backdrop != null) LookAtScreen("desktop-3-party");
             }, WaitingFor: () => app.Mates.All(m => m.Brain.IsDancing) ? null
                 : "not every mate joined the party: they are " + string.Join(", ", app.Mates.Select(m => m.Brain.State))),
+            // Every move but Sway is switched off, the mate's own dances too. Then Sway is all
+            // there is to dance: in a random dance, at the party (which is on) and in routines.
+            new(0.52, "switch moves off", () =>
+            {
+                var b = First().Brain;
+                var settings = app.Settings;
+                static string Names(IEnumerable<DanceMove> moves) => string.Join(", ", moves.Select(m => m.Name));
+                settings.DisabledMoves = [.. b.AllMoves().Where(m => m != Moves.Sway).Select(b.KeyOf)];
+                if (b.AvailableMoves() is not [var only] || only != Moves.Sway)
+                    throw new InvalidOperationException($"with all but Sway switched off, the mate still dances {Names(b.AvailableMoves())}");
+                if (app.Conductor.Pool() is not [var party] || party != Moves.Sway)
+                    throw new InvalidOperationException($"with all but Sway switched off, the party still dances {Names(app.Conductor.Pool())}");
+                var chill = Routine.All.First(r => r.Name == "Chill").Resolve(settings.BuiltInMoves());
+                if (chill.Count == 0 || chill.Any(m => m != Moves.Sway))
+                    throw new InvalidOperationException($"the Chill routine should be Sway alone, but is {Names(chill)}");
+                if (Routine.All.First(r => r.Name == "Acrobat").Resolve(settings.BuiltInMoves()).Count != 0)
+                    throw new InvalidOperationException("the Acrobat routine has no Sway in it, so nothing of it should be left");
+                // Switching off every built-in move still leaves something to dance.
+                var kept = settings.DisabledMoves;
+                settings.DisabledMoves = [.. Moves.All.Select(m => m.Id)];
+                if (settings.BuiltInMoves().Count != Moves.All.Count)
+                    throw new InvalidOperationException("with every built-in move switched off, there was nothing left to dance");
+                settings.DisabledMoves = kept;
+                Note($"with all but Sway switched off, the mate dances {Names(b.AvailableMoves())} and so does the party");
+            }),
             new(0.55, "party off, resize, menu", () =>
             {
                 app.SetParty(false);
@@ -313,7 +338,16 @@ public static class SmokeTest
                 int entries = First().ContextMenu!.Items.Count;
                 Note($"menu has {entries} entries");
                 if (entries < 10) throw new InvalidOperationException("context menu was not populated");
+                // Only Sway is switched on, so it is the only move on offer.
+                var items = First().ContextMenu!.Items.OfType<MenuItem>().ToList();
+                var offered = items.FirstOrDefault(i => i.Header as string == "Dance move")?.Items.Count;
+                var boxes = items.FirstOrDefault(i => i.Header as string == "Moves to use")?.Items.OfType<MenuItem>()
+                    .Count(i => i.ToggleType == MenuItemToggleType.CheckBox);
+                Note($"the Dance move menu offers {offered} move(s); Moves to use has {boxes} to tick");
+                if (offered != 1) throw new InvalidOperationException("the Dance move menu should offer Sway alone");
+                if (boxes is not > 15) throw new InvalidOperationException("Moves to use should list the built-in moves and the mate's own");
                 First().ContextMenu!.Close();
+                app.Settings.DisabledMoves.Clear();
             }, WaitingFor: () => First().ContextMenu?.IsOpen == true ? null : "context menu did not open"),
             new(0.66, "drag and throw", () =>
             {

@@ -60,14 +60,20 @@ public sealed class DanceSession
         return new DanceSession(beat, queue.Dequeue(), () => queue.Count > 0 ? queue.Dequeue() : null);
     }
 
-    public static DanceSession Endless(double beat, IReadOnlyList<DanceMove> pool, Random rng)
+    /// <summary>
+    /// Random moves for ever, never the same one twice running. The pool is asked for again
+    /// before each move, so a move switched off part way through is not picked again.
+    /// </summary>
+    public static DanceSession Endless(double beat, Func<IReadOnlyList<DanceMove>> pool, Random rng)
     {
-        DanceMove last = pool[rng.Next(pool.Count)];
+        var first = pool();
+        DanceMove last = first[rng.Next(first.Count)];
         return new DanceSession(beat, last, () =>
         {
+            var moves = pool();
             DanceMove pick;
-            do pick = pool[rng.Next(pool.Count)];
-            while (pool.Count > 1 && pick == last);
+            do pick = moves[rng.Next(moves.Count)];
+            while (moves.Count > 1 && pick == last);
             return last = pick;
         });
     }
@@ -97,11 +103,14 @@ public sealed class Conductor(BeatClock clock)
     public bool PartyOn { get; private set; }
     public DanceSession? Session { get; private set; }
 
+    /// <summary>The moves the party picks from: the built-in ones that are switched on. Never empty.</summary>
+    public Func<IReadOnlyList<DanceMove>> Pool { get; set; } = () => Moves.All;
+
     public void SetParty(bool on)
     {
         if (on == PartyOn) return;
         PartyOn = on;
         Session?.Stop();
-        Session = on ? DanceSession.Endless(clock.Beat, Moves.All, _rng) : null;
+        Session = on ? DanceSession.Endless(clock.Beat, Pool, _rng) : null;
     }
 }

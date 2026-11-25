@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using DeskDancer.Engine;
 
 namespace DeskDancer;
 
@@ -36,6 +37,34 @@ public sealed class Settings
     public bool AlwaysOnTop { get; set; } = true;
     /// <summary>Let clicks on the empty area around a mate reach the windows underneath.</summary>
     public bool ClickThrough { get; set; } = true;
+
+    /// <summary>
+    /// Dance moves switched off. A built-in move is listed by its id ("backflip"), and a
+    /// character's own dance by the character and its clip ("domo/dance_fart"), so that
+    /// switching one off leaves other characters' dances alone. A move that is switched off
+    /// is left out of the Dance move menu, random dances, dancing on its own, the dance
+    /// party and routines.
+    /// </summary>
+    public List<string> DisabledMoves { get; set; } = [];
+
+    public bool MoveEnabled(string key) => !DisabledMoves.Contains(key, StringComparer.OrdinalIgnoreCase);
+
+    public void SetMoveEnabled(string key, bool on)
+    {
+        DisabledMoves.RemoveAll(k => k.Equals(key, StringComparison.OrdinalIgnoreCase));
+        if (!on) DisabledMoves.Add(key);
+    }
+
+    /// <summary>
+    /// The built-in moves still switched on. The menu never lets the last of them go, but
+    /// should the settings file switch every one off, they all count as on: there is
+    /// always something to dance.
+    /// </summary>
+    public IReadOnlyList<DanceMove> BuiltInMoves()
+    {
+        var on = Moves.All.Where(m => MoveEnabled(m.Id)).ToList();
+        return on.Count > 0 ? on : Moves.All;
+    }
 
     /// <summary>False for throwaway runs (smoke tests) that must not touch the user's saved settings.</summary>
     [JsonIgnore] public bool Persist { get; set; } = true;
@@ -74,6 +103,11 @@ public sealed class Settings
                 if (loaded != null)
                 {
                     loaded.Mates ??= [];
+                    loaded.DisabledMoves ??= [];
+                    // Something must be left to dance: a file that switches off every
+                    // built-in move switches none of them off.
+                    if (Moves.All.All(m => !loaded.MoveEnabled(m.Id)))
+                        loaded.DisabledMoves.RemoveAll(k => Moves.All.Any(m => m.Id.Equals(k, StringComparison.OrdinalIgnoreCase)));
                     if (loaded.Mates.Count == 0) loaded.Mates.Add(new MateSettings());
                     foreach (var m in loaded.Mates) m.Scale = Math.Clamp(m.Scale, 0.25, 4);
                     return loaded;

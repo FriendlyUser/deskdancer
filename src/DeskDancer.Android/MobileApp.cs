@@ -43,7 +43,8 @@ public static class Stage
         Library.Scan();
         Settings = Settings.Load();
         Clock.Bpm = Settings.Bpm;
-        Conductor = new Conductor(Clock);
+        // The party dances only the moves that are switched on, as on the desktop.
+        Conductor = new Conductor(Clock) { Pool = () => Settings.BuiltInMoves() };
         // As on the desktop: a pack keeps only the clips it is showing in memory.
         Library.ClipsOnDemand = true;
         _ready = true;

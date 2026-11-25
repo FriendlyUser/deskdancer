@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using DeskDancer.Characters;
 using DeskDancer.Engine;
 using DeskDancer.Platform;
@@ -401,13 +402,33 @@ public sealed class MateWindow : Window
             settings.Save();
         }
 
-        var moves = Brain.AvailableMoves();
         var characters = _app.Library.Available;
+
+        // The dances on offer leave out the moves that are switched off, and are filled in
+        // again whenever one is switched on or off from the checklist below.
+        var moveMenu = new MenuItem { Header = "Dance move" };
+        var routineMenu = new MenuItem { Header = "Routine" };
+        void FillDances()
+        {
+            moveMenu.Items.Clear();
+            foreach (var m in Brain.AvailableMoves()) moveMenu.Items.Add(Item(m.Name, () => Brain.StartDance([m, m])));
+            // A routine plays without its switched-off moves, and goes if that leaves none.
+            routineMenu.Items.Clear();
+            var builtIn = settings.BuiltInMoves();
+            foreach (var routine in Routine.All)
+            {
+                var steps = routine.Resolve(builtIn);
+                if (steps.Count > 0) routineMenu.Items.Add(Item(routine.Name, () => Brain.StartDance(steps)));
+            }
+            routineMenu.IsVisible = routineMenu.Items.Count > 0;
+        }
+        FillDances();
 
         menu.Items.Clear();
         menu.Items.Add(Item(Brain.IsDancing ? "Stop dancing" : "Dance!", ToggleDance));
-        menu.Items.Add(Sub("Dance move", moves.Select(m => (Control)Item(m.Name, () => Brain.StartDance([m, m])))));
-        menu.Items.Add(Sub("Routine", Routine.All.Select(r => (Control)Item(r.Name, () => Brain.StartDance(r.Resolve())))));
+        menu.Items.Add(moveMenu);
+        menu.Items.Add(routineMenu);
+        menu.Items.Add(MovesToUse(FillDances));
         menu.Items.Add(Check("Dance party (everyone, non-stop)", _app.Conductor.PartyOn, _app.SetParty));
         menu.Items.Add(Sub("Tempo", new[] { 80, 100, 120, 140, 160 }.Select(bpm =>
             (Control)Check($"{bpm} BPM", Math.Abs(settings.Bpm - bpm) < 0.5, _ => _app.SetTempo(bpm)))));
@@ -439,5 +460,75 @@ public sealed class MateWindow : Window
             menu.Items.Add(Check("Click through empty space", settings.ClickThrough, v => Toggle(x => settings.ClickThrough = x, v)));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Quit", () => _app.Quit()));
+    }
+
+    /// <summary>
+    /// The "Moves to use" checklist: this character's own dances and the built-in moves,
+    /// each ticked if it is switched on. It stays open while boxes are ticked, so several can
+    /// be changed in one go. The last built-in move still on cannot be switched off, so there
+    /// is always something to dance. <paramref name="changed"/> runs after every change.
+    /// </summary>
+    MenuItem MovesToUse(Action changed)
+    {
+        var settings = _app.Settings;
+        var all = Brain.AllMoves();
+        var builtIn = all.Where(m => m.Clip == null).ToList();
+        var boxes = new List<(MenuItem Box, string Key, bool BuiltIn)>();
+
+        bool LastBuiltIn(string key) => settings.MoveEnabled(key) && builtIn.Count(m => settings.MoveEnabled(m.Id)) <= 1;
+
+        void Refresh()
+        {
+            foreach (var (box, key, isBuiltIn) in boxes)
+            {
+                box.IsChecked = settings.MoveEnabled(key);
+                box.IsEnabled = !(isBuiltIn && LastBuiltIn(key));
+            }
+        }
+
+        void Changed()
+        {
+            settings.Save();
+            changed();
+            // Posted, so it comes after whatever ticking the menu item does by itself.
+            Dispatcher.UIThread.Post(Refresh);
+        }
+
+        MenuItem Box(DanceMove move)
+        {
+            string key = Brain.KeyOf(move);
+            bool isBuiltIn = move.Clip == null;
+            var box = new MenuItem { Header = move.Name, ToggleType = MenuItemToggleType.CheckBox, StaysOpenOnClick = true };
+            box.Click += (_, _) =>
+            {
+                if (!(isBuiltIn && LastBuiltIn(key))) settings.SetMoveEnabled(key, !settings.MoveEnabled(key));
+                Changed();
+            };
+            boxes.Add((box, key, isBuiltIn));
+            return box;
+        }
+
+        static MenuItem Heading(string text) => new() { Header = text, IsEnabled = false };
+
+        var items = new List<Control>();
+        var own = all.Where(m => m.Clip != null).ToList();
+        if (own.Count > 0)
+        {
+            items.Add(Heading($"{_character.DisplayName}'s own dances"));
+            items.AddRange(own.Select(Box));
+            items.Add(new Separator());
+        }
+        items.Add(Heading("Built-in moves"));
+        items.AddRange(builtIn.Select(Box));
+        items.Add(new Separator());
+        var allOn = new MenuItem { Header = "Switch them all back on", StaysOpenOnClick = true };
+        allOn.Click += (_, _) =>
+        {
+            foreach (var (_, key, _) in boxes) settings.SetMoveEnabled(key, true);
+            Changed();
+        };
+        items.Add(allOn);
+        Refresh();
+        return Sub("Moves to use", items);
     }
 }
