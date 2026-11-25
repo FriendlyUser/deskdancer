@@ -10,6 +10,14 @@ The built-in character is **Remix**, a DJ robot drawn entirely in code. You can 
 in a folder of your own images and it becomes a character that walks and dances too:
 see [characters/README.md](characters/README.md).
 
+![Mochi in five poses](docs/mochi.png)
+
+**Mochi** ships as an image pack, animated from a single photo. It blinks and twitches
+its ears while it stands, puts on a happy face and flaps its ears for every dance move,
+and has two dances of its own, Bunny Hop and Ear Wave. Pick it under **Character** in
+the menu, or start with `--character mochi`. How it was made, and how to change it, is
+in [characters/mochi/_source](characters/mochi/_source/README.md).
+
 ## Run it
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) to build. The result

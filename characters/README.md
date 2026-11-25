@@ -60,6 +60,10 @@ of the artwork is treated as the floor.
 `remix-example` in this folder is a complete pack made of sprite sheets, a folder of
 frames and single stills. Copy it and replace the images to get started.
 
+`mochi` is a pack of animated WebP files, all made from one photo. Its `_source` folder
+has the scripts that cut the character out and drew the animations, if you want to do
+the same with a picture of your own.
+
 ## character.json (optional)
 
 Add this file to the folder to adjust things. Every setting is optional.
