@@ -569,8 +569,15 @@ public static partial class SpritePackLoader
     static unsafe void DecodeFile(string path, int columns, int rows, int count, double fps, PackOptions options,
         List<SKBitmap> frames, List<double> durations)
     {
-        using var codec = SKCodec.Create(path, out var status)
-                          ?? throw new InvalidDataException($"Could not read {Path.GetFileName(path)} ({status}).");
+        // The file is read into memory and the decoder is made from that, never straight from
+        // the file. Made from a file, the decoder is handed a stream, and for WebP Skia frees
+        // that stream at once while SkiaSharp still counts it as its own. If another thread
+        // opens a file at that moment and is given the same address, SkiaSharp tidies the first
+        // stream away by freeing the second, which the other thread is about to use. With clips
+        // decoded side by side, that crashed the app about one start in thirty on macOS.
+        using var data = SKData.CreateCopy(File.ReadAllBytes(path));
+        using var codec = SKCodec.Create(data)
+                          ?? throw new InvalidDataException($"Could not read {Path.GetFileName(path)}: it is not an image this program can decode.");
         var info = InfoFor(codec.Info.Width, codec.Info.Height);
         if (info.Width <= 0 || info.Height <= 0 || (long)info.Width * info.Height > 64_000_000)
             throw new InvalidDataException($"{Path.GetFileName(path)} is too large.");
