@@ -15,6 +15,8 @@ namespace DeskDancer.Droid;
 /// Scripts can drive it too, which is how the CI test does:
 /// <c>adb shell am start -n io.github.friendlyuser.deskdancer/.MainActivity --es command start|dance|stop [--es character mochi]</c>
 /// After a command the screen gets out of the way, so the mate is seen over whatever was there.
+/// Adding <c>--ez calm true</c> keeps the mate from wandering off or dancing unasked, and
+/// leaves the saved settings alone, so screenshots catch it where it was put.
 /// </summary>
 [Activity(Name = "io.github.friendlyuser.deskdancer.MainActivity", Label = "DeskDancer",
           MainLauncher = true, Exported = true, LaunchMode = LaunchMode.SingleTask)]
@@ -147,6 +149,12 @@ public sealed class MainActivity : Activity
         if (intent == null || command == null) return;
         intent.RemoveExtra("command");
         string? character = intent.GetStringExtra("character");
+        if (intent.GetBooleanExtra("calm", false))
+        {
+            Stage.Settings.Persist = false;
+            Stage.Settings.Wander = false;
+            Stage.Settings.AutoDance = false;
+        }
         Android.Util.Log.Info(MateOverlay.Tag, $"command '{command}'{(character == null ? "" : $" character '{character}'")}");
         switch (command)
         {

@@ -37,7 +37,7 @@ done
 rm -f "$out/0-home-a.png"
 
 log "putting the mate on the screen"
-adb shell am start -W -n $pkg/.MainActivity --es command start --es character mochi
+adb shell am start -W -n $pkg/.MainActivity --es command start --es character mochi --ez calm true
 # First start unpacks the characters and drops the mate in from above.
 sleep 12
 shot 1-standing

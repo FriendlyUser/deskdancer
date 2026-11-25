@@ -1,4 +1,7 @@
 using Android.Content;
+using Avalonia.Controls.Embedding;
+using Avalonia.Controls.Primitives;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using DeskDancer.Characters;
@@ -18,6 +21,12 @@ public sealed class MobileApp : Avalonia.Application
         RequestedThemeVariant = ThemeVariant.Dark;
         // The view that hosts the mate is a content control, which needs a theme to show its content.
         Styles.Add(new FluentTheme());
+        // The theme paints the root of every Avalonia view in its background colour. The mate's
+        // root has to be see-through, as the desktop's window is, or it stands in a dark box.
+        Styles.Add(new Style(x => x.OfType<EmbeddableControlRoot>())
+        {
+            Setters = { new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent) },
+        });
     }
 }
 
