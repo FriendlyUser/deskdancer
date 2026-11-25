@@ -17,6 +17,9 @@ The drawing is treated as a puppet with a few working parts:
   damped spring drives them from the body's own motion, so they lag and overshoot.
 - Hand. The open hand bends at the wrist to wave; the sash behind it is repainted so
   nothing shows through when it lifts.
+- Arm. To play the lute, the whole of that arm swings across her body until the fingers
+  lie on the strings, and a flap of her shawl hangs where the arm was. It strums by
+  swinging at the elbow and flicking at the wrist.
 - Legs. Each leg is its own layer behind the skirt, so the legs can swing to walk and
   kick, and tuck up under the skirt when she bends her knees or sits on her heels.
 - Waist. Swaying turns her head and shoulders and bends the torso smoothly down to her
@@ -113,6 +116,49 @@ BEND_FROM, BEND_TO = 2, 30
 # What the thumb hides: the top of the sash, and its outline on the left.
 SASH_UNDER = [(261, 840), (275, 796), (314, 796), (314, 840)]
 SASH_EDGE = ([(256, 846), (262, 832), (267, 818), (272, 806), (276, 796)], [5.5, 5.5, 5.5, 5.5, 5.5])
+
+# Playing the lute. The arm with the open hand does the strumming. It is cut out whole:
+# ARM outlines fingers, glove, thumb, cuff and the bare forearm up to her vest, and ELBOW is
+# the middle of its inner end. In the drawing the shawl's border runs along the top of the
+# arm and cloth along the bottom, so the arm has no outline of its own there; ARM_TOP,
+# ARM_BOTTOM and THUMB_EDGE are where it is given one.
+ARM = [(203, 765), (214, 760), (232, 763), (247, 771), (266, 774), (283, 775), (290, 771), (295, 766.5),
+       (300, 760.5), (305, 755.5), (310, 750), (315, 745), (320, 740.5), (324, 737.5), (328, 734), (333, 730.5),
+       (337, 729.5), (337.5, 740), (338.5, 755), (339.5, 768), (340, 778.5), (336, 782), (331, 785.5),
+       (326, 787.5), (321.5, 788.5), (316, 793.5), (310, 799.5), (305, 803.5), (303, 808), (302, 815),
+       (300, 822), (296, 829), (278, 834), (263, 831), (253, 832), (243, 832), (235, 824), (233, 815),
+       (224, 815), (207, 807), (197, 792), (196, 778)]
+ELBOW = (338.5, 755)
+ARM_TOP = [(247, 771), (266, 774), (283, 775), (290, 771), (295, 766.5), (300, 760.5), (310, 750), (320, 740.5),
+           (328, 734), (337, 729.5)]
+ARM_BOTTOM = [(296, 829), (300, 822), (302, 815), (303, 808), (305, 803.5), (310, 799.5), (316, 793.5),
+              (321.5, 788.5), (331, 785.5), (340, 778.5)]
+THUMB_EDGE = [(243, 832), (253, 832), (263, 831), (278, 834), (296, 829)]
+# Where the arm goes to play: the elbow at her side, the arm swung round it until the
+# forearm crosses her body, the wrist part straightened so the fingers reach the strings.
+# It is drawn a little larger there, being in front of her now. A strum swings the arm
+# STRUM_SWING degrees either way about the elbow and the wrist STRUM_FLICK degrees.
+STRUM_ELBOW = (338, 772)
+STRUM_TURN = -161.0
+STRUM_UNBEND = 22.0
+STRUM_SCALE = 1.15
+STRUM_SWING = 4.5
+STRUM_FLICK = 9.0
+# With the arm gone from her side, the shawl that lay along it hangs there in a flap. FLAP
+# is the forearm and cuff it takes the place of; SHAWL_TIP is the shawl's border beyond
+# that, along the glove and fingers, which goes; FLAP_END is the outline that closes the
+# flap and FLAP_FOLD a crease down it. OVER_ARM is the flap with the outlines round it,
+# which lie over the arm where it comes out from underneath.
+FLAP = [(283, 775), (290, 771), (295, 766.5), (300, 760.5), (305, 755.5), (310, 750), (315, 745), (320, 740.5),
+        (324, 737.5), (328, 734), (333, 730.5), (337, 729.5), (337.5, 740), (338.5, 755), (339.5, 768),
+        (340, 778.5), (336, 782), (331, 785.5), (326, 787.5), (321.5, 788.5), (316, 793.5), (310, 799.5),
+        (305, 803.5), (297, 800), (289, 792), (284, 783)]
+SHAWL_TIP = [(232, 790), (240, 778), (252, 770), (264, 765), (276, 765), (284, 767), (287, 779), (283, 778),
+             (266, 777), (247, 774), (240, 792)]
+FLAP_END = ([(284, 771), (281, 780), (284, 790), (292, 799), (303, 806)], [5, 5.5, 5.5, 5.5, 5])
+FLAP_FOLD = ([(312, 752), (318, 766), (322, 782)], [1.5, 3, 1.5])
+OVER_ARM = [(270, 760), (300, 742), (322, 722), (342, 722), (343.5, 760), (344, 784), (322, 800), (300, 815),
+            (278, 800)]
 
 # Legs. Each outline follows the skirt's hem where the leg goes under it and runs through
 # empty background elsewhere; LEG_SPLIT is the line between the two, down the gap that
@@ -464,6 +510,28 @@ class Rig:
         self.under = under * self.under_mask[..., None]      # shown where the hand was
         self.hand = self.base * self.hand_mask[..., None]
 
+        # The arm that strums, with the outlines it lacks, and what shows at her side when
+        # it has gone: the sash under where the hand was, and a flap of the shawl, in the
+        # shawl's own colours, where the forearm was.
+        def colour_of(box, wanted):
+            (bx0, by0), (bx1, by1) = to_canvas(box[0], box[1]), to_canvas(box[2], box[3])
+            px = rgb[by0:by1, bx0:bx1].reshape(-1, 4)
+            px = px[px[:, 3] > 0.95][:, :3]
+            return np.median(px[wanted(px)], axis=0)
+        cloth = colour_of((300, 690, 345, 728), lambda c: (c[:, 0] > 0.6) & (c[:, 1] < 0.4))
+        maroon = colour_of((286, 745, 330, 775), lambda c: (c[:, 0] > 0.25) & (c[:, 0] < 0.6) & (c[:, 1] < 0.15))
+        arm_mask = poly_mask(ARM, 0.7)
+        outline = np.maximum.reduce([stroke(ARM_TOP, [4.5] * len(ARM_TOP)), stroke(ARM_BOTTOM, [4.5] * len(ARM_BOTTOM)),
+                                     stroke(THUMB_EDGE, [4.0] * len(THUMB_EDGE))])
+        self.arm = paint(self.base * arm_mask[..., None], outline, maroon * 0.75)
+        self.arm_gone = np.clip(arm_mask + poly_mask(SHAWL_TIP, 0.7), 0, 1)
+        flap = poly_mask(FLAP, 0.7)
+        shaded = cloth * 0.82 + maroon * 0.18                   # it hangs in her shadow
+        self.arm_behind = np.dstack([np.broadcast_to(shaded, (H, W, 3)) * flap[..., None], flap])
+        self.arm_behind = self.under + self.arm_behind * (1 - self.under[..., 3:])
+        self.flap_ink = (np.maximum(stroke(*FLAP_END), stroke(*FLAP_FOLD) * 0.7), maroon)
+        self.over_arm = poly_mask(OVER_ARM, 0.7)
+
         # Legs: each layer is the drawn leg plus a plain stretch of stocking carrying on up
         # behind the skirt, so no gap opens at the hem when it swings. The layers reach a
         # couple of pixels past their outlines (under the skirt, and under each other), which
@@ -501,6 +569,11 @@ class Rig:
         if abs(lift) < 1e-3:
             return img
         out = self.under + img * (1 - self.under_mask[..., None])
+        moved = self.bend_wrist(self.hand, lift)
+        return moved + out * (1 - moved[..., 3:])
+
+    def bend_wrist(self, layer, lift):
+        """Bends a layer at the wrist: lift is degrees the fingertips rise, as drawn."""
         xx, yy = self.grid
         px, py = to_canvas(*WRIST)
         vx, vy = xx - px, yy - py
@@ -509,8 +582,24 @@ class Rig:
         c, s_ = np.cos(phi), np.sin(phi)
         mx = (px + vx * c + vy * s_).astype(np.float32)
         my = (py - vx * s_ + vy * c).astype(np.float32)
-        moved = cv2.remap(self.hand, mx, my, cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT).clip(0, 1)
-        return moved + out * (1 - moved[..., 3:])
+        return cv2.remap(layer, mx, my, cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT).clip(0, 1)
+
+    def strum_pose(self, img, strum, flick):
+        """Her arm across her body with the hand on the lute. strum: where the hand is on
+        its way across the strings, from -1 (above them) to 1 (below). flick: the same for
+        the wrist alone."""
+        body = img * (1 - self.arm_gone[..., None])
+        body = body + self.arm_behind * (1 - body[..., 3:])
+        body = paint(body, *self.flap_ink)
+        # Straightening the wrist lowers the fingertips as drawn; turned round to the lute,
+        # that raises them, so a flick downwards is a little less straightening.
+        arm = self.bend_wrist(self.arm, -(STRUM_UNBEND - STRUM_FLICK * flick))
+        ex, ey = to_canvas(*ELBOW)
+        arm = transform(arm, about(ex, ey, STRUM_TURN + STRUM_SWING * strum, STRUM_SCALE,
+                                   dx=STRUM_ELBOW[0] - ELBOW[0], dy=STRUM_ELBOW[1] - ELBOW[1]))
+        out = arm + body * (1 - arm[..., 3:])
+        over = body * self.over_arm[..., None]
+        return over + out * (1 - over[..., 3:])
 
     def hair_pose(self, img, hair):
         """hair: {"L": (dx, dy), "R": (dx, dy)}, how far each fall's tip moves."""
@@ -570,10 +659,11 @@ class Rig:
         x, y = px + (x - px) * c - (y - py) * s_, py + (x - px) * s_ + (y - py) * c
         return self.body_matrix(**body) @ np.array([x, y, 1.0])
 
-    def pose(self, eyes=("open", "open"), mouth="grin", hand=0.0, hair=None, sway=0.0, legs=(0.0, 0.0),
-             lift=(0.0, 0.0), crouch=0.0, lean=0.0, squash=0.0, dx=0.0, dy=0.0):
+    def pose(self, eyes=("open", "open"), mouth="grin", hand=0.0, strum=None, flick=0.0, hair=None, sway=0.0,
+             legs=(0.0, 0.0), lift=(0.0, 0.0), crouch=0.0, lean=0.0, squash=0.0, dx=0.0, dy=0.0):
         img = self.face.get(tuple(eyes), mouth)
-        img = self.hand_pose(img, hand)
+        # She either plays, with that arm across her body, or holds the hand out as drawn.
+        img = self.hand_pose(img, hand) if strum is None else self.strum_pose(img, strum, flick)
         img = self.legs_pose(img, legs, lift, crouch)
         if hair:
             img = self.hair_pose(img, hair)
@@ -754,10 +844,12 @@ def sit(rig):
     return f
 
 
-def happy_dance(rig):
+def strum_along(rig):
     """Shown during every built-in dance move, which adds its own bounces, leans and spins,
-    so her feet stay still here. Two beats at 120 BPM: she sings on one and grins on the
-    other, sways at the waist and pumps her hand, and her hair bounces along."""
+    so her feet stay still here. This is when the app sends up its music notes, so she plays
+    her lute. Two beats at 120 BPM: her hand crosses the strings downwards on each beat and
+    comes back up between them, she sings on one beat and grins on the other, sways at the
+    waist, and her hair bounces along."""
     period = 1.0
 
     def body(t):
@@ -765,16 +857,23 @@ def happy_dance(rig):
     # The hair also feels a bounce the clip does not draw, standing in for the app's.
     hair = Hair(rig, lambda t: dict(body(t), dy=-10 * abs(math.sin(2 * math.pi * t / period))), period=period)
 
+    def stroke_at(phase):
+        """Where the hand is, -1 above the strings to 1 below: it passes them going down as
+        each beat starts. A little quicker through the strings than a plain swing."""
+        swing = math.sin(2 * math.pi * phase)
+        return math.copysign(abs(swing) ** 0.8, swing)
+
     def at(t):
         beat = t / (period / 2)
+        # The wrist follows the arm a moment behind, which is what makes it a strum.
         return dict(eyes=HAPPY_EYES, mouth="sing" if int(beat) % 2 == 0 else "grin",
-                    hand=12 * math.sin(math.pi * (beat % 1)) ** 2, hair=hair.at(t), **body(t))
-    return frames_from(even(period, 12), at)
+                    strum=stroke_at(beat), flick=stroke_at(beat - 0.14), hair=hair.at(t), **body(t))
+    return frames_from(even(period, 16), at)
 
 
 def serenade(rig):
     """Four beats: a slow sway from the hips with her head following, eyes closed,
-    singing, sinking a little on each beat."""
+    singing, sinking a little on each beat, and one unhurried strum of the lute to each."""
     period = 2.0
 
     def body(t):
@@ -783,11 +882,16 @@ def serenade(rig):
         return dict(lean=4 * math.sin(p), sway=5 * math.sin(p - 0.6), dx=8 * math.sin(p), crouch=0.22 * (1 - dip))
     hair = Hair(rig, body, period=period)
 
+    def stroke_at(phase):
+        """Down across the strings in the first third of a beat, then slowly back up."""
+        phase %= 1
+        return -1 + 2 * (smooth_ramp(phase, 0.0, 0.3) - smooth_ramp(phase, 0.45, 0.55))
+
     def at(t):
         beat = int(t / 0.5)
         return dict(eyes=SHUT if beat < 3 else HAPPY_EYES, mouth="sing" if beat % 2 == 0 else "smile",
-                    hand=7 + 7 * math.sin(2 * math.pi * t / period + 0.6), hair=hair.at(t), **body(t))
-    return frames_from(even(period, 10), at)
+                    strum=stroke_at(t / 0.5), flick=stroke_at(t / 0.5 - 0.08), hair=hair.at(t), **body(t))
+    return frames_from(even(period, 12), at)
 
 
 def hair_flip(rig):
@@ -863,7 +967,7 @@ CLIPS = {
     "idle": ("idle.webp", None, idle),
     "walk": ("walk.webp", None, walk),
     "sit": ("sit.webp", None, sit),
-    "dance": ("dance.webp", "Sing Along", happy_dance),
+    "dance": ("dance.webp", "Strum Along", strum_along),
     "dance_serenade": ("dance_serenade.webp", "Serenade", serenade),
     "dance_hair_flip": ("dance_hair_flip.webp", "Hair Flip", hair_flip),
     "dance_wave": ("dance_wave.webp", "Wave Hello", wave_hello),
