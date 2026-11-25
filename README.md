@@ -18,6 +18,15 @@ and has two dances of its own, Bunny Hop and Ear Wave. Pick it under **Character
 the menu, or start with `--character mochi`. How it was made, and how to change it, is
 in [characters/mochi/_source](characters/mochi/_source/README.md).
 
+![Lyra in five poses](docs/lyra.png)
+
+**Lyra**, a bard with a lute, is an image pack animated from a single drawing by
+@thaissingarts. She blinks, her long hair sways and swings after her when she moves, and
+now and then she waves. She sings along to every dance move and has three dances of her
+own: Serenade, Hair Flip and Wave Hello. Pick her under **Character**, or start with
+`--character lyra`. How she was made is in
+[characters/lyra/_source](characters/lyra/_source/README.md).
+
 ## Run it
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) to build. The result
