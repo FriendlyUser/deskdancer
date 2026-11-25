@@ -149,6 +149,7 @@ public static class SmokeTest
             {
                 var second = app.AddMate(spritePack ?? CharacterIds.BuiltIn);
                 Note($"second mate uses '{second.Character.Id}' ({second.Character.DisplayName})");
+                Note($"its own dances: {string.Join(", ", second.Character.DanceClips.Select(d => d.Name))}");
                 if (spritePack != null && app.Library.ErrorFor(spritePack) is { } error)
                     throw new InvalidOperationException($"image pack '{spritePack}' failed to load: {error}");
                 app.SetParty(true);
