@@ -41,10 +41,15 @@ public static class SmokeTest
         bool finished = false;
         Window? backdrop = null;
 
+        // The report is written as the test goes, so that if the app crashes, what it had
+        // done up to then is still there to read.
+        string resultFile = Path.Combine(outDir, "smoke-result.txt");
+        File.WriteAllText(resultFile, "");
         void Note(string line)
         {
             report.Add($"[{watch.Elapsed.TotalSeconds,5:0.00}s] {line}");
             Console.WriteLine(report[^1]);
+            File.AppendAllText(resultFile, report[^1] + Environment.NewLine);
         }
 
         void Finish(bool pass, string reason)
@@ -52,7 +57,6 @@ public static class SmokeTest
             if (finished) return;
             finished = true;
             Note((pass ? "PASS: " : "FAIL: ") + reason);
-            File.WriteAllLines(Path.Combine(outDir, "smoke-result.txt"), report);
             backdrop?.Close();
             app.Quit(pass ? 0 : 1);
         }
