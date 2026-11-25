@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
+using DeskDancer.Characters;
 using DeskDancer.Engine;
 using DeskDancer.Platform;
 using DeskDancer.Ui;
@@ -77,8 +78,9 @@ public static class SmokeTest
         // character it was asked to be, not the built-in one standing in for a broken pack.
         var packs = app.Library.Available.Where(c => c.Folder != null).Select(c => c.Id).ToList();
 
-        // Load them all now. A big pack takes a second or more, and the steps below are on a
-        // clock: loaded on the spot, a new mate would still be dropping in when it is checked.
+        // Load them all now. That reads each pack's idle clip, which can take a tenth of a
+        // second or more, and the steps below are on a clock: loaded on the spot, a new
+        // mate would still be dropping in when it is checked.
         foreach (string id in packs)
         {
             var loading = Stopwatch.StartNew();
@@ -93,6 +95,16 @@ public static class SmokeTest
                 throw new InvalidOperationException($"character '{id}' failed to load: {error}");
             if (!Same(mate.Character.Id, id))
                 throw new InvalidOperationException($"asked for character '{id}' but got '{mate.Character.Id}'");
+        }
+
+        // A pack only keeps the frames of the clips its mates have been showing. These say
+        // what that comes to, and check that a clip a mate is showing really did arrive.
+        string Held() => string.Join("; ", app.Library.LoadedPacks.Select(p =>
+            p.BytesInMemory == 0 ? $"{p.Id} nothing" : $"{p.Id} {string.Join("+", p.ClipsInMemory)} ({p.BytesInMemory / 1e6:0} MB)"));
+        void MustHold(MateWindow mate, string clip)
+        {
+            if (mate.Character is SpriteCharacter pack && pack.HasClip(clip) && !pack.ClipsInMemory.Contains(clip))
+                throw new InvalidOperationException($"'{pack.Id}' is showing its '{clip}' clip, but the frames are not in memory");
         }
 
         // Each step fires once, at a fraction of the total run time.
@@ -117,6 +129,14 @@ public static class SmokeTest
                 var b = First().Brain;
                 if (Math.Abs(b.FootY - b.Floor) > 2) throw new InvalidOperationException($"mate did not land: footY={b.FootY} floor={b.Floor} state={b.State}");
                 Snap(First(), "1-landed");
+
+                // So far a mate has dropped in and stood still, and nothing else. A pack
+                // holding more than the clips for that is loading what nobody asked for.
+                MustHold(First(), "idle");
+                Note($"in memory: {Held()}");
+                foreach (var pack in app.Library.LoadedPacks)
+                    if (pack.ClipsInMemory.Except(["idle", "fall", "drag"]).ToList() is { Count: > 0 } early)
+                        throw new InvalidOperationException($"'{pack.Id}' loaded clips before they were wanted: {string.Join(", ", early)}");
             }),
             (0.17, "click-through", () =>
             {
@@ -162,6 +182,7 @@ public static class SmokeTest
             {
                 if (!First().Brain.IsDancing) throw new InvalidOperationException("mate is not dancing");
                 Snap(First(), "2-dancing");
+                MustHold(First(), "dance");
 
                 if (backdrop == null) return;
                 // While dancing the whole window is in play, so its far corners must be see-through too.
@@ -188,6 +209,8 @@ public static class SmokeTest
                 if (app.Mates.Any(m => !m.Brain.IsDancing)) throw new InvalidOperationException("not every mate joined the party");
                 Snap(app.Mates[0], "3-party-a");
                 Snap(app.Mates[1], "3-party-b");
+                foreach (var mate in app.Mates) MustHold(mate, "dance");
+                Note($"in memory: {Held()}");
             }),
             (0.55, "party off, resize, menu", () =>
             {
@@ -195,6 +218,13 @@ public static class SmokeTest
                 app.SetTempo(140);
                 app.Mates[1].SetScale(1.5);
                 First().OpenMenu();
+
+                // Have every pack let go of its pictures, as each does by itself with the
+                // ones that have been out of use for a minute. The mates must carry on
+                // regardless: what they are showing is simply read again.
+                long freed = app.Library.ReleaseUnused(TimeSpan.Zero);
+                Note($"let go of every picture ({freed / 1e6:0} MB); in memory: {Held()}");
+                if (app.Library.LoadedPacks.Any(p => p.BytesInMemory != 0)) throw new InvalidOperationException("not every picture was let go of");
             }),
             (0.63, "menu open", () =>
             {
@@ -203,6 +233,9 @@ public static class SmokeTest
                 Note($"menu has {entries} entries");
                 if (entries < 10) throw new InvalidOperationException("context menu was not populated");
                 First().ContextMenu!.Close();
+
+                foreach (var mate in app.Mates) MustHold(mate, "idle");
+                Note($"in memory again: {Held()}");
             }),
             (0.66, "drag and throw", () =>
             {
@@ -215,6 +248,7 @@ public static class SmokeTest
                 var b = First().Brain;
                 if (b.State != MateState.Drag) throw new InvalidOperationException($"expected Drag, was {b.State}");
                 Snap(First(), "4-carried");
+                MustHold(First(), "drag");
                 b.EndDrag();
             }),
             (0.86, "sit, swap character", () =>
@@ -240,6 +274,19 @@ public static class SmokeTest
                 Snap(app.Mates[1], "5-swapped");
                 app.RemoveMate(app.Mates[1]);
                 if (app.Mates.Count != 1) throw new InvalidOperationException("second mate was not removed");
+            }),
+            (0.97, "every clip", () =>
+            {
+                // Loading a pack decodes its idle clip and no more, so the rest are read
+                // here. A clip that cannot be decoded should fail this test, not wait for
+                // somebody to notice a mate standing still where it ought to be dancing.
+                foreach (string id in packs)
+                {
+                    var loading = Stopwatch.StartNew();
+                    if (app.Library.Load(id, everyClip: true) is not SpriteCharacter pack || app.Library.ErrorFor(id) is not null)
+                        throw new InvalidOperationException($"character '{id}' has a clip that cannot be read: {app.Library.ErrorFor(id)}");
+                    Note($"every clip of '{id}' decodes: {pack.ClipNames.Count} clips, {pack.BytesInMemory / 1e6:0} MB, in {loading.ElapsedMilliseconds} ms");
+                }
             }),
         };
 

@@ -127,17 +127,25 @@ src/DeskDancer/
     Conductor.cs    Beat clock and the shared session behind the dance party
   Characters/   Remix (drawn in code) and the loader for image packs
   Ui/           The transparent window, its menu and the renderer
-  Platform/     Click-through for Windows and X11
+  Platform/     Click-through for Windows and X11; giving freed memory back on Linux
   Tools/        Smoke test, contact sheets and the example pack exporter
 characters/     Character packs that ship with the app
 ```
 
+An image pack is not read all at once. Its idle animation is read when the character is
+picked, which at start-up happens on another thread while the window is being put
+together. Each of its other animations is read the first time the mate needs it, and
+dropped again after a minute out of use. A mate that mostly stands about holds little
+more than its idle frames.
+
 The GitHub Actions workflow builds both systems and runs the smoke test on each. The
 smoke test starts the real app and drives it: dancing, a two-mate party, the menu,
-dragging and throwing, with Mochi, Remix and the example pack each taking a turn. On
-Windows it also reads pixels back off the screen to confirm that the window is
-see-through and the character is visible, checks that clicks pass through the empty part
-of the window, and saves pictures of the desktop as artifacts.
+dragging and throwing, with Mochi, Remix and a second image pack each taking a turn. It
+checks that a pack's animations arrive when a mate first needs them and come back after
+being dropped, and that every animation of every pack can be read. On Windows it also
+reads pixels back off the screen to confirm that the window is see-through and the
+character is visible, checks that clicks pass through the empty part of the window, and
+saves pictures of the desktop as artifacts.
 
 One thing to know when building: Avalonia's build step sends anonymous usage data to
 its vendor. The publish scripts and the workflow switch that off with

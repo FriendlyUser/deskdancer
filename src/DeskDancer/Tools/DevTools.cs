@@ -36,7 +36,9 @@ public static class DevTools
     static void RenderTest(string dir, string? characterId)
     {
         Directory.CreateDirectory(dir);
-        var character = App.Instance.Library.Load(characterId ?? CharacterIds.BuiltIn);
+        // Every clip is loaded up front, so that each picture shows the frame it is meant
+        // to and not whatever stands in while a clip is on its way.
+        var character = App.Instance.Library.Load(characterId ?? CharacterIds.BuiltIn, everyClip: true);
         const int columns = 10, cellW = 170, cellH = 230, labelW = 110;
         const double h = 100;
         var backdrop = new SolidColorBrush(Color.FromRgb(0x3B, 0x42, 0x5C));

@@ -43,5 +43,10 @@ public interface ICharacter
     int NaturalFacing { get; }
     IReadOnlyList<DanceClip> DanceClips { get; }
     bool HasClip(string clip);
+    /// <summary>
+    /// Says a clip is about to be shown. A character that only fetches its pictures when
+    /// they are wanted can start on them now, ahead of the first frame that needs them.
+    /// </summary>
+    void Prepare(string clip);
     void Draw(DrawingContext ctx, double height, in CharacterFrame frame);
 }
