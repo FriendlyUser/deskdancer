@@ -135,6 +135,8 @@ To run straight from source instead: `dotnet run --project src/DeskDancer`.
 The right-click menu has everything else:
 
 - **Dance move / Routine**: pick one of 15 moves or a choreographed routine.
+- **Moves to use**: untick the moves you don't care for, built-in ones and the
+  character's own. See [Switching moves off](#switching-moves-off) below.
 - **Dance party**: every mate on screen dances non-stop, in sync.
 - **Tempo**: 80 to 160 BPM. All moves are written against the beat, so they follow it.
 - **Sit down / Take a nap**, and switches for wandering, dancing on its own, falling
@@ -151,6 +153,38 @@ the screen. Routines chain them: Disco Fever, Street, Acrobat and Chill.
 
 Every move works on every character. Remix also moves its arms, legs, head and face;
 image characters are bounced, leaned, spun and flipped as a whole.
+
+### Switching moves off
+
+Right-click the mate and open **Moves to use**. It lists the character's own dances first,
+then the 15 built-in moves, each ticked while it is in use. Untick the ones you don't care
+for; the menu stays open, so you can go down the list in one go, and **Switch them all back
+on** undoes the lot. A move that is switched off is left out everywhere:
+
+- the **Dance move** list,
+- the dance a double-click starts, and the dances a mate does on its own,
+- the **Dance party**, even one that is already going,
+- **Routines**, which play without it, and disappear from the menu if that leaves nothing.
+
+The built-in moves are shared by every mate. A character's own dances are switched off for
+that character alone, so switching off Domo's Fart leaves Plush Domo's alone. One built-in
+move always stays on, so there is always something to dance: the last one cannot be
+unticked.
+
+The choice is saved with the other settings (see below), in `settings.json` under
+`DisabledMoves`. You can also edit it there while the app is closed: a built-in move is
+listed by its id, and a character's own dance as the character's folder name and the
+clip's name, joined by a slash.
+
+```json
+"DisabledMoves": ["backflip", "cartwheel", "tornado", "domo/dance_fart", "sprig/dance_spin_attack"]
+```
+
+The ids of the built-in moves are `bounce`, `sway`, `disco`, `sidestep`, `shuffle`,
+`wiggle`, `headbang`, `poplock`, `starjump`, `twirl`, `tornado`, `backflip`,
+`cartwheel`, `moonwalk` and `strut`. A character's clip names are the names under
+`clips` in its `character.json`, or, if it has none, its file names without the
+extension, such as `dance_spin_attack`.
 
 ## Platform notes
 
@@ -224,14 +258,15 @@ more than its idle frames.
 The GitHub Actions workflow builds for Windows, Linux and both kinds of Mac, and runs
 the smoke test on each. The smoke test starts the real app and drives it: dancing, a
 two-mate party, the menu, dragging and throwing, with Mochi, Remix and the example pack
-each taking a turn. It checks that a pack holds only the animations its mates have shown,
-that they come back after being taken away, and that every animation of every pack can
-be read. On Windows and macOS it also reads pixels back off the screen to
-confirm that the window is see-through and the character is visible, checks that clicks
-pass through the empty part of the window, and saves pictures of the desktop as
-artifacts. On macOS, where what a click lands on depends on where the pointer is, it
-moves the pointer onto the mate, off onto the empty corner of its window and back again,
-and asks the system each time.
+each taking a turn. It switches off every move but one and checks that the mate, the
+party, the routines and the menu offer that one alone. It checks that a pack holds only
+the animations its mates have shown, that they come back after being taken away, and
+that every animation of every pack can be read. On Windows and macOS it also reads
+pixels back off the screen to confirm that the window is see-through and the character
+is visible, checks that clicks pass through the empty part of the window, and saves
+pictures of the desktop as artifacts. On macOS, where what a click lands on depends on
+where the pointer is, it moves the pointer onto the mate, off onto the empty corner of
+its window and back again, and asks the system each time.
 
 One thing to know when building: Avalonia's build step sends anonymous usage data to
 its vendor. The publish scripts and the workflow switch that off with

@@ -513,4 +513,7 @@ public sealed record Routine(string Name, string[] MoveIds)
     ];
 
     public IEnumerable<DanceMove> Resolve() => MoveIds.Select(Moves.Find).OfType<DanceMove>();
+
+    /// <summary>The routine without the moves that are switched off. Empty if that leaves nothing.</summary>
+    public IReadOnlyList<DanceMove> Resolve(IReadOnlyList<DanceMove> switchedOn) => Resolve().Where(switchedOn.Contains).ToList();
 }

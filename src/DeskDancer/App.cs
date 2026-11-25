@@ -30,7 +30,9 @@ public sealed class App : Application
     {
         Name = "DeskDancer";
         RequestedThemeVariant = ThemeVariant.Dark;
-        Conductor = new Conductor(Clock);
+        // The party dances only the moves that are switched on; Settings is read each time, as
+        // it is replaced once the saved settings are loaded.
+        Conductor = new Conductor(Clock) { Pool = () => Settings.BuiltInMoves() };
         Library.ExtraFolder = Options.CharactersFolder;
         Library.Scan();
 
