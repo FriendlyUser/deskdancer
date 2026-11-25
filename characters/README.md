@@ -64,6 +64,10 @@ frames and single stills. Copy it and replace the images to get started.
 has the scripts that cut the character out and drew the animations, if you want to do
 the same with a picture of your own.
 
+`lyra` is the same idea for a drawing: its `_source` folder sharpens the drawing,
+takes it off a white background, and animates it with hair that swings on a spring, legs
+that walk, a hand that waves and a redrawn face.
+
 `domo` is a pack with no picture behind it at all: the script in its `_source` folder
 draws every frame. It is the one to copy if you would rather describe a character in
 shapes than paint it, and it has clips for sitting and napping as well.
