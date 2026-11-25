@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      mac_smoke_runs:
+        description: Times to run the smoke test on each Mac, to chase a failure that only happens now and then
+        default: "1"
 
 env:
   DOTNET_NOLOGO: true
@@ -21,6 +25,13 @@ jobs:
             rid: win-x64
           - os: ubuntu-latest
             rid: linux-x64
+          # Each Mac build is made and tested on the kind of Mac it is for: an Apple silicon
+          # runner and an Intel one. The Intel build does run on Apple silicon, through
+          # Rosetta, but that tests Apple's translator as much as it tests the build.
+          - os: macos-latest
+            rid: osx-arm64
+          - os: macos-15-intel
+            rid: osx-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -30,11 +41,17 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Publish
+        if: runner.os != 'macOS'
         shell: bash
         run: >
           dotnet publish src/DeskDancer -c Release -r ${{ matrix.rid }} --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
           -p:DebugType=none -o dist/${{ matrix.rid }}
+
+      # On a Mac the publish script also wraps the program up as DeskDancer.app and signs it.
+      - name: Publish (macOS)
+        if: runner.os == 'macOS'
+        run: ./publish.sh ${{ matrix.rid }}
 
       # The smoke test starts the real app, drives every feature for a few seconds and
       # exits non-zero if a step fails, a window stops drawing or anything throws.
@@ -79,6 +96,77 @@ jobs:
           Write-Host "Exit code: $($app.ExitCode)"
           exit $app.ExitCode
 
+      - name: Smoke test (macOS)
+        if: runner.os == 'macOS'
+        env:
+          RUNS: ${{ inputs.mac_smoke_runs || '1' }}
+        run: |
+          app="dist/${{ matrix.rid }}/DeskDancer.app"
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          echo "This Mac: macOS $(sw_vers -productVersion), $(uname -m)"
+          mkdir -p smoke
+          started="$(mktemp)"
+          # --screenshots: the test takes screenshots of the real desktop and reads them, to
+          # check that the mate is visible and the rest of its window see-through. They are
+          # kept with its other results. The runner allows screenshots; a Mac of your own
+          # asks first.
+          # A workflow started by hand can ask for the test to be run several times over. It
+          # stops at the first run that fails.
+          case "$RUNS" in ''|*[!0-9]*) RUNS=1 ;; esac
+          for run in $(seq 1 "$RUNS"); do
+            [ "$RUNS" = 1 ] || echo "--- Run $run of $RUNS"
+            "$app/Contents/MacOS/DeskDancer" --smoke-test --screenshots --seconds 20 --out "$PWD/smoke" &
+            pid=$!
+            # If the app hangs, stop it so the job fails here and not on a timeout hours later.
+            ( sleep 180; kill -9 "$pid" ) >/dev/null 2>&1 &
+            watchdog=$!
+            disown 2>/dev/null || true    # or bash reports stopping it, below, as "Terminated"
+            code=0
+            wait "$pid" || code=$?
+            kill "$watchdog" 2>/dev/null || true
+            [ "$code" = 0 ] || break
+          done
+          [ -f smoke/smoke-result.txt ] || echo "::warning::No smoke-result.txt was written; the app exited before the test started"
+          echo "Exit code: $code"
+          # Above 128 a signal stopped the app: it crashed. macOS writes a report some seconds
+          # later, sometimes a good many. Keep it with the results, and show here what each
+          # thread was doing.
+          if [ "$code" -gt 128 ]; then
+            report=""
+            for wait in $(seq 1 18); do
+              sleep 5
+              report="$(find "$HOME/Library/Logs/DiagnosticReports" -name 'DeskDancer*.ips' -newer "$started" 2>/dev/null | head -1)" || true
+              [ -z "$report" ] || break
+            done
+            if [ -n "$report" ]; then
+              cp "$report" smoke/crash-report.ips
+              python3 - "$report" <<'PY' || echo "::warning::Could not read the crash report; it is kept with the smoke test's results"
+          import json, sys
+          body = open(sys.argv[1], encoding="utf-8", errors="replace").read().partition("\n")[2]
+          report = json.loads(body)
+          crash = report.get("exception", {})
+          images = report.get("usedImages", [])
+          def where(frame):
+              i = frame.get("imageIndex", -1)
+              name = images[i].get("name", "?") if 0 <= i < len(images) else "?"
+              return f"{name}  {frame.get('symbol', '?')} +{frame.get('symbolLocation', frame.get('imageOffset', 0))}"
+          print("::group::Crash report")
+          print("Crashed with", crash.get("type"), crash.get("signal"), crash.get("subtype") or "",
+                "| under Rosetta:", report.get("translated"), "| macOS", report.get("osVersion", {}).get("train"))
+          for thread in report.get("threads", []):
+              crashed = thread.get("triggered")
+              print(("CRASHED " if crashed else "") + f"thread {thread.get('id')} {thread.get('name') or thread.get('queue') or ''}")
+              for frame in thread.get("frames", [])[: 60 if crashed else 6]:
+                  print("   ", where(frame))
+          print("::endgroup::")
+          PY
+            else
+              echo "::warning::The app crashed and macOS left no crash report"
+            fi
+          fi
+          exit "$code"
+
       - name: Upload smoke test output
         if: always()
         uses: actions/upload-artifact@v6
@@ -87,8 +175,14 @@ jobs:
           path: smoke
           if-no-files-found: warn
 
+      # An app is a folder whose signature and file permissions matter, and an artifact
+      # upload keeps neither. ditto makes a zip that does.
+      - name: Zip the app (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent "dist/${{ matrix.rid }}/DeskDancer.app" "dist/DeskDancer-${{ matrix.rid }}.zip"
+
       - name: Upload build
         uses: actions/upload-artifact@v6
         with:
           name: DeskDancer-${{ matrix.rid }}
-          path: dist/${{ matrix.rid }}
+          path: ${{ runner.os == 'macOS' && format('dist/DeskDancer-{0}.zip', matrix.rid) || format('dist/{0}', matrix.rid) }}

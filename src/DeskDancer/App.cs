@@ -16,7 +16,6 @@ namespace DeskDancer;
 public sealed class App : Application
 {
     IClassicDesktopStyleApplicationLifetime? _desktop;
-    DispatcherTimer? _tidy;
 
     public static App Instance => (App)Current!;
     public static CliOptions Options { get; set; } = new();
@@ -47,10 +46,12 @@ public sealed class App : Application
             }
             Clock.Bpm = Settings.Bpm;
 
-            // The mates' pictures start being read here, on other threads, while this one
-            // gets on with the theme and the windows. By the time the first window asks
-            // for its character, there is usually nothing left to wait for. A mate
-            // arrives by dropping in, so falling is the clip it shows first.
+            // With mates on screen an image pack holds only the clips it is showing; see
+            // CharacterLibrary. The mates' packs start being read here, on a thread of
+            // their own, while this one gets on with the theme and the windows. By the time
+            // the first window asks for its character, there is usually nothing left to
+            // wait for. A mate arrives by dropping in, so falling is the clip it shows first.
+            Library.ClipsOnDemand = true;
             foreach (var mate in Settings.Mates) Library.Preload(mate.Character, "fall");
         }
 
@@ -64,15 +65,16 @@ public sealed class App : Application
             _desktop = desktop;
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+            // Every so often the clips that have gone unshown for a while are dropped.
+            DispatcherTimer.Run(() =>
+            {
+                Library.ReleaseUnusedClips();
+                return true;
+            }, TimeSpan.FromSeconds(10));
+
             int index = 0, count = Settings.Mates.Count;
             foreach (var mate in Settings.Mates.ToList())
                 Spawn(mate, count > 1 ? (index++ + 1.0) / (count + 1) : null);
-
-            // Pictures that nothing has shown for a while are dropped. Looking every few
-            // seconds is plenty, and costs nothing when there is nothing to drop.
-            _tidy = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-            _tidy.Tick += (_, _) => Library.ReleaseUnused();
-            _tidy.Start();
 
             if (Options.SmokeTest)
             {
@@ -136,7 +138,7 @@ public sealed class App : Application
     public void ReloadCharacters()
     {
         Library.Scan();
-        // Start on all of them at once, so several different mates take no longer than one.
+        // Start on all of them now, so none waits for the window of the one before it.
         foreach (var mate in Mates) Library.Preload(mate.Settings.Character);
         foreach (var mate in Mates) mate.ReloadCharacter();
     }

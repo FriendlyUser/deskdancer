@@ -4,7 +4,8 @@ A character is a folder of images. Put the folder in either of these places:
 
 - the `characters` folder next to the program, or
 - your personal one: `%APPDATA%\DeskDancer\characters` on Windows,
-  `~/.config/DeskDancer/characters` on Linux. The menu item
+  `~/.config/DeskDancer/characters` on Linux,
+  `~/Library/Application Support/DeskDancer/characters` on macOS. The menu item
   **Character > Open characters folder** creates it and opens it for you.
 
 Then right-click the mate and choose **Character > Reload characters**.
@@ -74,6 +75,10 @@ the same with a picture of your own.
 takes it off a white background, and animates it with hair that swings on a spring, legs
 that walk, a hand that waves and a redrawn face.
 
+`domo` is a pack with no picture behind it at all: the script in its `_source` folder
+draws every frame. It is the one to copy if you would rather describe a character in
+shapes than paint it, and it has clips for sitting and napping as well.
+
 ## character.json (optional)
 
 Add this file to the folder to adjust things. Every setting is optional.
@@ -125,8 +130,8 @@ Per animation, inside `clips`:
   folder and inside a character's own folder. That makes them a good place for working
   files: `mochi/_source` is one.
 - If the menu shows "could not load", the reason is in `deskdancer.log` in the
-  settings folder. The mate uses the built-in character until it is fixed. If only one
-  animation is damaged, that shows when the mate first needs it: the mate keeps its
-  character, and the idle picture is shown where that animation would be.
+  settings folder. The mate uses the built-in character until it is fixed. If it is
+  only that one of the animations is damaged, the mate keeps its character and the idle
+  picture is shown where that animation would be.
 - Very large images are scaled down to 640 pixels on their longest side when loaded,
   and an animation is limited to 400 frames.

@@ -47,7 +47,10 @@ public sealed class Settings
         AllowTrailingCommas = true,
     };
 
-    /// <summary>Per-user folder: %APPDATA%\DeskDancer on Windows, ~/.config/DeskDancer on Linux.</summary>
+    /// <summary>
+    /// Per-user folder: %APPDATA%\DeskDancer on Windows, ~/.config/DeskDancer on Linux,
+    /// ~/Library/Application Support/DeskDancer on macOS.
+    /// </summary>
     public static string ConfigDir
     {
         get

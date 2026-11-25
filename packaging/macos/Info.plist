@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- What macOS reads to treat the DeskDancer folder as an app. publish.sh copies this into
+     DeskDancer.app/Contents and fills in the version from the project file. -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>DeskDancer</string>
+    <key>CFBundleDisplayName</key>
+    <string>DeskDancer</string>
+    <key>CFBundleIdentifier</key>
+    <string>io.github.friendlyuser.deskdancer</string>
+    <key>CFBundleExecutable</key>
+    <string>DeskDancer</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@VERSION@</string>
+    <key>CFBundleVersion</key>
+    <string>@VERSION@</string>
+    <!-- The oldest macOS the .NET runtime inside will start on. -->
+    <key>LSMinimumSystemVersion</key>
+    <string>12.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+</dict>
+</plist>

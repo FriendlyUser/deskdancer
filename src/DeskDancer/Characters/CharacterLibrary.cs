@@ -11,9 +11,6 @@ public sealed record CharacterInfo(string Id, string Name, string? Folder);
 /// </summary>
 public sealed class CharacterLibrary
 {
-    /// <summary>How long a clip's frames stay in memory after the last time they were shown.</summary>
-    public static readonly TimeSpan KeepUnused = TimeSpan.FromSeconds(60);
-
     readonly Dictionary<string, SpriteCharacter> _loaded = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, Task<SpriteCharacter>> _opening = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> _errors = new(StringComparer.OrdinalIgnoreCase);
@@ -23,7 +20,32 @@ public sealed class CharacterLibrary
     /// <summary>Extra folder to scan, from the command line.</summary>
     public string? ExtraFolder { get; set; }
 
-    public static string AppFolder => Path.Combine(AppContext.BaseDirectory, "characters");
+    /// <summary>
+    /// True while mates are on screen. An image pack loaded from then on comes back with only
+    /// its idle clip decoded: the others are read when a mate first needs them, and
+    /// <see cref="ReleaseUnusedClips"/> lets them go again. The offline tools leave this off
+    /// and get every frame of a pack up front.
+    /// </summary>
+    public bool ClipsOnDemand { get; set; }
+
+    /// <summary>How long a clip stays in memory after it was last drawn.</summary>
+    static readonly TimeSpan ClipLifetime = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// The packs that ship with the program: a "characters" folder next to it or, in a
+    /// macOS app bundle, in the bundle's Resources folder beside the one the program is in.
+    /// </summary>
+    public static string AppFolder
+    {
+        get
+        {
+            string beside = Path.Combine(AppContext.BaseDirectory, "characters");
+            if (Directory.Exists(beside)) return beside;
+            string bundled = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "Resources", "characters"));
+            return Directory.Exists(bundled) ? bundled : beside;
+        }
+    }
+
     public static string UserFolder => Path.Combine(Settings.ConfigDir, "characters");
 
     public IReadOnlyList<CharacterInfo> Available => _available;
@@ -37,13 +59,13 @@ public sealed class CharacterLibrary
     public void Scan()
     {
         // Whatever was loaded is read afresh after this, so its pictures can go now. That
-        // includes a pack another thread is still opening, once it has finished.
-        foreach (var character in _loaded.Values) character.ReleaseUnused(long.MaxValue);
+        // includes a pack that is still being opened, once that has finished.
+        foreach (var character in _loaded.Values) character.ReleaseUnused(TimeSpan.Zero);
         foreach (var opening in _opening.Values)
         {
             opening.ContinueWith(static done =>
             {
-                if (done.IsCompletedSuccessfully) done.Result.ReleaseUnused(long.MaxValue);
+                if (done.IsCompletedSuccessfully) done.Result.ReleaseUnused(TimeSpan.Zero);
                 else _ = done.Exception;
             }, TaskScheduler.Default);
         }
@@ -78,7 +100,7 @@ public sealed class CharacterLibrary
     CharacterInfo? Find(string id) => _available.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// Starts opening a pack on another thread, so that <see cref="Load"/> has less to
+    /// Starts opening a pack on the decoding thread, so that <see cref="Load"/> has less to
     /// wait for, or nothing, when it is asked for the same character a moment later.
     /// <paramref name="firstClip"/> is the clip the mate will be showing to begin with,
     /// if that is known: it is fetched as well, so the very first frame can have it.
@@ -87,7 +109,7 @@ public sealed class CharacterLibrary
     {
         if (string.IsNullOrEmpty(id) || _loaded.ContainsKey(id) || _opening.ContainsKey(id)) return;
         if (Find(id) is not { Folder: { } folder } info) return;
-        _opening[id] = Task.Run(() =>
+        _opening[id] = DecodeThread.Run(() =>
         {
             var character = SpritePackLoader.Load(info.Id, folder);
             if (firstClip != null) character.Prepare(firstClip);
@@ -97,11 +119,11 @@ public sealed class CharacterLibrary
 
     /// <summary>
     /// Loads a character, falling back to the built-in one if the pack is missing or broken.
-    /// A pack comes back ready to be shown, with its idle clip in memory. Its other clips
-    /// are decoded when a mate first needs them, unless <paramref name="everyClip"/> asks
-    /// for them all to be there before this returns.
+    /// A pack comes back ready to be shown, with its idle clip in memory. With
+    /// <see cref="ClipsOnDemand"/> its other clips are decoded when a mate first needs
+    /// them; without, they are all there when this returns.
     /// </summary>
-    public ICharacter Load(string id, bool everyClip = false)
+    public ICharacter Load(string id)
     {
         if (string.IsNullOrEmpty(id) || id.Equals(CharacterIds.BuiltIn, StringComparison.OrdinalIgnoreCase)) return _builtIn;
 
@@ -125,11 +147,22 @@ public sealed class CharacterLibrary
             try
             {
                 // Waiting for another thread here is safe: opening a pack never needs this one.
-                character = _opening.Remove(id, out var opening)
-                    ? opening.GetAwaiter().GetResult()
-                    : SpritePackLoader.Load(info.Id, info.Folder);
+                if (_opening.Remove(id, out var opening))
+                {
+                    character = opening.GetAwaiter().GetResult();
+                }
+                else
+                {
+                    character = SpritePackLoader.Load(info.Id, info.Folder);
+                    // That was decoded on this thread, which leaves memory behind that the C
+                    // library will hand back if asked.
+                    FreedMemory.Return();
+                }
                 _loaded[id] = character;
                 _errors.Remove(id);
+                // Only the idle clip has been decoded. The rest are gone through behind the
+                // scenes, so that a damaged one is still reported now, as the pack is loaded.
+                if (ClipsOnDemand) character.CheckClips();
             }
             catch (Exception ex)
             {
@@ -139,29 +172,32 @@ public sealed class CharacterLibrary
             }
         }
 
-        // A character nobody has drawn for a while has let go of its frames, so this may
-        // be where its idle clip is read again.
-        if (!character.LoadNow(everyClip))
+        // A character nobody has drawn for a while has let go of its frames, so this may be
+        // where its idle clip is read again. And with every clip wanted up front, as the
+        // offline tools want them, a pack that cannot supply one of them is no use at all.
+        if (!character.LoadNow(everyClip: !ClipsOnDemand) || !ClipsOnDemand && character.Problem != null)
         {
             _loaded.Remove(id);
             _errors[id] = character.Problem ?? "The idle clip could not be read.";
+            character.ReleaseUnused(TimeSpan.Zero);
+            Log.Error($"Character '{id}' cannot be used ({_errors[id]}); using the built-in one");
             return _builtIn;
         }
         return character;
     }
 
     /// <summary>
-    /// Lets go of the frames of every clip that nothing has shown for
-    /// <paramref name="unusedFor"/>, <see cref="KeepUnused"/> if not given, and returns how
-    /// many bytes that gave up. A character on screen keeps its idle clip and whatever it
-    /// has been doing lately; one that no mate is using any more ends up holding nothing.
+    /// Lets go of the frames of clips that nothing has drawn for a while, and returns how
+    /// many bytes that gave up. They come back by themselves the next time they are drawn.
+    /// A character on screen keeps its idle clip and whatever it has been doing lately; one
+    /// that no mate is using any more ends up holding nothing.
     /// </summary>
-    public long ReleaseUnused(TimeSpan? unusedFor = null)
+    public long ReleaseUnusedClips(TimeSpan? unusedFor = null)
     {
-        long since = Environment.TickCount64 - (long)(unusedFor ?? KeepUnused).TotalMilliseconds;
         long bytes = 0;
-        foreach (var character in _loaded.Values) bytes += character.ReleaseUnused(since);
-        PictureMemory.Return();
+        foreach (var character in _loaded.Values) bytes += character.ReleaseUnused(unusedFor ?? ClipLifetime);
+        // The frames were bitmaps the C library allocated, so it is asked to hand them back.
+        if (bytes > 0) FreedMemory.Return();
         return bytes;
     }
 
