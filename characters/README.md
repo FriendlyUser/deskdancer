@@ -64,6 +64,10 @@ frames and single stills. Copy it and replace the images to get started.
 has the scripts that cut the character out and drew the animations, if you want to do
 the same with a picture of your own.
 
+`lyra` is the same idea for a drawing: its `_source` folder sharpens the drawing,
+takes it off a white background, and animates it with hair that swings on a spring, legs
+that walk, a hand that waves and a redrawn face.
+
 ## character.json (optional)
 
 Add this file to the folder to adjust things. Every setting is optional.
@@ -111,7 +115,9 @@ Per animation, inside `clips`:
 ## If it does not show up
 
 - The folder needs at least one image in it, or in a folder inside it.
-- Folders whose names start with `.` or `_` are ignored.
+- Folders whose names start with `.` or `_` are ignored, both in the `characters`
+  folder and inside a character's own folder. That makes them a good place for working
+  files: `mochi/_source` is one.
 - If the menu shows "could not load", the reason is in `deskdancer.log` in the
   settings folder. The mate uses the built-in character until it is fixed.
 - Very large images are scaled down to 640 pixels on their longest side when loaded,

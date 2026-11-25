@@ -73,7 +73,28 @@ public static class SmokeTest
         }
 
         MateWindow First() => app.Mates[0];
-        string? spritePack = app.Library.Available.FirstOrDefault(c => c.Folder != null)?.Id;
+
+        // The image packs that are installed, and a check that a mate really became the
+        // character it was asked to be, not the built-in one standing in for a broken pack.
+        var packs = app.Library.Available.Where(c => c.Folder != null).Select(c => c.Id).ToList();
+
+        // Load them all now. A big pack takes a second or more, and the steps below are on a
+        // clock: loaded on the spot, a new mate would still be dropping in when it is checked.
+        foreach (string id in packs)
+        {
+            var loading = Stopwatch.StartNew();
+            var character = app.Library.Load(id);
+            Note($"loaded '{id}' in {loading.ElapsedMilliseconds} ms; its own dances: " +
+                 (character.DanceClips.Count == 0 ? "none" : string.Join(", ", character.DanceClips.Select(d => d.Name))));
+        }
+        bool Same(string a, string b) => a.Equals(b, StringComparison.OrdinalIgnoreCase);
+        void MustBe(MateWindow mate, string id)
+        {
+            if (app.Library.ErrorFor(id) is { } error)
+                throw new InvalidOperationException($"character '{id}' failed to load: {error}");
+            if (!Same(mate.Character.Id, id))
+                throw new InvalidOperationException($"asked for character '{id}' but got '{mate.Character.Id}'");
+        }
 
         // Each step fires once, at a fraction of the total run time.
         var steps = new List<(double At, string Name, Action Run)>
@@ -82,6 +103,13 @@ public static class SmokeTest
             {
                 if (app.Mates.Count != 1) throw new InvalidOperationException($"expected 1 mate, found {app.Mates.Count}");
                 Note($"characters: {string.Join(", ", app.Library.Available.Select(c => c.Id))}");
+                foreach (string id in packs)
+                    if (app.Library.ErrorFor(id) is { } error)
+                        throw new InvalidOperationException($"character '{id}' failed to load: {error}");
+                string wanted = First().Settings.Character;
+                Note($"first mate is '{First().Character.Id}' ({First().Character.DisplayName})");
+                if (Same(wanted, CharacterIds.BuiltIn) || packs.Any(p => Same(p, wanted))) MustBe(First(), wanted);
+                else Note($"character '{wanted}' is not installed; the built-in one is standing in");
                 var screen = First().Screens.Primary ?? First().Screens.All.FirstOrDefault();
                 Note($"screens: {First().Screens.All.Count}, work area: {screen?.WorkingArea}, scaling {First().RenderScaling}");
             }),
@@ -148,10 +176,12 @@ public static class SmokeTest
             }),
             (0.33, "second mate + party", () =>
             {
-                var second = app.AddMate(spritePack ?? CharacterIds.BuiltIn);
+                // Between them the two mates cover both kinds of character: the one drawn in
+                // code and an image pack.
+                string id = First().Character.IsRigged ? packs.FirstOrDefault() ?? CharacterIds.BuiltIn : CharacterIds.BuiltIn;
+                var second = app.AddMate(id);
                 Note($"second mate uses '{second.Character.Id}' ({second.Character.DisplayName})");
-                if (spritePack != null && app.Library.ErrorFor(spritePack) is { } error)
-                    throw new InvalidOperationException($"image pack '{spritePack}' failed to load: {error}");
+                MustBe(second, id);
                 app.SetParty(true);
             }),
             (0.42, "drop clips", () =>
@@ -202,12 +232,22 @@ public static class SmokeTest
                 var b = First().Brain;
                 if (Math.Abs(b.FootY - b.Floor) > 2) throw new InvalidOperationException("mate did not fall back to the floor");
                 b.Sit();
-                app.Mates[1].SetCharacter(CharacterIds.BuiltIn);
+
+                // Turn the second mate into a character neither mate has been yet, where there
+                // is one, so that every kind that is installed gets loaded and drawn.
+                var second = app.Mates[1];
+                string id = packs.FirstOrDefault(p => !Same(p, First().Character.Id) && !Same(p, second.Character.Id))
+                            ?? (second.Character.IsRigged ? packs.FirstOrDefault() : null)
+                            ?? CharacterIds.BuiltIn;
+                second.SetCharacter(id);
                 app.ReloadCharacters();
+                Note($"second mate is now '{second.Character.Id}' ({second.Character.DisplayName})");
+                MustBe(second, id);
             }),
             (0.94, "remove mate", () =>
             {
                 Snap(First(), "5-sitting");
+                Snap(app.Mates[1], "5-swapped");
                 app.RemoveMate(app.Mates[1]);
                 if (app.Mates.Count != 1) throw new InvalidOperationException("second mate was not removed");
             }),
@@ -245,6 +285,7 @@ public static class SmokeTest
             e.Handled = true;
             Finish(false, "unhandled UI exception: " + e.Exception);
         };
+        watch.Restart();
         timer.Start();
     }
 }

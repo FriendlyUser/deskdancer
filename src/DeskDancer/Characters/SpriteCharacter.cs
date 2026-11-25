@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Avalonia;
@@ -239,7 +240,9 @@ public static partial class SpritePackLoader
         try
         {
             return Directory.EnumerateFiles(dir).Any(IsImage)
-                   || Directory.EnumerateDirectories(dir).Any(d => Directory.EnumerateFiles(d).Any(IsImage));
+                   || Directory.EnumerateDirectories(dir).Any(d =>
+                       !Path.GetFileName(d).StartsWith('.') && !Path.GetFileName(d).StartsWith('_')
+                       && Directory.EnumerateFiles(d).Any(IsImage));
         }
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
@@ -516,8 +519,11 @@ public static partial class SpritePackLoader
         }
         foreach (var folder in Directory.EnumerateDirectories(dir).OrderBy(f => f, NaturalOrder.Instance))
         {
+            // A folder of frames is a clip, unless its name starts with "." or "_": those are
+            // the pack author's own working files (a "_source" folder, say) and stay out of it.
             string rel = Path.GetFileName(folder);
-            if (claimed.Contains(rel) || rel.StartsWith('.') || !Directory.EnumerateFiles(folder).Any(IsImage)) continue;
+            if (claimed.Contains(rel) || rel.StartsWith('.') || rel.StartsWith('_')) continue;
+            if (!Directory.EnumerateFiles(folder).Any(IsImage)) continue;
             string key = NormaliseKey(rel, out _, out _);
             sources.TryAdd(key, new ClipSource { Key = key, Folder = rel });
         }
@@ -636,11 +642,13 @@ public static partial class SpritePackLoader
 
     static unsafe bool HasTransparency(SKBitmap bmp)
     {
+        // Each of these is a call into Skia, so they are read once, not once per pixel.
+        int w = bmp.Width, h = bmp.Height, stride = bmp.RowBytes;
         byte* px = (byte*)bmp.GetPixels();
-        for (int y = 0; y < bmp.Height; y++)
+        for (int y = 0; y < h; y++)
         {
-            byte* row = px + y * bmp.RowBytes;
-            for (int x = 0; x < bmp.Width; x++)
+            byte* row = px + y * stride;
+            for (int x = 0; x < w; x++)
                 if (row[x * 4 + 3] < 250) return true;
         }
         return false;
@@ -721,11 +729,13 @@ public static partial class SpritePackLoader
         int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
         foreach (var bmp in frames)
         {
+            // Each of these is a call into Skia, so they are read once, not once per pixel.
+            int w = bmp.Width, h = bmp.Height, stride = bmp.RowBytes;
             byte* px = (byte*)bmp.GetPixels();
-            for (int y = 0; y < bmp.Height; y++)
+            for (int y = 0; y < h; y++)
             {
-                byte* row = px + y * bmp.RowBytes;
-                for (int x = 0; x < bmp.Width; x++)
+                byte* row = px + y * stride;
+                for (int x = 0; x < w; x++)
                 {
                     if (row[x * 4 + 3] <= 12) continue;
                     if (x < minX) minX = x;
@@ -817,14 +827,33 @@ public static partial class SpritePackLoader
         };
     }
 
-    static Bitmap[] CutFrames(List<SKBitmap> frames, SKRectI crop, double shrink, int outW, int outH)
+    static unsafe Bitmap[] CutFrames(List<SKBitmap> frames, SKRectI crop, double shrink, int outW, int outH)
     {
         var bitmaps = new Bitmap[frames.Count];
         var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
+        byte[]? rows = null;
         try
         {
             for (int i = 0; i < frames.Count; i++)
             {
+                // Nothing to resize, which is the usual case: copy the trimmed rows straight
+                // across. Drawing them through a canvas gives the same pixels far more slowly.
+                var frame = frames[i];
+                if (shrink == 1 && frame.Width >= crop.Right && frame.Height >= crop.Bottom)
+                {
+                    int rowBytes = outW * 4;
+                    rows ??= new byte[rowBytes * outH];
+                    fixed (byte* to = rows)
+                    {
+                        byte* from = (byte*)frame.GetPixels() + crop.Top * frame.RowBytes + crop.Left * 4;
+                        for (int y = 0; y < outH; y++)
+                            Buffer.MemoryCopy(from + (long)y * frame.RowBytes, to + (long)y * rowBytes, rowBytes, rowBytes);
+                        bitmaps[i] = new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, (nint)to,
+                            new PixelSize(outW, outH), new Vector(96, 96), rowBytes);
+                    }
+                    continue;
+                }
+
                 using var cell = new SKBitmap(InfoFor(outW, outH));
                 cell.Erase(SKColors.Transparent);
                 using (var canvas = new SKCanvas(cell))
