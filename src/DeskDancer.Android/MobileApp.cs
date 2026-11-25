@@ -1,32 +1,19 @@
 using Android.Content;
-using Avalonia.Controls.Embedding;
-using Avalonia.Controls.Primitives;
-using Avalonia.Media;
-using Avalonia.Styling;
-using Avalonia.Themes.Fluent;
 using DeskDancer.Characters;
 using DeskDancer.Engine;
 
 namespace DeskDancer.Droid;
 
 /// <summary>
-/// The Avalonia application. It shows no windows of its own: the mate is drawn by an
-/// Avalonia view inside the overlay that <see cref="MateService"/> puts on the screen.
+/// The Avalonia application. It shows no windows of its own: Avalonia draws the mate
+/// off-screen, and the overlay that <see cref="MateService"/> puts on the screen shows the
+/// result (see <see cref="StageCanvas"/>). It needs no theme, as it has no controls.
 /// </summary>
 public sealed class MobileApp : Avalonia.Application
 {
     public override void Initialize()
     {
         Name = "DeskDancer";
-        RequestedThemeVariant = ThemeVariant.Dark;
-        // The view that hosts the mate is a content control, which needs a theme to show its content.
-        Styles.Add(new FluentTheme());
-        // The theme paints the root of every Avalonia view in its background colour. The mate's
-        // root has to be see-through, as the desktop's window is, or it stands in a dark box.
-        Styles.Add(new Style(x => x.OfType<EmbeddableControlRoot>())
-        {
-            Setters = { new Setter(TemplatedControl.BackgroundProperty, Brushes.Transparent) },
-        });
     }
 }
 

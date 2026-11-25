@@ -2,7 +2,8 @@
 
   <!--
     DeskDancer on Android: the same engine, characters and drawing as the desktop program,
-    hosted in a "display over other apps" overlay run by a foreground service. The shared
+    hosted in a "display over other apps" overlay run by a foreground service. Avalonia
+    draws each frame off-screen; a plain Android view shows it (see StageCanvas.cs). The shared
     code is compiled in from ../DeskDancer rather than referenced, so the desktop project
     stays as it is. Building this needs the Android workload: dotnet workload install android
   -->
@@ -31,7 +32,6 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia.Android" Version="12.2.0" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.2.0" />
   </ItemGroup>
 
   <!-- The platform-neutral part of the desktop program. -->

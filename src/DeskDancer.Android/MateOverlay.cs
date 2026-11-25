@@ -4,7 +4,6 @@ using Android.OS;
 using Android.Runtime;
 using Android.Util;
 using Android.Views;
-using Avalonia.Android;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using DeskDancer.Characters;
@@ -17,9 +16,9 @@ namespace DeskDancer.Droid;
 /// <summary>
 /// One mate on the phone's screen. It is two overlay windows that move together:
 /// <list type="bullet">
-/// <item>the stage, a transparent window a little bigger than the character, with the
-/// shared <see cref="MateView"/> drawing in it. It never takes touches, so taps around the
-/// character reach the app underneath.</item>
+/// <item>the stage, a transparent window a little bigger than the character, showing what
+/// the shared <see cref="MateView"/> draws (see <see cref="StageCanvas"/>). It never takes
+/// touches, so taps around the character reach the app underneath.</item>
 /// <item>the hit box, an empty window over the character's body that takes its touches:
 /// drag to carry and throw, tap to poke, double-tap to dance, long-press for settings.</item>
 /// </list>
@@ -35,7 +34,7 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
 
     readonly Context _context;
     readonly IWindowManager _windows;
-    readonly AvaloniaView _stage;
+    readonly StageCanvas _stage;
     readonly AView _hitBox;
     readonly MateView _view = new();
     readonly WindowManagerLayoutParams _stageLp, _hitLp;
@@ -68,18 +67,7 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
         Brain = new MateBrain(Stage.Clock, Stage.Conductor, Stage.Settings, _character, _rng);
         _view.Brain = Brain;
 
-        _stage = new AvaloniaView(context) { Content = _view };
-        // Avalonia draws on a SurfaceView, which normally sits behind its window with the window
-        // cut away in front of it. Behind an overlay, Android shows the see-through parts of such a
-        // surface as black. On top of its window, with a translucent format, they stay see-through.
-        for (int i = 0; i < _stage.ChildCount; i++)
-        {
-            if (_stage.GetChildAt(i) is SurfaceView surface)
-            {
-                surface.SetZOrderOnTop(true);
-                surface.Holder?.SetFormat(Format.Translucent);
-            }
-        }
+        _stage = new StageCanvas(context, _density);
         _stageLp = NewParams(touchable: false);
         // From Android 12 a touch only gets through another app's window when that window is
         // see-through enough, so the stage is drawn just under that limit.
@@ -153,6 +141,9 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
         _stageLp.Height = (int)Math.Ceiling(_stageH * _density);
         _view.CharacterHeight = h;
         _view.Scaling = _density;
+        // The view is drawn off-screen, outside any window, so it is given its size by hand.
+        _view.Measure(new Avalonia.Size(_stageW, _stageH));
+        _view.Arrange(new Avalonia.Rect(0, 0, _stageW, _stageH));
         Brain.H = h * _density;
     }
 
@@ -275,7 +266,7 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
         Brain.Update(dt);
         ApplyPosition();
         ApplyHitBox();
-        _view.InvalidateVisual();
+        _stage.Render(_view, _stageLp.Width, _stageLp.Height);
         FrameCount++;
 
         _releaseIn -= dt;
