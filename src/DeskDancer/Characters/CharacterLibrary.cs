@@ -1,3 +1,5 @@
+using DeskDancer.Platform;
+
 namespace DeskDancer.Characters;
 
 /// <summary>A character the user can pick, before any of its images are loaded.</summary>
@@ -81,6 +83,11 @@ public sealed class CharacterLibrary
             _errors[id] = ex.Message;
             Log.Error($"Could not load character '{id}' from {info.Folder}", ex);
             return _builtIn;
+        }
+        finally
+        {
+            // Decoding a pack goes through far more memory than the pack ends up holding.
+            FreedMemory.Return();
         }
     }
 
