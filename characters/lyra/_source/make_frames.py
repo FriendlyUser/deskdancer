@@ -5,7 +5,7 @@
     python3 make_frames.py --sheet      # also saves sheet.png, every frame on one page
     python3 make_frames.py idle drag    # only rebuilds the clips named
 
-It takes about five minutes for everything.
+It takes about a minute for everything.
 
 The drawing is treated as a puppet with a few working parts:
 
@@ -17,15 +17,21 @@ The drawing is treated as a puppet with a few working parts:
   damped spring drives them from the body's own motion, so they lag and overshoot.
 - Hand. The open hand bends at the wrist to wave; the sash behind it is repainted so
   nothing shows through when it lifts.
-- Body. Lean, squash, sway and hops, all about the point between the feet.
+- Legs. Each leg is its own layer behind the skirt, so the legs can swing to walk and
+  kick, and tuck up under the skirt when she bends her knees or sits on her heels.
+- Waist. Swaying turns her head and shoulders and bends the torso smoothly down to her
+  hips, which stay put.
+- Body. Lean, squash and hops, all about the point between the feet.
 
 Every clip is drawn on the same canvas with the feet in the same place, then trimmed to
 the part it uses so the pack loads quickly; character.json records where the feet are in
-each clip (anchor), so clips never jump. Coordinates are pixels of cutout.png. Needs numpy, pillow and opencv-python-headless. This folder starts with "_",
-so the app does not load anything from it.
+each clip (anchor), so clips never jump. Coordinates are pixels of cutout.png. Needs
+numpy, pillow and opencv-python-headless. This folder starts with "_", so the app does
+not load anything from it.
 """
 import json
 import math
+import multiprocessing
 import sys
 from pathlib import Path
 
@@ -99,7 +105,7 @@ HAIR_TIPS = {"L": (150, 700), "R": (800, 720)}
 # The open hand bends at the wrist. HAND outlines fingers, palm, thumb and glove; the
 # bend fades in between BEND_FROM and BEND_TO pixels out from the wrist.
 HAND = [(304, 770), (284, 769), (266, 774), (247, 771), (232, 763), (214, 760), (203, 765), (196, 778),
-        (197, 792), (207, 805), (224, 811), (233, 812), (235, 824), (243, 832), (253, 832), (263, 831), (278, 834),
+        (197, 792), (207, 807), (224, 815), (233, 815), (235, 824), (243, 832), (253, 832), (263, 831), (278, 834),
         (296, 829), (308, 820), (310, 804)]
 WRIST = (302, 798)
 HAND_AXIS = (-1.0, -0.08)                   # from the wrist towards the fingertips
@@ -107,6 +113,28 @@ BEND_FROM, BEND_TO = 2, 30
 # What the thumb hides: the top of the sash, and its outline on the left.
 SASH_UNDER = [(261, 840), (275, 796), (314, 796), (314, 840)]
 SASH_EDGE = ([(256, 846), (262, 832), (267, 818), (272, 806), (276, 796)], [5.5, 5.5, 5.5, 5.5, 5.5])
+
+# Legs. Each outline follows the skirt's hem where the leg goes under it and runs through
+# empty background elsewhere; LEG_SPLIT is the line between the two, down the gap that
+# separates them. The far leg (left on screen) is drawn behind the near one, and both
+# behind the skirt, so they can swing and tuck up under it. They turn about points just
+# under the hem, which keeps them from sliding sideways where they meet it. The slit of
+# thigh that shows between two panels of the skirt is left as part of the skirt.
+LEG_SPLIT = [(418, 967), (412, 971), (407.5, 976), (406.5, 990), (409, 998), (412, 1006), (414.5, 1012),
+             (416.5, 1022), (421, 1030), (421, 1040), (425, 1048), (425, 1085)]
+LEG_FAR = [(314, 1085), (314, 965), (322, 950), (335, 946), (345, 943.5), (351, 943), (357, 941.5),
+           (366, 934), (376, 926), (383, 932), (392, 941), (400, 949), (408, 956), (414, 962)]
+LEG_NEAR = [(422.5, 964), (427, 955), (434, 945.5), (441, 938.5), (449, 936), (460, 940), (470.5, 945),
+            (472.5, 950.5), (477, 951), (483, 955.5), (489, 958.5), (496, 963), (590, 963), (590, 1085)]
+HIP = {"far": (378, 925), "near": (452, 925)}
+LEG_TOP = {"far": (352, 412), "near": (423, 487)}      # columns where each leg carries on up under the skirt
+LEG_HIDDEN = 70                             # how far up that hidden part is painted
+CROUCH = 66                                 # how far she sinks when her knees are fully bent
+
+# Swaying bends her at the waist. Everything above SWAY_TOP_Y turns as one piece about
+# SWAY_PIVOT, nothing below SWAY_BOTTOM_Y moves, and the torso bends smoothly in between.
+SWAY_TOP_Y, SWAY_BOTTOM_Y = 650, 850
+SWAY_PIVOT = (430, 850)
 
 INK = (0.07, 0.05, 0.07)
 MOUTH_IN = (0.47, 0.13, 0.19)
@@ -436,6 +464,38 @@ class Rig:
         self.under = under * self.under_mask[..., None]      # shown where the hand was
         self.hand = self.base * self.hand_mask[..., None]
 
+        # Legs: each layer is the drawn leg plus a plain stretch of stocking carrying on up
+        # behind the skirt, so no gap opens at the hem when it swings. The layers reach a
+        # couple of pixels past their outlines (under the skirt, and under each other), which
+        # keeps the soft edges solid where they overlap.
+        self.legs_mask = poly_mask(LEG_FAR + LEG_SPLIT[:1] + LEG_NEAR, 0.6)
+        far = np.minimum(poly_mask(LEG_FAR + LEG_SPLIT, 0.6), self.legs_mask)
+        exact = {"far": far, "near": self.legs_mask - far}
+        self.leg, self.leg_outline = {}, {}
+        for name in ("far", "near"):
+            hard = exact[name] > 0.5
+            contours, _ = cv2.findContours((hard & (a > 0.5)).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            self.leg_outline[name] = max(contours, key=cv2.contourArea)[:, 0, :].astype(np.float64)
+            wide = cv2.dilate(exact[name], np.ones((5, 5), np.uint8))
+            layer = self.base * wide[..., None]
+            leg_px = rgb[hard & (a > 0.95)][:, :3]
+            dark = leg_px[leg_px.max(axis=1) < 0.42]
+            stocking = np.median(dark, axis=0)
+            outline = np.median(dark[dark.sum(axis=1) < np.percentile(dark.sum(axis=1), 10)], axis=0)
+            hidden = np.zeros((H, W), np.float32)
+            colour = np.zeros((H, W, 3), np.float32)
+            x_from, x_to = (v - X0 for v in LEG_TOP[name])
+            for x in range(x_from, x_to + 1):
+                top = int(np.nonzero(hard[:, x])[0].min())
+                edge = min(x - x_from, x_to - x) < 4
+                colour[top - LEG_HIDDEN:top + 3, x] = outline if edge else stocking
+                hidden[top - LEG_HIDDEN:top + 3, x] = 1
+            hidden = cv2.GaussianBlur(hidden, (0, 0), 0.7)
+            colour = cv2.GaussianBlur(colour, (0, 0), 0.9)
+            self.leg[name] = layer + np.dstack([colour * hidden[..., None], hidden]) * (1 - layer[..., 3:])
+
+        self.sway_w = smoothstep((SWAY_BOTTOM_Y - Y0 - yy) / (SWAY_BOTTOM_Y - SWAY_TOP_Y))
+
     def hand_pose(self, img, lift):
         """lift: degrees the fingertips rise (negative lowers them)."""
         if abs(lift) < 1e-3:
@@ -462,18 +522,64 @@ class Rig:
         return cv2.remap(img, (xx - dx).astype(np.float32), (yy - dy).astype(np.float32), cv2.INTER_CUBIC,
                          borderMode=cv2.BORDER_CONSTANT).clip(0, 1)
 
-    def body_matrix(self, lean=0.0, squash=0.0, dx=0.0, dy=0.0):
-        fx, fy = to_canvas(*self.feet)
-        return about(fx, fy, lean, 1 + 0.6 * squash, 1 - squash, dx, dy)
+    def legs_pose(self, img, legs, lift, crouch):
+        """legs: degrees each leg swings back (far, near; negative is forward, the way she
+        faces). lift: pixels each foot is raised. crouch: 0..1, how far the knees are bent,
+        which tucks both legs up under the skirt."""
+        if not (any(legs) or any(lift) or crouch):
+            return img
+        under = None
+        for name, deg, up in (("near", legs[1], lift[1]), ("far", legs[0], lift[0])):
+            hx, hy = to_canvas(*HIP[name])
+            layer = transform(self.leg[name], about(hx, hy, deg, dy=-up - crouch * CROUCH))
+            under = layer if under is None else under + layer * (1 - under[..., 3:])
+        body = img * (1 - self.legs_mask[..., None])
+        return body + under * (1 - body[..., 3:])
 
-    def pose(self, eyes=("open", "open"), mouth="grin", hand=0.0, hair=None, lean=0.0, squash=0.0, dx=0.0,
-             dy=0.0):
+    def foot_drop(self, name, deg):
+        """How far below its resting level the lowest point of a leg ends up when the leg is
+        turned by deg (negative if it rises). Raising the leg by this much keeps the foot on
+        the floor: on its heel when the leg is forward, on its toes when it is back."""
+        hx, hy = to_canvas(*HIP[name])
+        pts = self.leg_outline[name]
+        c, s_ = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+        return float((hy + (pts[:, 0] - hx) * s_ + (pts[:, 1] - hy) * c).max() - pts[:, 1].max())
+
+    def sway_pose(self, img, deg):
+        """deg: how far the head and shoulders tip, bending at the waist (positive is right)."""
+        if abs(deg) < 1e-3:
+            return img
+        xx, yy = self.grid
+        px, py = to_canvas(*SWAY_PIVOT)
+        vx, vy = xx - px, yy - py
+        phi = np.radians(deg) * self.sway_w
+        c, s_ = np.cos(phi), np.sin(phi)
+        return cv2.remap(img, (px + vx * c + vy * s_).astype(np.float32), (py - vx * s_ + vy * c).astype(np.float32),
+                         cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT).clip(0, 1)
+
+    def body_matrix(self, lean=0.0, squash=0.0, dx=0.0, dy=0.0, crouch=0.0, **_):
+        fx, fy = to_canvas(*self.feet)
+        return about(fx, fy, lean, 1 + 0.6 * squash, 1 - squash, dx, dy + crouch * CROUCH)
+
+    def place(self, point, sway=0.0, **body):
+        """Where a point of the drawing (cutout pixels) ends up on the canvas in a pose."""
+        x, y = to_canvas(*point)
+        px, py = to_canvas(*SWAY_PIVOT)
+        w = float(smoothstep((py - y) / (SWAY_BOTTOM_Y - SWAY_TOP_Y)))
+        c, s_ = math.cos(math.radians(sway * w)), math.sin(math.radians(sway * w))
+        x, y = px + (x - px) * c - (y - py) * s_, py + (x - px) * s_ + (y - py) * c
+        return self.body_matrix(**body) @ np.array([x, y, 1.0])
+
+    def pose(self, eyes=("open", "open"), mouth="grin", hand=0.0, hair=None, sway=0.0, legs=(0.0, 0.0),
+             lift=(0.0, 0.0), crouch=0.0, lean=0.0, squash=0.0, dx=0.0, dy=0.0):
         img = self.face.get(tuple(eyes), mouth)
         img = self.hand_pose(img, hand)
+        img = self.legs_pose(img, legs, lift, crouch)
         if hair:
             img = self.hair_pose(img, hair)
-        if lean or squash or dx or dy:
-            img = transform(img, self.body_matrix(lean, squash, dx, dy))
+        img = self.sway_pose(img, sway)
+        if lean or squash or dx or dy or crouch:
+            img = transform(img, self.body_matrix(lean, squash, dx, dy, crouch))
         return img
 
     @property
@@ -502,7 +608,7 @@ class Hair:
     """Each fall of hair is a damped spring hung from the body. When the body moves, the
     tip is left behind and swings back, so the hair lags, overshoots and settles.
 
-    body(t) gives the body pose (lean, squash, dx, dy) at time t; push(t) an extra force
+    body(t) gives the body pose (lean, sway, crouch, dx, dy...) at time t; push(t) an extra force
     per side (a breeze, a flutter). The clip is a loop, so the spring is run for a few
     turns first and the last one is kept, which makes the loop seamless."""
 
@@ -511,15 +617,11 @@ class Hair:
         self.period, self.limit = period, limit
         dt = 1 / 480
         steps = int(round(period / dt))
-        tips = {k: np.array(v, float) for k, v in HAIR_TIPS.items()}
-
         def where(t, k):
-            m = rig.body_matrix(**body(t))
-            x, y = to_canvas(*tips[k])
-            return m @ np.array([x, y, 1.0])
+            return rig.place(HAIR_TIPS[k], **body(t))
 
-        self.track = {k: [] for k in tips}
-        for k in tips:
+        self.track = {}
+        for k in HAIR_TIPS:
             o, v = np.zeros(2), np.zeros(2)
             for turn in range(4):
                 rec = []
@@ -534,7 +636,8 @@ class Hair:
 
     def at(self, t):
         i = int(round((t % self.period) * 480)) % len(self.track["L"])
-        lean = math.radians(self.body(t).get("lean", 0.0))
+        pose = self.body(t)
+        lean = math.radians(pose.get("lean", 0.0) + 0.8 * pose.get("sway", 0.0))
         c, s = math.cos(-lean), math.sin(-lean)
         out = {}
         for k, rec in self.track.items():
@@ -571,13 +674,18 @@ def smooth_ramp(t, start, length):
 
 # ---------------------------------------------------------------- the clips
 
-def blink(frames):
-    frames += [(dict(eyes=(0.5, 0.5)), 40), (dict(eyes=("closed", "closed")), 70), (dict(eyes=(0.5, 0.5)), 50)]
+OPEN, SHUT, HAPPY_EYES, WIDE = ("open", "open"), ("closed", "closed"), ("happy", "happy"), ("wide", "wide")
+
+
+def blink(frames, **held):
+    """Adds a blink; `held` is the rest of the pose she keeps while she does it."""
+    for eyes, ms in (((0.5, 0.5), 40), (SHUT, 70), ((0.5, 0.5), 50)):
+        frames.append((dict(held, eyes=eyes), ms))
 
 
 def idle(rig):
-    """Mostly still, which the app breathes for her. Blinks, a breeze through her hair,
-    and now and then a little wave."""
+    """Mostly still, which the app breathes for her. Blinks, a breeze through her hair, a
+    tilt of the head as if listening, and now and then a wave."""
     f = [(dict(), 2200)]
     blink(f)
     f.append((dict(), 1400))
@@ -587,59 +695,98 @@ def idle(rig):
         b = bump(t, 0.0, 1.5)
         return {"L": (900 * b, -250 * b), "R": (1100 * b, -200 * b)}
     hair = Hair(rig, lambda t: {}, breeze, period=4.0, stiffness=70, damping=5.5)
-    times = even(2.0, 8)
-    f += frames_from(times, lambda t: dict(hair=hair.at(t)))
+    f += frames_from(even(2.0, 8), lambda t: dict(hair=hair.at(t)))
     f.append((dict(), 1200))
     blink(f)
     f.append((dict(), 110))
     blink(f)
+    f.append((dict(), 900))
+
+    # She tips her head and shoulders to one side, holds it, and comes back.
+    for sway, ms in ((1.6, 60), (3.6, 60), (4.5, 1100), (3.0, 60), (1.2, 60)):
+        f.append((dict(sway=sway, hair={"L": (-1.5 * sway, 0), "R": (-1.5 * sway, 0)}), ms))
     f.append((dict(), 1000))
 
-    # Wave hello: up, two waggles, down.
+    # Wave hello: up, three waggles, down, leaning a little towards the hand.
     def wave(t):
-        up = smooth_ramp(t, 0.0, 0.25) * (1 - smooth_ramp(t, 1.35, 0.25))
-        return up * (13 + 6 * math.sin(2 * math.pi * 2.0 * (t - 0.25)))
-    times = even(1.6, 10)
-    f += frames_from(times, lambda t: dict(eyes=("happy", "happy") if 0.2 < t < 1.45 else ("open", "open"),
-                                           hand=wave(t)))
+        up = smooth_ramp(t, 0.0, 0.25) * (1 - smooth_ramp(t, 1.25, 0.25))
+        return dict(hand=up * (20 + 9 * math.sin(2 * math.pi * 2.0 * (t - 0.25))), sway=-2.5 * up,
+                    eyes=HAPPY_EYES if 0.2 < t < 1.35 else OPEN)
+    f += frames_from(even(1.5, 10), wave)
     f.append((dict(), 1600))
     blink(f)
     f.append((dict(), 800))
     return f
 
 
+def walk(rig):
+    """One stride (two steps). With a walk clip the app adds no motion of its own, so the
+    bob and the lean are drawn in. The legs swing from under the skirt; each foot stays
+    planted on the floor while it travels back (heel first, then toes) and is picked up
+    as it comes forward, and the body dips when both feet are down."""
+    period, swing, step = 0.4, 18.0, 11.0
+
+    def body(t):
+        p = 2 * math.pi * t / period
+        s, c = math.sin(p), math.cos(p)
+        dy = 2.5 - 5 * c * c
+        legs = (swing * s, -swing * s)
+        height = (step * max(0.0, -c), step * max(0.0, c))      # of each foot above the floor
+        lift = tuple(h + rig.foot_drop(name, deg) + dy for name, deg, h in zip(("far", "near"), legs, height))
+        return dict(legs=legs, lift=lift, dy=dy, lean=2.5, sway=1.5 * s)
+    hair = Hair(rig, body, period=period, stiffness=160, damping=8)
+    return frames_from(even(period, 20), lambda t: dict(
+        hand=5 + 6 * math.sin(2 * math.pi * t / period), hair=hair.at(t), **body(t)))
+
+
+def sit(rig):
+    """Settled on her heels with her skirt round her: blinks, and a contented moment."""
+    held = dict(crouch=1.0, hand=-5)
+    f = [(held, 2000)]
+    blink(f, **held)
+    f.append((held, 1500))
+    f.append((dict(held, sway=1.0), 60))
+    f.append((dict(held, sway=2.2, eyes=HAPPY_EYES, mouth="smile"), 1300))
+    f.append((dict(held, sway=1.0), 60))
+    f.append((held, 1200))
+    blink(f, **held)
+    f.append((held, 600))
+    return f
+
+
 def happy_dance(rig):
-    """Shown during every built-in dance move, which adds its own body motion. Two beats
-    at 120 BPM: she sings on one and grins on the other, pumps her hand, and her hair
-    bounces as if she were bobbing."""
+    """Shown during every built-in dance move, which adds its own bounces, leans and spins,
+    so her feet stay still here. Two beats at 120 BPM: she sings on one and grins on the
+    other, sways at the waist and pumps her hand, and her hair bounces along."""
     period = 1.0
-    bob = lambda t: dict(dy=-10 * abs(math.sin(2 * math.pi * t / period)), lean=3 * math.sin(2 * math.pi * t / period))
-    hair = Hair(rig, bob, period=period)
-    times = even(period, 12)
+
+    def body(t):
+        return dict(sway=3.5 * math.sin(2 * math.pi * t / period))
+    # The hair also feels a bounce the clip does not draw, standing in for the app's.
+    hair = Hair(rig, lambda t: dict(body(t), dy=-10 * abs(math.sin(2 * math.pi * t / period))), period=period)
 
     def at(t):
         beat = t / (period / 2)
-        return dict(eyes=("happy", "happy"), mouth="sing" if int(beat) % 2 == 0 else "grin",
-                    hand=10 * math.sin(math.pi * (beat % 1)) ** 2, hair=hair.at(t))
-    return frames_from(times, at)
+        return dict(eyes=HAPPY_EYES, mouth="sing" if int(beat) % 2 == 0 else "grin",
+                    hand=12 * math.sin(math.pi * (beat % 1)) ** 2, hair=hair.at(t), **body(t))
+    return frames_from(even(period, 12), at)
 
 
 def serenade(rig):
-    """Four beats: a slow sway, eyes closed, singing, with the hair swinging behind."""
+    """Four beats: a slow sway from the hips with her head following, eyes closed,
+    singing, sinking a little on each beat."""
     period = 2.0
 
     def body(t):
         p = 2 * math.pi * t / period
         dip = math.sin(math.pi * ((t / 0.5) % 1)) ** 2
-        return dict(lean=6 * math.sin(p), dx=10 * math.sin(p), dy=-6 * dip, squash=0.025 * (1 - dip))
+        return dict(lean=4 * math.sin(p), sway=5 * math.sin(p - 0.6), dx=8 * math.sin(p), crouch=0.22 * (1 - dip))
     hair = Hair(rig, body, period=period)
 
     def at(t):
         beat = int(t / 0.5)
-        eyes = ("closed", "closed") if beat < 3 else ("happy", "happy")
-        mouth = "sing" if beat % 2 == 0 else "smile"
-        return dict(eyes=eyes, mouth=mouth, hand=7 + 7 * math.sin(2 * math.pi * t / period + 0.6),
-                    hair=hair.at(t), **body(t))
+        return dict(eyes=SHUT if beat < 3 else HAPPY_EYES, mouth="sing" if beat % 2 == 0 else "smile",
+                    hand=7 + 7 * math.sin(2 * math.pi * t / period + 0.6), hair=hair.at(t), **body(t))
     return frames_from(even(period, 10), at)
 
 
@@ -648,25 +795,26 @@ def hair_flip(rig):
     period = 2.0
 
     def body(t):
-        lean = (-3 * bump(t, 0.0, 0.5) + 11 * bump(t, 0.5, 0.42) - 11 * bump(t, 1.0, 0.42))
-        squash = 0.06 * bump(t, 0.05, 0.45) + 0.07 * bump(t, 1.5, 0.12) + 0.05 * bump(t, 1.88, 0.12)
-        dy = -46 * math.sin(math.pi * min(1, max(0, (t - 1.6) / 0.3))) if 1.6 <= t <= 1.9 else 0.0
-        return dict(lean=lean, squash=squash, dy=dy, dx=8 * bump(t, 0.5, 0.42) - 8 * bump(t, 1.0, 0.42))
+        whip = bump(t, 0.5, 0.42) - bump(t, 1.0, 0.42)
+        hop = math.sin(math.pi * (t - 1.6) / 0.3) if 1.6 <= t <= 1.9 else 0.0
+        return dict(lean=-2 * bump(t, 0.0, 0.5) + 6 * whip, sway=-3 * bump(t, 0.0, 0.5) + 8 * whip, dx=8 * whip,
+                    crouch=0.3 * bump(t, 0.05, 0.45) + 0.35 * bump(t, 1.42, 0.2) + 0.3 * bump(t, 1.86, 0.14),
+                    dy=-46 * hop, lift=(10 * hop, 10 * hop), legs=(9 * hop, -9 * hop))
     hair = Hair(rig, body, period=period, stiffness=95, damping=5.0, gain=0.4)
 
     def at(t):
         if t < 0.45:
-            eyes, mouth = ("open", "open"), "grin"
+            eyes, mouth = OPEN, "grin"
         elif t < 1.45:
             eyes, mouth = (("happy", "open") if t < 0.95 else ("open", "happy")), "grin"
         else:
-            eyes, mouth = ("happy", "happy"), "sing"
-        return dict(eyes=eyes, mouth=mouth, hand=14 * bump(t, 1.5, 0.45), hair=hair.at(t), **body(t))
+            eyes, mouth = HAPPY_EYES, "sing"
+        return dict(eyes=eyes, mouth=mouth, hand=18 * bump(t, 1.5, 0.45), hair=hair.at(t), **body(t))
     return frames_from(even(period, 12), at)
 
 
 def wave_hello(rig):
-    """Four beats: two little hops, waving all the while."""
+    """Four beats: two little hops with a kick, waving all the while."""
     period = 2.0
 
     def body(t):
@@ -675,39 +823,46 @@ def wave_hello(rig):
             u = (t - start) / 0.42
             if 0 <= u <= 1:
                 hop = math.sin(math.pi * u)
-        land = sum(bump(t, s, 0.14) for s in (0.4, 1.4))
-        return dict(dy=-30 * hop, squash=-0.03 * hop + 0.06 * land, lean=-2 + 4 * math.sin(math.pi * t))
+        bend = sum(bump(t, start, 0.16) for start in (0.4, 0.84, 1.4, 1.84))    # landing, then gathering
+        return dict(dy=-30 * hop, crouch=0.28 * bend, lift=(9 * hop, 9 * hop), legs=(10 * hop, -10 * hop),
+                    sway=3 * math.sin(math.pi * t), lean=-1.5 * math.sin(math.pi * t))
     hair = Hair(rig, body, period=period)
 
     def at(t):
-        hop = body(t)["dy"] < -15
-        return dict(eyes=("happy", "happy"), mouth="sing" if hop else "grin",
-                    hand=12 + 7 * math.sin(2 * math.pi * 2.5 * t), hair=hair.at(t), **body(t))
+        pose = body(t)
+        return dict(eyes=HAPPY_EYES, mouth="sing" if pose["dy"] < -15 else "grin",
+                    hand=18 + 10 * math.sin(2 * math.pi * 2.5 * t), hair=hair.at(t), **pose)
     return frames_from(even(period, 10), at)
 
 
 def dangle(rig):
-    """Picked up: wide eyes, a little "o", hand flailing, hair fluttering."""
+    """Picked up, and falling: wide eyes, a little "o", legs kicking, hand flapping, hair
+    fluttering."""
     period = 0.6
 
     def flutter(t):
         p = 2 * math.pi * t / period
         return {"L": (1800 * math.sin(p), 600 * math.sin(2 * p)), "R": (-1800 * math.sin(p + 0.8), 600 * math.sin(2 * p + 1))}
-    hair = Hair(rig, lambda t: dict(squash=-0.04), flutter, period=period, stiffness=140, damping=7)
+
+    def body(t):
+        p = 2 * math.pi * t / period
+        return dict(squash=-0.04, legs=(12 * math.sin(p), -12 * math.sin(p)), sway=2.5 * math.sin(p + 1.0))
+    hair = Hair(rig, body, flutter, period=period, stiffness=140, damping=7)
     return frames_from(even(period, 15), lambda t: dict(
-        eyes=("wide", "wide"), mouth="o", hand=6 + 12 * math.sin(2 * math.pi * 2 * t / period),
-        squash=-0.04, hair=hair.at(t)))
+        eyes=WIDE, mouth="o", hand=8 + 14 * math.sin(2 * math.pi * 2 * t / period), hair=hair.at(t), **body(t)))
 
 
 def sleep(rig):
-    """Dozing, tipped to one side. The app adds the breathing and the Zs."""
-    return [(dict(eyes=("closed", "closed"), mouth="smile", hand=-5, lean=6, squash=0.05,
-                  hair={"L": (-12, 5), "R": (-14, 6)}), 1000)]
+    """Dozing on her heels, head lolling to one side. The app adds the breathing and the Zs."""
+    return [(dict(eyes=SHUT, mouth="smile", crouch=1.0, sway=6, lean=1, hand=-6,
+                  hair={"L": (5, 6), "R": (7, 8)}), 1000)]
 
 
 CLIPS = {
     # key: (file, menu name or None, frames)
     "idle": ("idle.webp", None, idle),
+    "walk": ("walk.webp", None, walk),
+    "sit": ("sit.webp", None, sit),
     "dance": ("dance.webp", "Sing Along", happy_dance),
     "dance_serenade": ("dance_serenade.webp", "Serenade", serenade),
     "dance_hair_flip": ("dance_hair_flip.webp", "Hair Flip", hair_flip),
@@ -716,14 +871,32 @@ CLIPS = {
     "sleep": ("sleep.png", None, sleep),
 }
 
+RIG = None
+
+
+def render(spec):
+    return to_image(RIG.pose(**spec))
+
+
+def render_all(specs):
+    """Draws every frame, on all the processor's cores where the system can fork."""
+    try:
+        ctx = multiprocessing.get_context("fork")
+    except ValueError:                                      # Windows: one at a time
+        return [render(spec) for spec in specs]
+    with ctx.Pool() as pool:
+        return pool.map(render, specs, chunksize=2)
+
 
 def main():
-    rig = Rig()
+    global RIG
+    cv2.setNumThreads(1)                                    # the frames are spread over cores instead
+    RIG = rig = Rig()
     only = [a for a in sys.argv[1:] if not a.startswith("--")]
     print("feet at", [round(float(v), 1) for v in rig.feet], "-> anchor", rig.anchor)
     manifest = {"name": "Lyra", "height": 160, "facing": "right", "removeBackground": False, "clips": {}}
-    sheet_rows = []
     old = json.loads((PACK / "character.json").read_text())["clips"] if (PACK / "character.json").exists() else {}
+    sheet_rows = []
     for key, (file, name, make) in CLIPS.items():
         clip = {"file": file, "anchor": old.get(key, {}).get("anchor", rig.anchor)}
         if name:
@@ -732,7 +905,7 @@ def main():
         if only and key not in only:
             continue
         frames = make(rig)
-        images = [to_image(rig.pose(**spec)) for spec, _ in frames]
+        images = render_all([spec for spec, _ in frames])
         # Keep only the part of the canvas the clip uses: the app decodes every pixel of
         # every frame when the pack loads, so empty margins would only slow that down.
         boxes = [im.getbbox() for im in images]
@@ -750,7 +923,7 @@ def main():
             images[0].save(path, optimize=True)
         else:
             images[0].save(path, save_all=True, append_images=images[1:], duration=durations, loop=0,
-                           lossless=False, quality=90, alpha_quality=100, method=6)
+                           lossless=False, quality=90, alpha_quality=100, method=4)
         sheet_rows.append((key, images))
         print(f"{file}: {len(images)} frames, {sum(durations) / 1000:.2f}s, {path.stat().st_size // 1024} KB")
 

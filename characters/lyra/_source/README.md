@@ -22,7 +22,7 @@ pip install numpy pillow opencv-python-headless
 python3 make_frames.py
 ```
 
-It takes about five minutes and overwrites the clips and `character.json` in the folder
+It takes about a minute and overwrites the clips and `character.json` in the folder
 above. Then right-click the mate and choose **Character > Reload characters**.
 `python3 make_frames.py --sheet` also saves `sheet.png` with every frame on one page, and
 `python3 make_frames.py idle drag` rebuilds only the clips named.
@@ -58,25 +58,34 @@ times before it is recorded, so the loops are seamless.
 behind it shows; that part is painted in by carrying the sash's own colours upwards, so
 its folds and outline continue unbroken.
 
+**Legs.** Each leg is its own layer, cut along the skirt's hem and drawn behind the skirt,
+with a plain stretch of stocking carrying on up out of sight. So the legs can swing from
+under the skirt to walk and kick, and tuck up under it when she bends her knees, which is
+how she crouches before a hop and settles on her heels to sit. In the walk each foot is
+held on the floor while it travels back and picked up as it comes forward.
+
+**Waist.** Swaying bends her at the waist: her head and shoulders turn as one piece, her
+hips stay put, and the torso and lute bend smoothly in between.
+
 Every clip is drawn on the same canvas with the feet in the same place, then trimmed to
 the part it uses, which keeps the pack quick to load. `character.json` records where the
 feet are in each clip (`anchor`), so nothing jumps between clips.
 
 | Clip | When the app shows it |
 | --- | --- |
-| `idle.webp` | Standing, and while walking (the app adds the breathing and the waddle). Blinks, a breeze through her hair, and now and then a little wave. |
-| `dance.webp` | During all 15 built-in dance moves, which add their own body motion: happy eyes, singing on one beat and grinning on the next, her hand pumping and her hair bouncing. Also listed as **Sing Along**. |
-| `dance_serenade.webp`, `dance_hair_flip.webp`, `dance_wave.webp` | Their own entries under **Dance move**: Serenade, Hair Flip and Wave Hello. Each is four beats at the default 120 BPM. Clip dances get no motion from the app, so the sways and hops are drawn in. |
-| `drag.webp` | Being carried, and falling: wide eyes, a little "o", her hand flapping and her hair fluttering. |
-| `sleep.png` | Napping. The app adds the breathing and the Zs. |
-
-Sitting has no clip of its own; the app squashes the idle picture.
+| `idle.webp` | Standing (the app adds the breathing). Blinks, a breeze through her hair, a tilt of the head, and now and then a wave. |
+| `walk.webp` | Wandering along the floor: one stride, with her legs stepping, a small bob and her hair bouncing. The app adds no motion of its own to a walk clip. |
+| `sit.webp` | Sitting on her heels with her skirt round her. Blinks, and a contented moment. |
+| `dance.webp` | During all 15 built-in dance moves, which add their own bounces, leans and spins: happy eyes, singing on one beat and grinning on the next, swaying at the waist, her hand pumping and her hair bouncing. Also listed as **Sing Along**. |
+| `dance_serenade.webp`, `dance_hair_flip.webp`, `dance_wave.webp` | Their own entries under **Dance move**: Serenade, Hair Flip and Wave Hello. Each is four beats at the default 120 BPM. Clip dances get no motion from the app, so the sways, knee bends and hops are drawn in. |
+| `drag.webp` | Being carried, and falling: wide eyes, a little "o", legs kicking, her hand flapping and her hair fluttering. |
+| `sleep.png` | Napping on her heels, head lolling. The app adds the breathing and the Zs. |
 
 ## Changing things
 
-Each clip is a short function near the end of `make_frames.py` (`idle`, `happy_dance`,
-`serenade`, `hair_flip`, `wave_hello`, `dangle`, `sleep`) that returns a list of
-`(pose, milliseconds)`. A pose can set:
+Each clip is a short function near the end of `make_frames.py` (`idle`, `walk`, `sit`,
+`happy_dance`, `serenade`, `hair_flip`, `wave_hello`, `dangle`, `sleep`) that returns a list
+of `(pose, milliseconds)`. A pose can set:
 
 - `eyes`: a pair, each `"open"`, `"closed"`, `"happy"`, `"wide"`, or a number from 0 to 1
   for an eye part way shut
@@ -84,8 +93,12 @@ Each clip is a short function near the end of `make_frames.py` (`idle`, `happy_d
 - `hand`: degrees the fingertips lift at the wrist (negative lowers them)
 - `hair`: how far the tip of each fall moves, `{"L": (dx, dy), "R": (dx, dy)}`. Clips
   usually get this from a `Hair` spring driven by the body's motion.
-- `lean` (degrees, positive tips right), `squash` (positive is shorter and wider), `dx`,
-  `dy` (pixels of `cutout.png`; negative `dy` is up)
+- `sway`: degrees her head and shoulders tip, bending at the waist (positive is right)
+- `legs`: a pair, degrees each leg swings back (far leg, near leg; negative is forward)
+- `lift`: a pair, how far each foot is raised, in pixels of `cutout.png`
+- `crouch`: 0 to 1, how far her knees are bent; at 1 she is sitting on her heels
+- `lean` (degrees, positive tips the whole of her right), `squash` (positive is shorter
+  and wider), `dx`, `dy` (pixels of `cutout.png`; negative `dy` is up)
 
 To add a dance, write another function and add a line to `CLIPS`; any key starting with
 `dance_` appears under **Dance move**.
