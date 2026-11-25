@@ -30,19 +30,12 @@ public sealed class App : Application
     {
         Name = "DeskDancer";
         RequestedThemeVariant = ThemeVariant.Dark;
-        Styles.Add(new FluentTheme());
         Conductor = new Conductor(Clock);
         Library.ExtraFolder = Options.CharactersFolder;
         Library.Scan();
-    }
 
-    public override void OnFrameworkInitializationCompleted()
-    {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        if (!Options.IsTool)
         {
-            _desktop = desktop;
-            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-
             // Test runs start from defaults and never write to the user's settings file.
             bool throwaway = Options.SmokeTest || Options.Fresh;
             Settings = throwaway ? new Settings { Persist = false } : Settings.Load();
@@ -53,9 +46,26 @@ public sealed class App : Application
             }
             Clock.Bpm = Settings.Bpm;
 
-            // With mates on screen an image pack holds only the clips it is showing. Every so
-            // often the ones that have gone unshown for a while are dropped; see CharacterLibrary.
+            // With mates on screen an image pack holds only the clips it is showing; see
+            // CharacterLibrary. The mates' packs start being read here, on a thread of
+            // their own, while this one gets on with the theme and the windows. By the time
+            // the first window asks for its character, there is usually nothing left to
+            // wait for. A mate arrives by dropping in, so falling is the clip it shows first.
             Library.ClipsOnDemand = true;
+            foreach (var mate in Settings.Mates) Library.Preload(mate.Character, "fall");
+        }
+
+        Styles.Add(new FluentTheme());
+    }
+
+    public override void OnFrameworkInitializationCompleted()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            _desktop = desktop;
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+            // Every so often the clips that have gone unshown for a while are dropped.
             DispatcherTimer.Run(() =>
             {
                 Library.ReleaseUnusedClips();
@@ -128,6 +138,8 @@ public sealed class App : Application
     public void ReloadCharacters()
     {
         Library.Scan();
+        // Start on all of them now, so none waits for the window of the one before it.
+        foreach (var mate in Mates) Library.Preload(mate.Settings.Character);
         foreach (var mate in Mates) mate.ReloadCharacter();
     }
 

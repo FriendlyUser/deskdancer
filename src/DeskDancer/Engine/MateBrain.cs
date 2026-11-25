@@ -104,6 +104,8 @@ public sealed class MateBrain
     {
         _vx = vx;
         _vy = vy;
+        // A new mate drops in before its first frame is drawn, so this is early notice.
+        _character.Prepare("fall");
         SetState(MateState.Fall, 0, 0.1);
     }
 
@@ -126,7 +128,10 @@ public sealed class MateBrain
 
     public void StartDance(IEnumerable<DanceMove> moves)
     {
-        var session = DanceSession.FromList(_clock.Beat, moves);
+        var list = moves.ToList();
+        // The later moves are still beats away: time for their pictures to be fetched.
+        foreach (var move in list) _character.Prepare(move.Clip ?? "dance");
+        var session = DanceSession.FromList(_clock.Beat, list);
         if (session != null) BeginSession(session);
     }
 
@@ -176,6 +181,8 @@ public sealed class MateBrain
         _dragY = FootY;
         _swing = _swingV = 0;
         _samples.Clear();
+        // What is carried is dropped sooner or later.
+        _character.Prepare("fall");
         SetState(MateState.Drag, 0, 0.12);
     }
 

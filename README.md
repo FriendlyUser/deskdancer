@@ -166,16 +166,24 @@ src/DeskDancer/
     Conductor.cs    Beat clock and the shared session behind the dance party
   Characters/   Remix (drawn in code) and the loader for image packs
   Ui/           The transparent window, its menu and the renderer
-  Platform/     Click-through for Windows, X11 and macOS
+  Platform/     Click-through for Windows, X11 and macOS; getting freed memory back on Linux
   Tools/        Smoke test, contact sheets and the example pack exporter
 characters/     Character packs that ship with the app
 packaging/      What macOS needs in order to treat the build as an app
 ```
 
+An image pack is not read all at once. Its idle animation is read when the character is
+picked, which at start-up happens on another thread while the window is being put
+together. Each of its other animations is read the first time the mate needs it, and
+dropped again after a minute out of use. A mate that mostly stands about holds little
+more than its idle frames.
+
 The GitHub Actions workflow builds for Windows, Linux and both kinds of Mac, and runs
 the smoke test on each. The smoke test starts the real app and drives it: dancing, a
 two-mate party, the menu, dragging and throwing, with Mochi, Remix and the example pack
-each taking a turn. On Windows and macOS it also reads pixels back off the screen to
+each taking a turn. It checks that a pack holds only the animations its mates have shown,
+that they come back after being taken away, and that every animation of every pack can
+be read. On Windows and macOS it also reads pixels back off the screen to
 confirm that the window is see-through and the character is visible, checks that clicks
 pass through the empty part of the window, and saves pictures of the desktop as
 artifacts. On macOS, where what a click lands on depends on where the pointer is, it

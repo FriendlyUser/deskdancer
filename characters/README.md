@@ -58,6 +58,12 @@ Draw every animation at the same size as your idle picture so the character does
 grow or shrink between them. Empty margins are trimmed automatically and the bottom
 of the artwork is treated as the floor.
 
+Frames take memory once they are unpacked: four bytes for every pixel of every frame.
+The idle animation is in memory for as long as the character is on screen. Each of the
+others is read the first time the mate needs it, with the idle picture standing in for
+the few frames that takes, and is dropped again when it has not been shown for a
+minute. So a long idle animation costs more than a long dance does.
+
 `remix-example` in this folder is a complete pack made of sprite sheets, a folder of
 frames and single stills. Copy it and replace the images to get started.
 
@@ -124,6 +130,8 @@ Per animation, inside `clips`:
   folder and inside a character's own folder. That makes them a good place for working
   files: `mochi/_source` is one.
 - If the menu shows "could not load", the reason is in `deskdancer.log` in the
-  settings folder. The mate uses the built-in character until it is fixed.
+  settings folder. The mate uses the built-in character until it is fixed. If it is
+  only that one of the animations is damaged, the mate keeps its character and the idle
+  picture is shown where that animation would be.
 - Very large images are scaled down to 640 pixels on their longest side when loaded,
   and an animation is limited to 400 frames.

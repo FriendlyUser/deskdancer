@@ -127,8 +127,9 @@ public static class SmokeTest
         // character it was asked to be, not the built-in one standing in for a broken pack.
         var packs = app.Library.Available.Where(c => c.Folder != null).Select(c => c.Id).ToList();
 
-        // Load them all now. A big pack takes a second or more, and the steps below are on a
-        // clock: loaded on the spot, a new mate would still be dropping in when it is checked.
+        // Load them all now. That reads each pack's idle clip, which can take a tenth of a
+        // second or more, and the steps below are on a clock: loaded on the spot, a new
+        // mate would still be dropping in when it is checked.
         foreach (string id in packs)
         {
             var loading = Stopwatch.StartNew();
@@ -151,6 +152,10 @@ public static class SmokeTest
             var b = mate.Brain;
             return b.State != MateState.Fall && Math.Abs(b.FootY - b.Floor) <= 2 ? null : $"footY={b.FootY:0.#} floor={b.Floor:0.#} state={b.State}";
         }
+
+        // What each loaded pack is holding in memory: the clips its mates have been showing.
+        string Held() => string.Join("; ", app.Library.LoadedPacks.Select(p =>
+            p.BytesInMemory == 0 ? $"{p.Id} nothing" : $"{p.Id} {string.Join("+", p.ClipsInMemory)} ({p.BytesInMemory / 1e6:0} MB)"));
 
         // An image pack reads a clip in when it is first shown, so it is not there at once.
         string? ClipNotInMemory() => app.Mates
@@ -201,8 +206,17 @@ public static class SmokeTest
                 else Note($"character '{wanted}' is not installed; the built-in one is standing in");
                 Note($"screens: {First().Screens.All.Count}, work area: {MainScreen()?.WorkingArea}, scaling {First().RenderScaling}");
             }),
-            new(0.16, "landed", () => Snap(First(), "1-landed"),
-                WaitingFor: () => NotOnTheFloor(First()) is { } where ? "mate did not land: " + where : null),
+            new(0.16, "landed", () =>
+            {
+                Snap(First(), "1-landed");
+
+                // So far a mate has dropped in and stood still, and nothing else. A pack
+                // holding more than the clips for that is loading what nobody asked for.
+                Note($"in memory: {Held()}");
+                foreach (var pack in app.Library.LoadedPacks)
+                    if (pack.ClipsInMemory.Except(["idle", "fall", "drag"]).ToList() is { Count: > 0 } early)
+                        throw new InvalidOperationException($"'{pack.Id}' loaded clips before they were wanted: {string.Join(", ", early)}");
+            }, WaitingFor: () => NotOnTheFloor(First()) is { } where ? "mate did not land: " + where : null),
             new(0.17, "click-through", () =>
             {
                 var mate = First();
@@ -257,7 +271,7 @@ public static class SmokeTest
                 Note($"on screen while dancing: window corners show {left} and {right}");
                 bool clear = left is { } l && ScreenProbe.Near(l, backdropSeen) || right is { } r && ScreenProbe.Near(r, backdropSeen);
                 if (!clear) throw new InvalidOperationException("the window is not transparent while dancing");
-            }),
+            }, WaitingFor: ClipNotInMemory),
             new(0.33, "second mate + party", () =>
             {
                 // Between them the two mates cover both kinds of character: the one drawn in
@@ -270,11 +284,14 @@ public static class SmokeTest
             }),
             new(0.42, "drop clips", () =>
             {
-                // An image pack keeps only the clips it is showing. Take away everything it can
-                // read again, mid-dance; what the mates are showing has to come back by itself.
-                app.Library.ReleaseUnusedClips(TimeSpan.Zero);
+                // An image pack keeps only the clips it is showing. Take every one of them
+                // away, mid-dance; what the mates are showing has to come back by itself.
+                Note($"in memory: {Held()}");
+                long freed = app.Library.ReleaseUnusedClips(TimeSpan.Zero);
+                Note($"let go of all of it ({freed / 1e6:0} MB)");
+                if (app.Library.LoadedPacks.Any(p => p.BytesInMemory != 0)) throw new InvalidOperationException($"not everything was let go of: {Held()}");
             }),
-            new(0.46, "clips back", () => Note("every mate has the clip it is showing in memory"),
+            new(0.46, "clips back", () => Note($"every mate has the clip it is showing in memory: {Held()}"),
                 WaitingFor: ClipNotInMemory),
             new(0.50, "party", () =>
             {
@@ -310,7 +327,7 @@ public static class SmokeTest
                 if (b.State != MateState.Drag) throw new InvalidOperationException($"expected Drag, was {b.State}");
                 Snap(First(), "4-carried");
                 b.EndDrag();
-            }),
+            }, WaitingFor: ClipNotInMemory),
             new(0.86, "sit, swap character", () =>
             {
                 First().Brain.Sit();
@@ -333,6 +350,23 @@ public static class SmokeTest
                 app.RemoveMate(app.Mates[1]);
                 if (app.Mates.Count != 1) throw new InvalidOperationException("second mate was not removed");
             }),
+            // Loading a pack decodes its idle clip and no more; the rest are gone through
+            // behind the scenes. Every pack is loaded here, in case the reload above left
+            // one out, and the run ends once all of them have been through that check: a
+            // clip that cannot be decoded has to fail this test, whether or not a mate
+            // happened to show it.
+            new(0.96, "load every pack", () =>
+            {
+                foreach (string id in packs) app.Library.Load(id);
+            }),
+            new(0.97, "every clip", () =>
+            {
+                foreach (string id in packs)
+                    if (app.Library.ErrorFor(id) is { } error)
+                        throw new InvalidOperationException($"character '{id}' has a clip that cannot be read: {error}");
+                Note($"every clip of {string.Join(", ", packs)} can be decoded");
+            }, WaitingFor: () => app.Library.LoadedPacks.FirstOrDefault(p => !p.Checked) is { } pack
+                ? $"the clips of '{pack.Id}' are still being checked" : null),
         };
 
         // On macOS the window takes the mouse only while the pointer is on the character, so

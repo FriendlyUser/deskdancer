@@ -11,7 +11,8 @@ public sealed record CharacterInfo(string Id, string Name, string? Folder);
 /// </summary>
 public sealed class CharacterLibrary
 {
-    readonly Dictionary<string, ICharacter> _loaded = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, SpriteCharacter> _loaded = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, Task<SpriteCharacter>> _opening = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> _errors = new(StringComparer.OrdinalIgnoreCase);
     readonly RemixCharacter _builtIn = new();
     List<CharacterInfo> _available = [];
@@ -20,8 +21,8 @@ public sealed class CharacterLibrary
     public string? ExtraFolder { get; set; }
 
     /// <summary>
-    /// True while mates are on screen. An image pack loaded from then on keeps only its idle
-    /// clip in memory the whole time: the others are read when they are first drawn, and
+    /// True while mates are on screen. An image pack loaded from then on comes back with only
+    /// its idle clip decoded: the others are read when a mate first needs them, and
     /// <see cref="ReleaseUnusedClips"/> lets them go again. The offline tools leave this off
     /// and get every frame of a pack up front.
     /// </summary>
@@ -49,13 +50,27 @@ public sealed class CharacterLibrary
 
     public IReadOnlyList<CharacterInfo> Available => _available;
     public ICharacter BuiltIn => _builtIn;
+    /// <summary>The image packs that have been loaded since the last scan.</summary>
+    public IReadOnlyCollection<SpriteCharacter> LoadedPacks => _loaded.Values;
 
-    /// <summary>Why a pack failed to load, if it did.</summary>
-    public string? ErrorFor(string id) => _errors.GetValueOrDefault(id);
+    /// <summary>Why a pack failed to load, or what is wrong with one of its clips, if anything is.</summary>
+    public string? ErrorFor(string id) => _errors.GetValueOrDefault(id) ?? _loaded.GetValueOrDefault(id)?.Problem;
 
     public void Scan()
     {
+        // Whatever was loaded is read afresh after this, so its pictures can go now. That
+        // includes a pack that is still being opened, once that has finished.
+        foreach (var character in _loaded.Values) character.ReleaseUnused(TimeSpan.Zero);
+        foreach (var opening in _opening.Values)
+        {
+            opening.ContinueWith(static done =>
+            {
+                if (done.IsCompletedSuccessfully) done.Result.ReleaseUnused(TimeSpan.Zero);
+                else _ = done.Exception;
+            }, TaskScheduler.Default);
+        }
         _loaded.Clear();
+        _opening.Clear();
         _errors.Clear();
         var list = new List<CharacterInfo> { new(CharacterIds.BuiltIn, _builtIn.DisplayName, null) };
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { CharacterIds.BuiltIn };
@@ -82,57 +97,108 @@ public sealed class CharacterLibrary
         _available = list;
     }
 
-    /// <summary>Loads a character, falling back to the built-in one if the pack is missing or broken.</summary>
-    public ICharacter Load(string id)
+    CharacterInfo? Find(string id) => _available.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Starts opening a pack on the decoding thread, so that <see cref="Load"/> has less to
+    /// wait for, or nothing, when it is asked for the same character a moment later.
+    /// <paramref name="firstClip"/> is the clip the mate will be showing to begin with,
+    /// if that is known: it is fetched as well, so the very first frame can have it.
+    /// </summary>
+    public void Preload(string id, string? firstClip = null)
     {
-        if (string.IsNullOrEmpty(id) || id.Equals(CharacterIds.BuiltIn, StringComparison.OrdinalIgnoreCase)) return _builtIn;
-        if (_loaded.TryGetValue(id, out var cached)) return cached;
-
-        var info = _available.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
-        if (info?.Folder == null)
+        if (string.IsNullOrEmpty(id) || _loaded.ContainsKey(id) || _opening.ContainsKey(id)) return;
+        if (Find(id) is not { Folder: { } folder } info) return;
+        _opening[id] = DecodeThread.Run(() =>
         {
-            // The default character is a pack on disk. A copy of the program without its
-            // characters folder has nothing wrong with it; the built-in one just stands in.
-            if (id.Equals(CharacterIds.Default, StringComparison.OrdinalIgnoreCase))
-            {
-                Log.Info($"The default character '{id}' is not installed; using the built-in one");
-                return _builtIn;
-            }
-            _errors[id] = "Character folder not found.";
-            Log.Error($"Character '{id}' was not found; using the built-in one");
-            return _builtIn;
-        }
-
-        try
-        {
-            var character = SpritePackLoader.Load(info.Id, info.Folder, ClipsOnDemand);
-            _loaded[id] = character;
-            _errors.Remove(id);
+            var character = SpritePackLoader.Load(info.Id, folder);
+            if (firstClip != null) character.Prepare(firstClip);
             return character;
-        }
-        catch (Exception ex)
-        {
-            _errors[id] = ex.Message;
-            Log.Error($"Could not load character '{id}' from {info.Folder}", ex);
-            return _builtIn;
-        }
-        finally
-        {
-            // Decoding a pack goes through far more memory than the pack ends up holding.
-            FreedMemory.Return();
-        }
+        });
     }
 
     /// <summary>
-    /// Lets go of the frames of clips that no mate has drawn for a while and that can be read
-    /// from disk again. They come back by themselves the next time they are drawn.
+    /// Loads a character, falling back to the built-in one if the pack is missing or broken.
+    /// A pack comes back ready to be shown, with its idle clip in memory. With
+    /// <see cref="ClipsOnDemand"/> its other clips are decoded when a mate first needs
+    /// them; without, they are all there when this returns.
     /// </summary>
-    public void ReleaseUnusedClips(TimeSpan? unusedFor = null)
+    public ICharacter Load(string id)
     {
-        bool any = false;
-        foreach (var character in _loaded.Values.OfType<SpriteCharacter>())
-            any |= character.ReleaseUnused(unusedFor ?? ClipLifetime);
-        if (any) FreedMemory.Return();
+        if (string.IsNullOrEmpty(id) || id.Equals(CharacterIds.BuiltIn, StringComparison.OrdinalIgnoreCase)) return _builtIn;
+
+        if (!_loaded.TryGetValue(id, out var character))
+        {
+            var info = Find(id);
+            if (info?.Folder == null)
+            {
+                // The default character is a pack on disk. A copy of the program without its
+                // characters folder has nothing wrong with it; the built-in one just stands in.
+                if (id.Equals(CharacterIds.Default, StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Info($"The default character '{id}' is not installed; using the built-in one");
+                    return _builtIn;
+                }
+                _errors[id] = "Character folder not found.";
+                Log.Error($"Character '{id}' was not found; using the built-in one");
+                return _builtIn;
+            }
+
+            try
+            {
+                // Waiting for another thread here is safe: opening a pack never needs this one.
+                if (_opening.Remove(id, out var opening))
+                {
+                    character = opening.GetAwaiter().GetResult();
+                }
+                else
+                {
+                    character = SpritePackLoader.Load(info.Id, info.Folder);
+                    // That was decoded on this thread, which leaves memory behind that the C
+                    // library will hand back if asked.
+                    FreedMemory.Return();
+                }
+                _loaded[id] = character;
+                _errors.Remove(id);
+                // Only the idle clip has been decoded. The rest are gone through behind the
+                // scenes, so that a damaged one is still reported now, as the pack is loaded.
+                if (ClipsOnDemand) character.CheckClips();
+            }
+            catch (Exception ex)
+            {
+                _errors[id] = ex.Message;
+                Log.Error($"Could not load character '{id}' from {info.Folder}", ex);
+                return _builtIn;
+            }
+        }
+
+        // A character nobody has drawn for a while has let go of its frames, so this may be
+        // where its idle clip is read again. And with every clip wanted up front, as the
+        // offline tools want them, a pack that cannot supply one of them is no use at all.
+        if (!character.LoadNow(everyClip: !ClipsOnDemand) || !ClipsOnDemand && character.Problem != null)
+        {
+            _loaded.Remove(id);
+            _errors[id] = character.Problem ?? "The idle clip could not be read.";
+            character.ReleaseUnused(TimeSpan.Zero);
+            Log.Error($"Character '{id}' cannot be used ({_errors[id]}); using the built-in one");
+            return _builtIn;
+        }
+        return character;
+    }
+
+    /// <summary>
+    /// Lets go of the frames of clips that nothing has drawn for a while, and returns how
+    /// many bytes that gave up. They come back by themselves the next time they are drawn.
+    /// A character on screen keeps its idle clip and whatever it has been doing lately; one
+    /// that no mate is using any more ends up holding nothing.
+    /// </summary>
+    public long ReleaseUnusedClips(TimeSpan? unusedFor = null)
+    {
+        long bytes = 0;
+        foreach (var character in _loaded.Values) bytes += character.ReleaseUnused(unusedFor ?? ClipLifetime);
+        // The frames were bitmaps the C library allocated, so it is asked to hand them back.
+        if (bytes > 0) FreedMemory.Return();
+        return bytes;
     }
 
     /// <summary>Creates the per-user characters folder with a short how-to in it, and returns its path.</summary>
