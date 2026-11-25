@@ -1,0 +1,53 @@
+{
+  "name": "Mochi",
+  "height": 150,
+  "facing": "right",
+  "removeBackground": false,
+  "clips": {
+    "idle": {
+      "file": "idle.webp",
+      "anchor": [
+        324.4,
+        628.8
+      ]
+    },
+    "dance": {
+      "file": "dance.webp",
+      "anchor": [
+        324.4,
+        628.8
+      ],
+      "name": "Happy Ears"
+    },
+    "dance_bunny_hop": {
+      "file": "dance_bunny_hop.webp",
+      "anchor": [
+        324.4,
+        628.8
+      ],
+      "name": "Bunny Hop"
+    },
+    "dance_ear_wave": {
+      "file": "dance_ear_wave.webp",
+      "anchor": [
+        324.4,
+        628.8
+      ],
+      "name": "Ear Wave"
+    },
+    "drag": {
+      "file": "drag.webp",
+      "anchor": [
+        324.4,
+        628.8
+      ]
+    },
+    "sleep": {
+      "file": "sleep.png",
+      "anchor": [
+        324.4,
+        628.8
+      ]
+    }
+  }
+}
