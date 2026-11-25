@@ -7,14 +7,21 @@ namespace DeskDancer;
 public sealed class MateSettings
 {
     /// <summary>Character id: "builtin" or the name of a folder under a characters directory.</summary>
-    public string Character { get; set; } = CharacterIds.BuiltIn;
+    public string Character { get; set; } = CharacterIds.Default;
     /// <summary>Size multiplier on top of the character's own preferred height.</summary>
     public double Scale { get; set; } = 1.0;
 }
 
 public static class CharacterIds
 {
+    /// <summary>The character drawn in code. Always there, so it is what every other one falls back to.</summary>
     public const string BuiltIn = "builtin";
+
+    /// <summary>
+    /// What a new mate starts as: the Mochi image pack in the characters folder next to the
+    /// program. A mate whose saved settings name another character keeps that one.
+    /// </summary>
+    public const string Default = "mochi";
 }
 
 /// <summary>Everything the app remembers between runs.</summary>

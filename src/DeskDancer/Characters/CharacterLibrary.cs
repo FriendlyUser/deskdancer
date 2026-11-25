@@ -64,6 +64,13 @@ public sealed class CharacterLibrary
         var info = _available.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
         if (info?.Folder == null)
         {
+            // The default character is a pack on disk. A copy of the program without its
+            // characters folder has nothing wrong with it; the built-in one just stands in.
+            if (id.Equals(CharacterIds.Default, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Info($"The default character '{id}' is not installed; using the built-in one");
+                return _builtIn;
+            }
             _errors[id] = "Character folder not found.";
             Log.Error($"Character '{id}' was not found; using the built-in one");
             return _builtIn;
