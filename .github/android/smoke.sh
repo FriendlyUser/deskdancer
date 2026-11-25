@@ -41,8 +41,11 @@ adb shell am start -W -n $pkg/.MainActivity --es command start --es character mo
 # First start unpacks the characters and drops the mate in from above.
 sleep 12
 shot 1-standing
-# Where Android has put the mate's two windows at this moment.
+# Where Android has put the mate's two windows at this moment, and how it composites them.
 adb shell dumpsys window windows > "$out/1-standing-windows.txt"
+adb shell dumpsys SurfaceFlinger > "$out/1-standing-surfaceflinger.txt"
+log "the mate's layers, as SurfaceFlinger has them"
+grep -n -i -A12 "deskdancer" "$out/1-standing-surfaceflinger.txt" | grep -i -E "deskdancer|isOpaque|opaque|alpha|format|z=|zOrder|flags|color|blend" | head -60 || true
 
 log "dancing"
 adb shell am start -W -n $pkg/.MainActivity --es command dance
@@ -53,8 +56,9 @@ for i in 1 2 3 4 5 6; do
 done
 
 log "stopping the dance and dragging the mate"
-adb shell am start -W -n $pkg/.MainActivity --es command dance
+adb shell am start -W -n $pkg/.MainActivity --es command rest
 sleep 3
+adb shell dumpsys window windows > "$out/3-before-drag-windows.txt"
 hit=$(adb logcat -d -s DeskDancer:I | grep -o 'hit=([0-9-]*,[0-9-]* [0-9]*x[0-9]*)' | tail -1)
 echo "last hit box: $hit"
 if [[ $hit =~ hit=\((-?[0-9]+),(-?[0-9]+)\ ([0-9]+)x([0-9]+)\) ]]; then

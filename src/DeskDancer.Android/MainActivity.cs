@@ -13,7 +13,8 @@ namespace DeskDancer.Droid;
 /// make it dance and put it away. Long-pressing the mate brings this back.
 ///
 /// Scripts can drive it too, which is how the CI test does:
-/// <c>adb shell am start -n io.github.friendlyuser.deskdancer/.MainActivity --es command start|dance|stop [--es character mochi]</c>
+/// <c>adb shell am start -n io.github.friendlyuser.deskdancer/.MainActivity --es command start|dance|rest|stop [--es character mochi]</c>
+/// (<c>dance</c> starts or stops a dance; <c>rest</c> only stops one.)
 /// After a command the screen gets out of the way, so the mate is seen over whatever was there.
 /// Adding <c>--ez calm true</c> keeps the mate from wandering off or dancing unasked, and
 /// leaves the saved settings alone, so screenshots catch it where it was put.
@@ -160,6 +161,7 @@ public sealed class MainActivity : Activity
         {
             case "start": Start(character); break;
             case "dance": Send(MateService.ActionDance); break;
+            case "rest": Send(MateService.ActionRest); break;
             case "stop": Stop(); break;
         }
         MoveTaskToBack(true);

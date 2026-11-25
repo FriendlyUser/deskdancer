@@ -18,6 +18,7 @@ public sealed class MateService : Service
     public const string ActionShow = "io.github.friendlyuser.deskdancer.SHOW";
     public const string ActionDance = "io.github.friendlyuser.deskdancer.DANCE";
     public const string ActionStop = "io.github.friendlyuser.deskdancer.STOP";
+    public const string ActionRest = "io.github.friendlyuser.deskdancer.REST";
     public const string ExtraCharacter = "character";
 
     const int NotificationId = 1;
@@ -52,6 +53,7 @@ public sealed class MateService : Service
             else if (character != null && !character.Equals(_overlay.Character.Id, StringComparison.OrdinalIgnoreCase))
                 _overlay.SetCharacter(character);
             if (action == ActionDance) _overlay.ToggleDance();
+            else if (action == ActionRest) _overlay.Rest();
         }
         catch (Exception ex)
         {

@@ -69,6 +69,17 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
         _view.Brain = Brain;
 
         _stage = new AvaloniaView(context) { Content = _view };
+        // Avalonia draws on a SurfaceView, which normally sits behind its window with the window
+        // cut away in front of it. Behind an overlay, Android shows the see-through parts of such a
+        // surface as black. On top of its window, with a translucent format, they stay see-through.
+        for (int i = 0; i < _stage.ChildCount; i++)
+        {
+            if (_stage.GetChildAt(i) is SurfaceView surface)
+            {
+                surface.SetZOrderOnTop(true);
+                surface.Holder?.SetFormat(Format.Translucent);
+            }
+        }
         _stageLp = NewParams(touchable: false);
         // From Android 12 a touch only gets through another app's window when that window is
         // see-through enough, so the stage is drawn just under that limit.
@@ -297,6 +308,7 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
         switch (ev.ActionMasked)
         {
             case MotionEventActions.Down:
+                Android.Util.Log.Info(Tag, $"touch down at ({x:0},{y:0})");
                 _pressed = true;
                 _dragging = false;
                 _longPressed = false;
@@ -379,6 +391,15 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
             Brain.StartRandomDance();
         }
         Android.Util.Log.Info(Tag, $"dancing: {Brain.IsDancing}");
+    }
+
+    /// <summary>Ends a dance if one is going, and otherwise leaves the mate be.</summary>
+    public void Rest()
+    {
+        if (!Brain.IsDancing) return;
+        if (Stage.Conductor.PartyOn) Stage.Conductor.SetParty(false);
+        Brain.StopDance();
+        Android.Util.Log.Info(Tag, "dancing: False");
     }
 
     public void Close()
