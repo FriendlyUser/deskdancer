@@ -31,10 +31,19 @@ and she has three dances of her own: Serenade, Hair Flip and Wave Hello. Pick he
 
 **Domo** is an image pack with no picture behind it: a script draws every frame, so his
 arms, legs, eyes and mouth all move. He toddles when he wanders, sits down with his legs
-out in front of him, snaps his teeth, and has two dances of his own, Chomp and Monster
-Stomp. How he is drawn, and how to change him, is in
+out in front of him, snaps his teeth, and has four dances of his own: Chomp, Monster
+Stomp, Bubble Tea, where he brings out a cup and drinks it through a straw, and Fart.
+How he is drawn, and how to change him, is in
 [characters/domo/_source](characters/domo/_source/README.md). Domo is NHK's mascot; this
 is a fan drawing, and NHK had no part in it.
+
+![Plush Domo in five poses](docs/domo-plush.png)
+
+**Plush Domo** is the same Domo made of fleece, with felt teeth and glossy beads for
+eyes. He is still a flat drawing, and the fleece is made by a script, not taken from a
+photo. He does everything Domo does, Bubble Tea and Fart included, because he is drawn
+from the same shapes and the same clips by a different painter:
+[characters/domo-plush/_source](characters/domo-plush/_source/README.md).
 
 <img src="characters/piplup/idle.png" alt="Piplup" height="150">
 
