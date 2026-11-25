@@ -174,6 +174,20 @@ An app you build yourself has no such flag and just opens. DeskDancer shows in t
 while it runs; quit from there or from the mate's menu. The mate stands on the Dock, or
 on the bottom of the screen if the Dock is hidden or at the side.
 
+**Android (prototype).** Android 8 or later. The `android` workflow builds an APK, signed
+with a throwaway key for installing by hand rather than from a store: download the
+`DeskDancer-android` artifact from a run, open `DeskDancer.apk` on the phone, and allow
+installing from that app when Android asks. In DeskDancer, tap **Allow display over other
+apps** and switch it on; on recent Android versions a sideloaded app may first need
+**Allow restricted settings** from its App info page. Then put the mate on the screen.
+It stands on the navigation bar over whatever app is open. Drag it to carry and throw
+it, double-tap it to dance, and long-press it for the settings. A notification stays up
+while it is out, because Android only keeps an app on the screen that way; it has Dance
+and Put away buttons. The APK carries Mochi and Remix; other packs are one line each in
+`src/DeskDancer.Android/DeskDancer.Android.csproj`. Touches around the mate go to the app
+underneath, which on Android 12 and later means the mate is drawn slightly see-through,
+as Android requires of anything that lets touches pass.
+
 **Clicking through.** The mate lives in a small transparent window. So that the empty
 part of it does not block what is underneath, only the area around the character
 takes mouse input. On Windows this is done while the mate is standing, sitting or
@@ -211,6 +225,9 @@ src/DeskDancer/
   Ui/           The transparent window, its menu and the renderer
   Platform/     Click-through for Windows, X11 and macOS; getting freed memory back on Linux
   Tools/        Smoke test, contact sheets and the example pack exporter
+src/DeskDancer.Android/
+                The Android app: the same engine, characters and renderer, compiled in
+                from src/DeskDancer and drawn in an overlay window kept up by a service
 characters/     Character packs that ship with the app
 packaging/      What macOS needs in order to treat the build as an app
 ```
@@ -232,6 +249,13 @@ pass through the empty part of the window, and saves pictures of the desktop as
 artifacts. On macOS, where what a click lands on depends on where the pointer is, it
 moves the pointer onto the mate, off onto the empty corner of its window and back again,
 and asks the system each time.
+
+A second workflow, `android`, builds the APK and runs it on an Android 14 emulator. It
+grants the overlay permission, puts Mochi on the home screen, makes it dance and drags it
+with a scripted swipe, then compares screenshots with one of the bare home screen: the
+mate has to be visible, the stage around it has to be see-through, the dancing frames have
+to differ, and the drag has to reach the mate. The screenshots are saved as artifacts, and
+a rough outline of what appeared on the screen is printed in the job's log.
 
 One thing to know when building: Avalonia's build step sends anonymous usage data to
 its vendor. The publish scripts and the workflow switch that off with
