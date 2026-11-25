@@ -30,7 +30,21 @@ public sealed class CharacterLibrary
     /// <summary>How long a clip stays in memory after it was last drawn.</summary>
     static readonly TimeSpan ClipLifetime = TimeSpan.FromSeconds(60);
 
-    public static string AppFolder => Path.Combine(AppContext.BaseDirectory, "characters");
+    /// <summary>
+    /// The packs that ship with the program: a "characters" folder next to it or, in a
+    /// macOS app bundle, in the bundle's Resources folder beside the one the program is in.
+    /// </summary>
+    public static string AppFolder
+    {
+        get
+        {
+            string beside = Path.Combine(AppContext.BaseDirectory, "characters");
+            if (Directory.Exists(beside)) return beside;
+            string bundled = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "Resources", "characters"));
+            return Directory.Exists(bundled) ? bundled : beside;
+        }
+    }
+
     public static string UserFolder => Path.Combine(Settings.ConfigDir, "characters");
 
     public IReadOnlyList<CharacterInfo> Available => _available;
