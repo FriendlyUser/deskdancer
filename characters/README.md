@@ -79,6 +79,10 @@ that walk, a hand that waves, an arm that strums her lute and a redrawn face.
 draws every frame. It is the one to copy if you would rather describe a character in
 shapes than paint it, and it has clips for sitting and napping as well.
 
+`domo-plush` is the same character painted in fleece. Its `_source` folder holds only a
+painter; the shapes and the clips come from `domo`'s script, which shows how one
+character can be given a second look without drawing it twice.
+
 ## character.json (optional)
 
 Add this file to the folder to adjust things. Every setting is optional.
