@@ -106,6 +106,7 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app"
           echo "This Mac: macOS $(sw_vers -productVersion), $(uname -m)"
           mkdir -p smoke
+          started="$(mktemp)"
           # --screenshots: the test takes screenshots of the real desktop and reads them, to
           # check that the mate is visible and the rest of its window see-through. They are
           # kept with its other results. The runner allows screenshots; a Mac of your own
@@ -128,11 +129,16 @@ jobs:
           done
           [ -f smoke/smoke-result.txt ] || echo "::warning::No smoke-result.txt was written; the app exited before the test started"
           echo "Exit code: $code"
-          # Above 128 a signal stopped the app: it crashed. macOS writes a report a few seconds
-          # later. Keep it with the results, and show here what each thread was doing.
+          # Above 128 a signal stopped the app: it crashed. macOS writes a report some seconds
+          # later, sometimes a good many. Keep it with the results, and show here what each
+          # thread was doing.
           if [ "$code" -gt 128 ]; then
-            sleep 15
-            report="$(ls -t "$HOME"/Library/Logs/DiagnosticReports/DeskDancer*.ips 2>/dev/null | head -1)" || true
+            report=""
+            for wait in $(seq 1 18); do
+              sleep 5
+              report="$(find "$HOME/Library/Logs/DiagnosticReports" -name 'DeskDancer*.ips' -newer "$started" 2>/dev/null | head -1)" || true
+              [ -z "$report" ] || break
+            done
             if [ -n "$report" ]; then
               cp "$report" smoke/crash-report.ips
               python3 - "$report" <<'PY' || echo "::warning::Could not read the crash report; it is kept with the smoke test's results"

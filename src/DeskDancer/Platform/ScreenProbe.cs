@@ -61,7 +61,9 @@ public static class ScreenProbe
                 return "screencapture did not finish";
             }
             if (tool.ExitCode != 0) return $"screencapture failed with exit code {tool.ExitCode}";
-            var shot = SKBitmap.Decode(savedAs);
+            // From memory, not straight from the file: see SpritePackLoader.DecodeFile.
+            using var data = SKData.CreateCopy(File.ReadAllBytes(savedAs));
+            var shot = SKBitmap.Decode(data);
             if (shot == null) return "the screenshot could not be read";
             _shot?.Dispose();
             _shot = shot;
