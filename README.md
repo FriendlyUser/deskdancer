@@ -45,6 +45,16 @@ photo. He does everything Domo does, Bubble Tea and Fart included, because he is
 from the same shapes and the same clips by a different painter:
 [characters/domo-plush/_source](characters/domo-plush/_source/README.md).
 
+<img src="characters/piplup/idle.png" alt="Piplup" height="150">
+
+**Piplup** is the quick kind of image pack: one picture and nothing else. It is a fan
+drawing by @ros…, taken off its background and stood upright on a level floor. The app
+does the rest, so Piplup breathes, waddles, sits, naps and does every dance move, bounced,
+leaned, spun and flipped as a whole. Pick it under **Character**, or start with
+`--character piplup`. How the picture was prepared is in
+[characters/piplup/_source](characters/piplup/_source/README.md). Piplup is a Pokémon and
+belongs to Nintendo, Creatures and Game Freak, who had no part in this pack.
+
 Switch between them under **Character** in the menu. You can also drop in a folder of
 your own images and it becomes a character that walks and dances too: see
 [characters/README.md](characters/README.md).
