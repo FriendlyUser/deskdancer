@@ -115,9 +115,9 @@ on the bottom of the screen if the Dock is hidden or at the side.
 part of it does not block what is underneath, only the area around the character
 takes mouse input. On Windows this is done while the mate is standing, sitting or
 walking; during a dance the whole window (roughly 1.7 x 2 character heights) takes
-clicks. Turn the feature off in the menu if it misbehaves with your setup. macOS does
-this by itself, pixel by pixel: a click on a see-through part of any window goes to what
-is underneath, so there is nothing to switch on or off there.
+clicks. On macOS a window either takes the mouse or ignores it altogether, so the mate's
+window is switched from one to the other as the pointer moves on and off the character.
+Turn the feature off in the menu if it misbehaves with your setup.
 
 Settings are remembered in `%APPDATA%\DeskDancer` on Windows, `~/.config/DeskDancer` on
 Linux and `~/Library/Application Support/DeskDancer` on macOS, along with a log file if
@@ -146,7 +146,7 @@ src/DeskDancer/
     Conductor.cs    Beat clock and the shared session behind the dance party
   Characters/   Remix (drawn in code) and the loader for image packs
   Ui/           The transparent window, its menu and the renderer
-  Platform/     Click-through for Windows and X11
+  Platform/     Click-through for Windows, X11 and macOS
   Tools/        Smoke test, contact sheets and the example pack exporter
 characters/     Character packs that ship with the app
 packaging/      What macOS needs in order to treat the build as an app
@@ -158,8 +158,8 @@ two-mate party, the menu, dragging and throwing, with Mochi, Remix and the examp
 each taking a turn. On Windows it also reads pixels back off the screen to confirm that
 the window is see-through and the character is visible, checks that clicks pass through
 the empty part of the window, and saves pictures of the desktop as artifacts. On macOS
-it asks the system what a click on the mate, and on the empty corner of its window,
-would land on.
+it moves the pointer onto the mate, then onto the empty corner of its window, and asks
+the system each time what a click there would land on.
 
 One thing to know when building: Avalonia's build step sends anonymous usage data to
 its vendor. The publish scripts and the workflow switch that off with

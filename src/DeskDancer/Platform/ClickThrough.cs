@@ -12,8 +12,9 @@ namespace DeskDancer.Platform;
 /// Windows: a window region. This also clips drawing, so callers only shrink it while
 /// nothing is being drawn outside the rectangle.
 /// Linux (X11): an input shape, which affects mouse input only.
-/// macOS: nothing is set. The system itself leaves a window out when a click lands on a
-/// part of it that is fully see-through, so only the character and its shadow are hit.
+/// macOS: a window cannot be given a shape; it either takes the mouse or ignores it
+/// altogether. So it is switched between the two as the pointer moves on and off the
+/// rectangle, which means <see cref="FollowPointer"/> has to be called every frame.
 /// Anywhere else this does nothing and the whole window stays clickable.
 /// </summary>
 public static class ClickThrough
@@ -24,7 +25,8 @@ public static class ClickThrough
     /// <summary>True where shrinking the clickable area also hides whatever is drawn outside it.</summary>
     public static bool ClipsDrawing => OperatingSystem.IsWindows();
 
-    public static bool Supported => !_failed && (OperatingSystem.IsWindows() || OperatingSystem.IsLinux());
+    public static bool Supported =>
+        !_failed && (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
 
     /// <summary>
     /// Makes only <paramref name="solid"/> (in window pixels) receive the mouse, or the whole
@@ -46,6 +48,12 @@ public static class ClickThrough
             if (OperatingSystem.IsLinux() && handle.HandleDescriptor == "XID")
             {
                 return ApplyX11(handle.Handle, solid);
+            }
+            if (OperatingSystem.IsMacOS() && MacWindow(window) != IntPtr.Zero)
+            {
+                // Only noted here; FollowPointer acts on it.
+                MacAreas.GetOrCreateValue(window).Solid = solid;
+                return true;
             }
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
@@ -132,34 +140,93 @@ public static class ClickThrough
     static extern nint SendForInteger(IntPtr receiver, IntPtr selector);
 
     [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    static extern nint SendForInteger(IntPtr receiver, IntPtr selector, NSPoint point, nint number);
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    static extern NSPoint SendForPoint(IntPtr receiver, IntPtr selector);
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
     static extern NSPoint SendForPoint(IntPtr receiver, IntPtr selector, NSPoint point);
 
     [DllImport(ObjC, EntryPoint = "objc_msgSend")]
-    static extern nint SendForInteger(IntPtr receiver, IntPtr selector, NSPoint point, nint number);
+    static extern void Send(IntPtr receiver, IntPtr selector, [MarshalAs(UnmanagedType.I1)] bool value);
 
-    static bool? IsWindowAtMac(Window window, PixelPoint screenPoint)
+    [DllImport("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")]
+    static extern int CGWarpMouseCursorPosition(NSPoint position);
+
+    /// <summary>What each macOS window has been told to treat as solid, and what it is doing about it.</summary>
+    sealed class MacArea
     {
-        IntPtr nsWindow = window.TryGetPlatformHandle() switch
-        {
-            Avalonia.Platform.IMacOSTopLevelPlatformHandle mac => mac.NSWindow,
-            { HandleDescriptor: "NSWindow" } other => other.Handle,
-            _ => IntPtr.Zero,
-        };
+        public PixelRect? Solid;
+        public bool Ignoring;
+    }
+
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Window, MacArea> MacAreas = new();
+
+    static IntPtr MacWindow(Window window) => window.TryGetPlatformHandle() switch
+    {
+        Avalonia.Platform.IMacOSTopLevelPlatformHandle mac => mac.NSWindow,
+        { HandleDescriptor: "NSWindow" } other => other.Handle,
+        _ => IntPtr.Zero,
+    };
+
+    // AppKit measures a window's inside in points, up from its bottom-left corner.
+    static NSPoint ToMacInside(Window window, PixelPoint screenPoint) => new()
+    {
+        X = (screenPoint.X - window.Position.X) / window.RenderScaling,
+        Y = window.Bounds.Height - (screenPoint.Y - window.Position.Y) / window.RenderScaling,
+    };
+
+    /// <summary>
+    /// macOS: makes the window take the mouse while the pointer is over its solid rectangle
+    /// and ignore it otherwise, so clicks beside the character reach what is underneath. Call
+    /// it every frame; <paramref name="held"/> is whether a mouse button is being held on the
+    /// window, which must not be let go of halfway. Returns whether the window is taking the
+    /// mouse, or null where none of this applies.
+    /// </summary>
+    public static bool? FollowPointer(Window window, bool held)
+    {
+        if (!OperatingSystem.IsMacOS() || _failed || !MacAreas.TryGetValue(window, out var area)) return null;
+        IntPtr nsWindow = MacWindow(window);
         if (nsWindow == IntPtr.Zero) return null;
         try
         {
-            // AppKit measures a window's inside in points, up from its bottom-left corner. Give
-            // it the spot that way and let it work out where that is on the screen: it knows
-            // where every monitor sits and how each is scaled.
-            double scale = window.RenderScaling;
-            var inside = new NSPoint
+            bool take = held || area.Solid is not { } solid || PointerIsOver(window, nsWindow, solid);
+            if (take == area.Ignoring)
             {
-                X = (screenPoint.X - window.Position.X) / scale,
-                Y = window.Bounds.Height - (screenPoint.Y - window.Position.Y) / scale,
-            };
-            NSPoint onScreen = SendForPoint(nsWindow, sel_registerName("convertPointToScreen:"), inside);
-            // The window a mouse click there would go to. Windows that are see-through at that
-            // spot, or that ignore the mouse, are not counted.
+                Send(nsWindow, sel_registerName("setIgnoresMouseEvents:"), !take);
+                area.Ignoring = !take;
+            }
+            return take;
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            _failed = true;
+            Log.Error("Click-through is not available on this system", ex);
+            return null;
+        }
+    }
+
+    static bool PointerIsOver(Window window, IntPtr nsWindow, PixelRect solid)
+    {
+        // Where the pointer is, whether or not the window is being sent mouse events.
+        NSPoint inside = SendForPoint(nsWindow, sel_registerName("mouseLocationOutsideOfEventStream"));
+        double scale = window.RenderScaling;
+        double x = inside.X * scale, y = (window.Bounds.Height - inside.Y) * scale;
+        return x >= solid.X && x < solid.Right && y >= solid.Y && y < solid.Bottom;
+    }
+
+    static bool? IsWindowAtMac(Window window, PixelPoint screenPoint)
+    {
+        IntPtr nsWindow = MacWindow(window);
+        if (nsWindow == IntPtr.Zero) return null;
+        try
+        {
+            // Give AppKit the spot in the window's own terms and let it work out where that is
+            // on the screen: it knows where every monitor sits and how each is scaled.
+            NSPoint onScreen = SendForPoint(nsWindow, sel_registerName("convertPointToScreen:"), ToMacInside(window, screenPoint));
+            // The window a mouse click there would go to. Windows that are ignoring the mouse
+            // are not counted.
             nint hit = SendForInteger(objc_getClass("NSWindow"),
                 sel_registerName("windowNumberAtPoint:belowWindowWithWindowNumber:"), onScreen, 0);
             return hit == SendForInteger(nsWindow, sel_registerName("windowNumber"));
@@ -167,6 +234,30 @@ public static class ClickThrough
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// macOS only: puts the pointer at a screen point, as if the mouse had been moved there.
+    /// False anywhere else. The smoke test uses it, because on macOS what a click lands on
+    /// depends on where the pointer is.
+    /// </summary>
+    public static bool MovePointerTo(Window window, PixelPoint screenPoint)
+    {
+        if (!OperatingSystem.IsMacOS()) return false;
+        IntPtr nsWindow = MacWindow(window);
+        if (nsWindow == IntPtr.Zero || window.Screens.Primary is not { } primary) return false;
+        try
+        {
+            // AppKit counts up from the bottom of the main screen; the call that moves the
+            // pointer counts down from its top.
+            NSPoint onScreen = SendForPoint(nsWindow, sel_registerName("convertPointToScreen:"), ToMacInside(window, screenPoint));
+            onScreen.Y = primary.Bounds.Height / primary.Scaling - onScreen.Y;
+            return CGWarpMouseCursorPosition(onScreen) == 0;
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return false;
         }
     }
 

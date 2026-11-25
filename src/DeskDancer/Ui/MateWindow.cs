@@ -232,18 +232,24 @@ public sealed class MateWindow : Window
             wanted = new PixelRect(x0, y0, x1 - x0, y1 - y0);
         }
 
-        if (wanted == _solidArea && _solidAreaApplied) return;
-        if (wanted == null && !_solidAreaApplied) return;
-        if (ClickThrough.Apply(this, wanted))
+        if (!(wanted == _solidArea && _solidAreaApplied) && !(wanted == null && !_solidAreaApplied))
         {
-            _solidArea = wanted;
-            _solidAreaApplied = wanted != null;
+            if (ClickThrough.Apply(this, wanted))
+            {
+                _solidArea = wanted;
+                _solidAreaApplied = wanted != null;
+            }
+            else
+            {
+                _solidArea = null;
+                _solidAreaApplied = false;
+            }
         }
-        else
-        {
-            _solidArea = null;
-            _solidAreaApplied = false;
-        }
+
+        // On macOS the area is not something the window can be given once: it is switched to
+        // take or ignore the mouse as the pointer comes and goes. While it is ignoring the
+        // mouse it never hears that the pointer has left, so say so here.
+        if (ClickThrough.FollowPointer(this, _pressed) == false) Brain.SetHover(false);
     }
 
     // ---- Mouse ----

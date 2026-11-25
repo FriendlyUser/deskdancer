@@ -119,25 +119,22 @@ public static class SmokeTest
                 if (Math.Abs(b.FootY - b.Floor) > 2) throw new InvalidOperationException($"mate did not land: footY={b.FootY} floor={b.Floor} state={b.State}");
                 Snap(First(), "1-landed");
             }),
+            // On macOS what a click lands on depends on where the pointer is, so the pointer is
+            // put on the mate first. Elsewhere this step does nothing.
+            (0.162, "pointer onto the mate", () =>
+            {
+                if (OperatingSystem.IsMacOS() && ClickThrough.Supported && First().SolidArea is { } solid)
+                {
+                    var middle = new PixelPoint(First().Position.X + solid.X + solid.Width / 2, First().Position.Y + solid.Y + solid.Height / 2);
+                    if (!ClickThrough.MovePointerTo(First(), middle)) throw new InvalidOperationException("could not move the pointer");
+                }
+            }),
             (0.17, "click-through", () =>
             {
                 var mate = First();
                 if (!ClickThrough.Supported)
                 {
-                    // No clickable area is set here. Where the system can still say what a click
-                    // would land on (macOS, which leaves see-through parts of a window out by
-                    // itself), report it, and make sure the mate can be clicked at all.
-                    var body = new PixelPoint((int)mate.Brain.FootX, (int)(mate.Brain.FootY - 0.4 * mate.Brain.H));
-                    var corner = new PixelPoint(mate.Position.X + 3, mate.Position.Y + 3);
-                    if (ClickThrough.IsWindowAt(mate, body) is { } onBody && ClickThrough.IsWindowAt(mate, corner) is { } onCorner)
-                    {
-                        Note($"hit test with no clickable area set: on character={onBody}, on empty corner={onCorner}");
-                        if (!onBody) throw new InvalidOperationException("the character itself is not clickable");
-                    }
-                    else
-                    {
-                        Note("click-through is not supported here; skipped");
-                    }
+                    Note("click-through is not supported here; skipped");
                     return;
                 }
                 if (mate.SolidArea is not { } solid) throw new InvalidOperationException("the click-through area was not applied");
@@ -147,7 +144,18 @@ public static class SmokeTest
                 var origin = mate.Position;
                 var onCharacter = new PixelPoint(origin.X + solid.X + solid.Width / 2, origin.Y + solid.Y + solid.Height / 2);
                 var onEmptyCorner = new PixelPoint(origin.X + 3, origin.Y + 3);
-                if (ClickThrough.IsWindowAt(mate, onCharacter) is { } hit && ClickThrough.IsWindowAt(mate, onEmptyCorner) is { } miss)
+                if (OperatingSystem.IsMacOS())
+                {
+                    // The pointer is on the character now. Check that a click there lands on the
+                    // mate, then put the pointer on the empty corner for the next step.
+                    bool? hit = ClickThrough.IsWindowAt(mate, onCharacter);
+                    bool? outside = ClickThrough.IsWindowAt(mate, new PixelPoint(origin.X - 40, origin.Y - 40));
+                    Note($"hit test with the pointer on the character: on character={hit}, outside the window={outside}");
+                    if (hit != true) throw new InvalidOperationException("the character itself is not clickable");
+                    if (outside != false) throw new InvalidOperationException("the hit test reports the mate where its window is not");
+                    if (!ClickThrough.MovePointerTo(mate, onEmptyCorner)) throw new InvalidOperationException("could not move the pointer");
+                }
+                else if (ClickThrough.IsWindowAt(mate, onCharacter) is { } hit && ClickThrough.IsWindowAt(mate, onEmptyCorner) is { } miss)
                 {
                     Note($"hit test: on character={hit}, on empty corner={miss}");
                     if (!hit) throw new InvalidOperationException("the character itself is not clickable");
@@ -170,6 +178,14 @@ public static class SmokeTest
                 if (seen is not { } colour) throw new InvalidOperationException("could not read the screen");
                 if (!ScreenProbe.Near(colour, backdropColour)) throw new InvalidOperationException("the window is not transparent: something is painted where it should be see-through");
                 if (painted < 3) throw new InvalidOperationException("the character is not visible on screen");
+            }),
+            (0.176, "pointer onto the empty corner", () =>
+            {
+                if (!OperatingSystem.IsMacOS() || !ClickThrough.Supported) return;
+                var corner = new PixelPoint(First().Position.X + 3, First().Position.Y + 3);
+                bool? miss = ClickThrough.IsWindowAt(First(), corner);
+                Note($"hit test with the pointer on the empty corner: on empty corner={miss}");
+                if (miss != false) throw new InvalidOperationException("clicks on the empty corner are not passing through");
             }),
             (0.18, "backflip", () => First().Brain.StartDance([Moves.Backflip, Moves.Twirl])),
             (0.27, "mid-dance", () =>
