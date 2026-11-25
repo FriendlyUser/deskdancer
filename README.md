@@ -21,10 +21,11 @@ flop as it moves. How it was made, and how to change it, is in
 
 **Lyra**, a bard with a lute, is an image pack animated from a single drawing by
 @thaissingarts. She blinks, her long hair sways and swings after her when she moves, and
-now and then she waves. She walks on her own two feet, sits down on her heels, sings
-along to every dance move and has three dances of her own: Serenade, Hair Flip and Wave
-Hello. Pick her under **Character**, or start with `--character lyra`. How she was made
-is in [characters/lyra/_source](characters/lyra/_source/README.md).
+now and then she waves. She walks on her own two feet and sits down on her heels. When
+the music starts she plays her lute, strumming and singing along to every dance move,
+and she has three dances of her own: Serenade, Hair Flip and Wave Hello. Pick her under
+**Character**, or start with `--character lyra`. How she was made is in
+[characters/lyra/_source](characters/lyra/_source/README.md).
 
 ![Domo in five poses](docs/domo.png)
 

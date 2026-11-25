@@ -58,6 +58,16 @@ times before it is recorded, so the loops are seamless.
 behind it shows; that part is painted in by carrying the sash's own colours upwards, so
 its folds and outline continue unbroken.
 
+**Arm.** In the drawing she holds the lute by its neck and her other hand is held out
+open, so to play it that whole arm has to move. It is cut out in one piece, from the
+fingertips to where the forearm goes under her vest, its wrist is straightened part of
+the way, and it is swung about the elbow until the forearm crosses her body and the
+fingers lie on the strings. It is drawn a little larger there, being in front of her
+now, and it is given outlines along its edges, which in the drawing were the shawl's
+border above it and cloth below. Where the arm was, the shawl that lay along it hangs in
+a flap, and the arm comes out from under that. A strum is a few degrees at the elbow with
+the wrist following a moment behind.
+
 **Legs.** Each leg is its own layer, cut along the skirt's hem and drawn behind the skirt,
 with a plain stretch of stocking carrying on up out of sight. So the legs can swing from
 under the skirt to walk and kick, and tuck up under it when she bends her knees, which is
@@ -76,21 +86,24 @@ feet are in each clip (`anchor`), so nothing jumps between clips.
 | `idle.webp` | Standing (the app adds the breathing). Blinks, a breeze through her hair, a tilt of the head, and now and then a wave. |
 | `walk.webp` | Wandering along the floor: one stride, with her legs stepping, a small bob and her hair bouncing. The app adds no motion of its own to a walk clip. |
 | `sit.webp` | Sitting on her heels with her skirt round her. Blinks, and a contented moment. |
-| `dance.webp` | During all 15 built-in dance moves, which add their own bounces, leans and spins: happy eyes, singing on one beat and grinning on the next, swaying at the waist, her hand pumping and her hair bouncing. Also listed as **Sing Along**. |
-| `dance_serenade.webp`, `dance_hair_flip.webp`, `dance_wave.webp` | Their own entries under **Dance move**: Serenade, Hair Flip and Wave Hello. Each is four beats at the default 120 BPM. Clip dances get no motion from the app, so the sways, knee bends and hops are drawn in. |
+| `dance.webp` | During all 15 built-in dance moves, which add their own bounces, leans and spins, and which is when the app sends up its music notes. She plays her lute: her hand crosses the strings downwards on each beat and comes back up between them. Happy eyes, singing on one beat and grinning on the next, swaying at the waist, her hair bouncing. Also listed as **Strum Along**. |
+| `dance_serenade.webp`, `dance_hair_flip.webp`, `dance_wave.webp` | Their own entries under **Dance move**: Serenade, Hair Flip and Wave Hello. Each is four beats at the default 120 BPM. Clip dances get no motion from the app, so the sways, knee bends and hops are drawn in. In Serenade she plays too, one slow strum to a beat. In the other two the hand is held out as drawn: it waves in Wave Hello and goes up with the hop in Hair Flip. |
 | `drag.webp` | Being carried, and falling: wide eyes, a little "o", legs kicking, her hand flapping and her hair fluttering. |
 | `sleep.png` | Napping on her heels, head lolling. The app adds the breathing and the Zs. |
 
 ## Changing things
 
 Each clip is a short function near the end of `make_frames.py` (`idle`, `walk`, `sit`,
-`happy_dance`, `serenade`, `hair_flip`, `wave_hello`, `dangle`, `sleep`) that returns a list
+`strum_along`, `serenade`, `hair_flip`, `wave_hello`, `dangle`, `sleep`) that returns a list
 of `(pose, milliseconds)`. A pose can set:
 
 - `eyes`: a pair, each `"open"`, `"closed"`, `"happy"`, `"wide"`, or a number from 0 to 1
   for an eye part way shut
 - `mouth`: `"grin"` (as drawn), `"sing"`, `"smile"` or `"o"`
 - `hand`: degrees the fingertips lift at the wrist (negative lowers them)
+- `strum`: set this and she plays, with that arm across her body. It is where the hand is
+  on its way across the strings, from -1 (above them) to 1 (below); `flick` is the same
+  for the wrist alone. Leave `strum` out and the hand is held out as drawn.
 - `hair`: how far the tip of each fall moves, `{"L": (dx, dy), "R": (dx, dy)}`. Clips
   usually get this from a `Hair` spring driven by the body's motion.
 - `sway`: degrees her head and shoulders tip, bending at the waist (positive is right)
