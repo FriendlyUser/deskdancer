@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Threading;
 using DeskDancer.Engine;
 using DeskDancer.Platform;
@@ -22,6 +24,7 @@ public static class SmokeTest
         var watch = Stopwatch.StartNew();
         double total = Math.Max(6, options.Seconds);
         bool finished = false;
+        Window? backdrop = null;
 
         void Note(string line)
         {
@@ -35,6 +38,7 @@ public static class SmokeTest
             finished = true;
             Note((pass ? "PASS: " : "FAIL: ") + reason);
             File.WriteAllLines(Path.Combine(outDir, "smoke-result.txt"), report);
+            backdrop?.Close();
             app.Quit(pass ? 0 : 1);
         }
 
@@ -48,6 +52,24 @@ public static class SmokeTest
         // Keep the mate where it lands so the checks below are repeatable.
         app.Settings.Wander = false;
         app.Settings.AutoDance = false;
+
+        // Where the screen can be read back (Windows), put a plain backdrop in a colour the
+        // characters never use behind everything. If that colour shows through the empty
+        // part of a mate's window, the window really is transparent on this machine.
+        var backdropColour = Color.FromRgb(128, 96, 16);
+        if (ScreenProbe.Supported)
+        {
+            backdrop = new Window
+            {
+                Title = "DeskDancer smoke test backdrop",
+                Background = new SolidColorBrush(backdropColour),
+                WindowDecorations = WindowDecorations.None,
+                WindowState = WindowState.Maximized,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+            };
+            backdrop.Show();
+        }
 
         MateWindow First() => app.Mates[0];
         string? spritePack = app.Library.Available.FirstOrDefault(c => c.Folder != null)?.Id;
@@ -89,12 +111,39 @@ public static class SmokeTest
                     if (!hit) throw new InvalidOperationException("the character itself is not clickable");
                     if (miss) throw new InvalidOperationException("clicks on the empty corner are not passing through");
                 }
+
+                if (backdrop == null) return;
+                // Read the real screen. Just inside the clickable rectangle's top corner there is
+                // window but no character, so the backdrop must show through it.
+                var emptySpot = new PixelPoint(origin.X + solid.X + 6, origin.Y + solid.Y + 6);
+                var b = mate.Brain;
+                int painted = 0, samples = 0;
+                for (double up = 0.1; up < 0.95; up += 0.1, samples++)
+                {
+                    var onBody = new PixelPoint((int)b.FootX, (int)(b.FootY - up * b.H));
+                    if (ScreenProbe.PixelAt(onBody) is { } c && !ScreenProbe.Near(c, backdropColour)) painted++;
+                }
+                var seen = ScreenProbe.PixelAt(emptySpot);
+                Note($"on screen: empty part of the window shows {seen} (backdrop is {backdropColour}); character painted at {painted} of {samples} sample points");
+                if (seen is not { } colour) throw new InvalidOperationException("could not read the screen");
+                if (!ScreenProbe.Near(colour, backdropColour)) throw new InvalidOperationException("the window is not transparent: something is painted where it should be see-through");
+                if (painted < 3) throw new InvalidOperationException("the character is not visible on screen");
             }),
             (0.18, "backflip", () => First().Brain.StartDance([Moves.Backflip, Moves.Twirl])),
             (0.27, "mid-dance", () =>
             {
                 if (!First().Brain.IsDancing) throw new InvalidOperationException("mate is not dancing");
                 Snap(First(), "2-dancing");
+
+                if (backdrop == null) return;
+                // While dancing the whole window is in play, so its far corners must be see-through too.
+                var mate = First();
+                var size = PixelSize.FromSize(mate.Bounds.Size, mate.RenderScaling);
+                var left = ScreenProbe.PixelAt(new PixelPoint(mate.Position.X + 4, mate.Position.Y + 4));
+                var right = ScreenProbe.PixelAt(new PixelPoint(mate.Position.X + size.Width - 5, mate.Position.Y + 4));
+                Note($"on screen while dancing: window corners show {left} and {right}");
+                bool clear = left is { } l && ScreenProbe.Near(l, backdropColour) || right is { } r && ScreenProbe.Near(r, backdropColour);
+                if (!clear) throw new InvalidOperationException("the window is not transparent while dancing");
             }),
             (0.33, "second mate + party", () =>
             {

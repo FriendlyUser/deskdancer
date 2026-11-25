@@ -23,9 +23,9 @@ jobs:
             rid: linux-x64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
@@ -58,8 +58,7 @@ jobs:
               $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
               $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
               $g = [System.Drawing.Graphics]::FromImage($bmp)
-              $op = [System.Drawing.CopyPixelOperation]::SourceCopy -bor [System.Drawing.CopyPixelOperation]::CaptureBlt
-              $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size, $op)
+              $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
               $bmp.Save($path)
               $g.Dispose(); $bmp.Dispose()
             } catch {
@@ -82,14 +81,14 @@ jobs:
 
       - name: Upload smoke test output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: smoke-${{ matrix.rid }}
           path: smoke
           if-no-files-found: warn
 
       - name: Upload build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: DeskDancer-${{ matrix.rid }}
           path: dist/${{ matrix.rid }}
