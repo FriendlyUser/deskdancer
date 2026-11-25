@@ -115,8 +115,9 @@ Per animation, inside `clips`:
 ## If it does not show up
 
 - The folder needs at least one image in it, or in a folder inside it.
-- Folders whose names start with `.` or `_` are ignored, both as characters and as
-  animations inside a character, so `_source` or `_notes` is a safe place for your own files.
+- Folders whose names start with `.` or `_` are ignored, both in the `characters`
+  folder and inside a character's own folder. That makes them a good place for working
+  files: `mochi/_source` is one.
 - If the menu shows "could not load", the reason is in `deskdancer.log` in the
   settings folder. The mate uses the built-in character until it is fixed.
 - Very large images are scaled down to 640 pixels on their longest side when loaded,

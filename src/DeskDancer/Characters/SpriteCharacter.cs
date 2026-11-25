@@ -139,7 +139,9 @@ public static partial class SpritePackLoader
         try
         {
             return Directory.EnumerateFiles(dir).Any(IsImage)
-                   || Directory.EnumerateDirectories(dir).Any(d => Directory.EnumerateFiles(d).Any(IsImage));
+                   || Directory.EnumerateDirectories(dir).Any(d =>
+                       !Path.GetFileName(d).StartsWith('.') && !Path.GetFileName(d).StartsWith('_')
+                       && Directory.EnumerateFiles(d).Any(IsImage));
         }
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
@@ -411,10 +413,11 @@ public static partial class SpritePackLoader
         }
         foreach (var folder in Directory.EnumerateDirectories(dir).OrderBy(f => f, NaturalOrder.Instance))
         {
+            // A folder of frames is a clip, unless its name starts with "." or "_": those are
+            // the pack author's own working files (a "_source" folder, say) and stay out of it.
             string rel = Path.GetFileName(folder);
-            // Folders starting with "." or "_" are the pack author's own (sources, notes), not clips.
-            if (claimed.Contains(rel) || rel.StartsWith('.') || rel.StartsWith('_')
-                || !Directory.EnumerateFiles(folder).Any(IsImage)) continue;
+            if (claimed.Contains(rel) || rel.StartsWith('.') || rel.StartsWith('_')) continue;
+            if (!Directory.EnumerateFiles(folder).Any(IsImage)) continue;
             string key = NormaliseKey(rel, out _, out _);
             sources.TryAdd(key, new ClipSource { Key = key, Folder = rel });
         }

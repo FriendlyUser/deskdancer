@@ -5,3 +5,5 @@ dist/
 .idea/
 *.user
 *.suo
+__pycache__/
+characters/*/_source/sheet.png
