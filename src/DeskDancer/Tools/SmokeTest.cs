@@ -200,9 +200,21 @@ public static class SmokeTest
                 foreach (var mate in app.Mates) MustHave(mate, "dance");
                 Snap(app.Mates[0], "3-party-a");
                 Snap(app.Mates[1], "3-party-b");
+
+                // A clip gives its frames up after a couple of minutes out of use. Take them
+                // away now, in the middle of a dance, to see that the mate carries on and
+                // gets them back.
+                foreach (var mate in app.Mates)
+                {
+                    if (mate.Character is not SpriteCharacter pack) continue;
+                    pack.ReleaseUnused(TimeSpan.Zero);
+                    if (pack.HasClip("dance") && pack.IsReady("dance"))
+                        throw new InvalidOperationException($"'{pack.Id}' did not let go of its frames");
+                }
             }),
             (0.55, "party off, resize, menu", () =>
             {
+                foreach (var mate in app.Mates) MustHave(mate, "dance");
                 app.SetParty(false);
                 app.SetTempo(140);
                 app.Mates[1].SetScale(1.5);

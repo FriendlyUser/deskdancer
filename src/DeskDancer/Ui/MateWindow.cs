@@ -338,6 +338,7 @@ public sealed class MateWindow : Window
         Settings.Character = id;
         _character = _app.Library.Load(id);
         ApplyCharacter();
+        _app.ForgetUnusedCharacters();
         _app.Settings.Save();
     }
 

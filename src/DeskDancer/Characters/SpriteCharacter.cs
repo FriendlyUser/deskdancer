@@ -50,10 +50,11 @@ public sealed class SpriteClip
 }
 
 /// <summary>
-/// One of a pack's animations, and its frames once they have been decoded. Opening a pack
+/// One of a pack's animations, and its frames while they are in memory. Opening a pack
 /// reads only what each clip is called and how long it runs. The frames of everything but
 /// the idle clip are decoded on a background thread the first time the clip is wanted, so
-/// a clip that is never shown is never loaded.
+/// a clip that is never shown is never loaded, and they are let go of again once the clip
+/// has gone unused for a while.
 /// </summary>
 sealed class ClipSlot
 {
@@ -67,6 +68,7 @@ sealed class ClipSlot
     volatile string? _error;
     Task? _loading;
     bool _closed;
+    long _used = Environment.TickCount64;
 
     /// <summary>A clip whose frames are decoded when it is first wanted.</summary>
     public ClipSlot(string pack, string key, string name, double seconds, Func<int, SpriteClip> decode)
@@ -97,12 +99,16 @@ sealed class ClipSlot
     /// <summary>Why the frames could not be decoded, if that was tried and failed.</summary>
     public string? Error => _error;
 
+    /// <summary>Notes that the clip is in use, which keeps its frames in memory for now.</summary>
+    public void Touch() => Volatile.Write(ref _used, Environment.TickCount64);
+
     /// <summary>
     /// Starts decoding the frames in the background, unless they are here, on their way, or
     /// already known to be unreadable. Returns at once.
     /// </summary>
     public void Request()
     {
+        Touch();
         if (_clip != null) return;
         lock (_gate)
         {
@@ -149,6 +155,23 @@ sealed class ClipSlot
         NativeHeap.Trim();
     }
 
+    /// <summary>
+    /// Takes the frames away if the clip has not been used since <paramref name="tick"/>, and
+    /// hands them to the caller to free. They are decoded again when the clip is next wanted.
+    /// The idle clip, which everything else falls back on, is never given up this way.
+    /// </summary>
+    public SpriteClip? TakeIfUnusedSince(long tick)
+    {
+        if (_decode == null) return null;
+        lock (_gate)
+        {
+            if (_clip == null || Volatile.Read(ref _used) > tick) return null;
+            var clip = _clip;
+            _clip = null;
+            return clip;
+        }
+    }
+
     /// <summary>Takes the frames away for good and hands them to the caller to free.</summary>
     public SpriteClip? Close()
     {
@@ -173,8 +196,17 @@ public sealed class SpriteCharacter : ICharacter, IDisposable
         ["sleep"] = ["sit"],
     };
 
+    // A clip that has not been shown for this long gives its frames up, and they are decoded
+    // again when it is next wanted. Long enough that a mate going about its day keeps the
+    // clips it keeps coming back to (walking, the dance most moves share); short enough that
+    // a dance it does a few times an hour is not held in memory in between.
+    static readonly TimeSpan UnusedAfter = TimeSpan.FromMinutes(2);
+    static readonly TimeSpan TidyEvery = TimeSpan.FromSeconds(10);
+
     readonly Dictionary<string, ClipSlot> _clips;
     readonly ClipSlot _idle;
+    long _tidied = Environment.TickCount64;
+    bool _keepEverything;
 
     internal SpriteCharacter(string id, string name, Dictionary<string, ClipSlot> clips, double height, int facing, bool pixelArt)
     {
@@ -217,23 +249,39 @@ public sealed class SpriteCharacter : ICharacter, IDisposable
     public void Prepare(string clip) => Resolve(clip).Request();
 
     /// <summary>
-    /// Decodes every clip and waits for them all. For the tools that draw each clip once
-    /// and need the real frames on the first try.
+    /// Decodes every clip, waits for them all and keeps them from then on. For the tools
+    /// that draw each clip once and need the real frames on the first try.
     /// </summary>
     public void LoadAll()
     {
+        _keepEverything = true;
         foreach (var slot in _clips.Values) slot.Request();
         foreach (var slot in _clips.Values) slot.Load();
     }
 
     /// <summary>
-    /// Lets go of every frame, for a character that is being replaced. Drawing it afterwards
-    /// draws nothing.
+    /// Lets go of the frames of every clip that has not been shown or asked for in the last
+    /// <paramref name="unusedFor"/>. The idle clip is always kept. This happens by itself
+    /// as the character is drawn; calling it is for tests that cannot wait that long.
+    /// </summary>
+    public void ReleaseUnused(TimeSpan unusedFor)
+    {
+        if (_keepEverything) return;
+        long since = Environment.TickCount64 - (long)unusedFor.TotalMilliseconds;
+        List<SpriteClip>? unused = null;
+        foreach (var slot in _clips.Values)
+            if (slot.TakeIfUnusedSince(since) is { } clip) (unused ??= []).Add(clip);
+        if (unused != null) Free(unused);
+    }
+
+    /// <summary>
+    /// Lets go of every frame, for a character that no mate is showing any more. Drawing it
+    /// afterwards draws nothing.
     /// </summary>
     public void Dispose() => Free(_clips.Values.Select(slot => slot.Close()).OfType<SpriteClip>().ToList());
 
-    // Freeing this many bitmaps and handing the memory back takes a few milliseconds, which
-    // the thread that draws should not spend.
+    // Freeing a clip's worth of bitmaps and handing the memory back takes a millisecond or
+    // two, which the thread that draws should not spend.
     static void Free(List<SpriteClip> clips)
     {
         if (clips.Count == 0) return;
@@ -262,16 +310,27 @@ public sealed class SpriteCharacter : ICharacter, IDisposable
         var clip = slot.Clip;
         if (clip == null)
         {
-            // Its frames are not in memory yet. Drawing must not wait for them, so ask for
-            // them and stand still for the few frames it takes.
+            // Its frames are not in memory. Drawing must not wait for them, so ask for them
+            // and stand still for the few frames it takes.
             slot.Request();
             clip = idle;
+        }
+        else
+        {
+            slot.Touch();
         }
         var bitmap = clip.FrameAt(frame.ClipTime);
         double s = height / idle.ContentHeight * clip.Scale;
         var size = bitmap.Size;
         var dest = new Rect(-clip.AnchorX * s, -clip.AnchorY * s, size.Width * s, size.Height * s);
         ctx.DrawImage(bitmap, new Rect(size), dest);
+
+        long now = Environment.TickCount64;
+        if (now - _tidied >= (long)TidyEvery.TotalMilliseconds)
+        {
+            _tidied = now;
+            ReleaseUnused(UnusedAfter);
+        }
     }
 }
 

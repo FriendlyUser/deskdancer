@@ -84,6 +84,22 @@ public sealed class CharacterLibrary
     static void DisposeWhenOpened(Task<SpriteCharacter> opening) =>
         opening.ContinueWith(done => done.Result.Dispose(), TaskContinuationOptions.OnlyOnRanToCompletion);
 
+    /// <summary>
+    /// Lets go of every loaded pack that is not among <paramref name="inUse"/>: the ones no
+    /// mate is showing any more. Such a pack is opened again, which is quick, if it is asked
+    /// for later.
+    /// </summary>
+    public void KeepOnly(IEnumerable<ICharacter> inUse)
+    {
+        var keep = new HashSet<ICharacter>(inUse, ReferenceEqualityComparer.Instance);
+        foreach (var (id, character) in _loaded.ToList())
+        {
+            if (keep.Contains(character)) continue;
+            _loaded.Remove(id);
+            (character as IDisposable)?.Dispose();
+        }
+    }
+
     /// <summary>Loads a character, falling back to the built-in one if the pack is missing or broken.</summary>
     public ICharacter Load(string id)
     {

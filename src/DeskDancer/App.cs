@@ -102,7 +102,14 @@ public sealed class App : Application
         Settings.Mates.Remove(window.Settings);
         Settings.Save();
         window.Close();
+        ForgetUnusedCharacters();
     }
+
+    /// <summary>
+    /// Lets go of the image packs that no mate is showing any more. Called when a mate has
+    /// changed character or gone, which are the only times a pack can fall out of use.
+    /// </summary>
+    public void ForgetUnusedCharacters() => Library.KeepOnly(Mates.Select(mate => mate.Character));
 
     public void SetParty(bool on) => Conductor.SetParty(on);
 

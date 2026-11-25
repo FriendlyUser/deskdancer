@@ -58,8 +58,9 @@ grow or shrink between them. Empty margins are trimmed automatically and the bot
 of the artwork is treated as the floor.
 
 Only the idle animation is read when the mate appears. Each of the others is read the
-first time the mate uses it, so a pack can carry as many as you like: they do not make
-it slower to start, and one that is never used takes up no memory.
+first time the mate uses it, and put away again once it has gone a couple of minutes
+without being used. So a pack can carry as many as you like: they do not make it slower
+to start, and only the ones in use take up memory.
 
 `remix-example` in this folder is a complete pack made of sprite sheets, a folder of
 frames and single stills. Copy it and replace the images to get started.
