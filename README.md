@@ -188,6 +188,9 @@ The ids of the built-in moves are `bounce`, `sway`, `disco`, `sidestep`, `shuffl
 `clips` in its `character.json`, or, if it has none, its file names without the
 extension, such as `dance_spin_attack`.
 
+This is on the desktop only for now. The Android prototype's settings have no checklist
+yet, so there every move stays on.
+
 ## Platform notes
 
 **Windows 10 and 11.** Nothing to set up.
