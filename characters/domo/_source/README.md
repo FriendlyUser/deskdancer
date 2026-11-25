@@ -87,11 +87,11 @@ the app never has to repeat one to fill a move.
 Frames are not free. The app keeps the idle clip unpacked in memory the whole time, and
 each other clip while it is being shown and for a minute afterwards. `make_frames.py`
 prints the total for every clip when it finishes (about 141 MB, of which idle is 28 and
-Bubble Tea and Fart are 45). Three things keep it down: each clip is cropped to what it uses; a
-frame is held for as long as nothing has visibly moved, so standing still costs one
-frame, not hundreds; and the two long clips are drawn at fewer frames a second than the
-dances. On disk the pack is about 1 MB, because flat colour packs down well without any
-loss.
+Bubble Tea and Fart are 45). Three things keep it down: each clip is cropped to what it
+uses; a frame is held for as long as nothing has visibly moved, so standing still costs
+one frame, not hundreds; and the two long clips are drawn at fewer frames a second than
+the dances. On disk the pack is about 1 MB, because flat colour packs down well without
+any loss.
 
 ## Changing things
 
