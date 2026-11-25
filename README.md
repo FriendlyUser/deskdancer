@@ -188,8 +188,8 @@ The ids of the built-in moves are `bounce`, `sway`, `disco`, `sidestep`, `shuffl
 `clips` in its `character.json`, or, if it has none, its file names without the
 extension, such as `dance_spin_attack`.
 
-This is on the desktop only for now. The Android prototype's settings have no checklist
-yet, so there every move stays on.
+On Android the same checklist is in the settings: long-press the mate, then tap **Moves to
+use** to open it.
 
 ## Platform notes
 
@@ -227,7 +227,24 @@ and Put away buttons. The APK carries Mochi and Remix; other packs are one line 
 underneath, which on Android 12 and later means the mate is drawn slightly see-through,
 as Android requires of anything that lets touches pass. Tick **Solid mate** in the
 settings to draw it at full strength instead; taps right around it then stop reaching
-the app underneath.
+the app underneath. The settings also have **Moves to use**, the same checklist as on
+the desktop (see [Switching moves off](#switching-moves-off)).
+
+**Your own characters on Android.** Make a folder on the phone, say `Documents/DeskDancer`,
+and put each character in a folder of its own inside it, laid out as on a computer (see
+[characters/README.md](characters/README.md)); a folder copied over from a computer's
+`characters` folder works as it is. In the settings, under **Your own characters**, tap
+**Choose a folder**, find that folder in Android's folder picker, tap **Use this folder**
+and allow DeskDancer to read it. Its characters then appear in the character list. You can
+also pick a folder that is one character on its own. Android lets an app read such a folder
+only through the picker, not as ordinary files, so DeskDancer copies the characters into
+its own storage. It copies them again, new and changed files only, whenever the settings
+screen opens, or when you tap **Reload characters**, and a character you take out of the
+folder goes from DeskDancer too. **Open the folder** shows it in the phone's Files app, to
+add or remove characters there, and **Choose another folder** or **Stop using this folder**
+changes your mind. Folders whose names start with `.` or `_`, such as a character's
+`_source` folder, are not copied, as DeskDancer never reads them. A character with the same
+folder name as one in the APK, such as `mochi`, is left out in favour of the APK's.
 
 **Clicking through.** The mate lives in a small transparent window. So that the empty
 part of it does not block what is underneath, only the area around the character
@@ -296,8 +313,12 @@ A second workflow, `android`, builds the APK and runs it on an Android 14 emulat
 grants the overlay permission, puts Mochi on the home screen, makes it dance and drags it
 with a scripted swipe, then compares screenshots with one of the bare home screen: the
 mate has to be visible, the stage around it has to be see-through, the dancing frames have
-to differ, and the drag has to reach the mate. The screenshots are saved as artifacts, and
-a rough outline of what appeared on the screen is printed in the job's log.
+to differ, and the drag has to reach the mate. Then it puts Kori in `Documents/DeskDancer`
+on the phone, chooses that folder in Android's folder picker by tapping through it as a
+person would, and checks that Kori is copied in and visible on the screen. It also checks
+that the folder opens in the Files app, and that unticking Backflip under **Moves to use**
+switches it off. The screenshots are saved as artifacts, and a rough outline of what
+appeared on the screen is printed in the job's log.
 
 ### Making a release
 

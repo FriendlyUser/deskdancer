@@ -10,7 +10,11 @@ Checks, in order:
   * the stage is see-through: in the rest of the stage window, the home screen shows
     through unchanged, so there is no box or tint around the mate;
   * it moves while dancing: the dancing screenshots differ from one another;
-  * it can be dragged: the log shows a drag that started from the scripted swipe.
+  * it can be dragged: the log shows a drag that started from the scripted swipe;
+  * a character put in a folder on the phone, once that folder is chosen in the folder
+    picker, is copied in, can be put on the screen and is visible there;
+  * the folder opens in the Files app;
+  * a move unticked in the settings is switched off.
 Where the two windows were comes from Android itself (dumpsys window), taken right after
 the screenshot. The bare home screen is the one taken after the mate was put away, when
 the launcher has long settled. Outlines of what changed are printed as text, so the result
@@ -179,6 +183,37 @@ frame_counts = [int(x) for x in re.findall(r"DeskDancer: frame (\d+) ", log)]
 print("frames drawn, as logged:", frame_counts[-5:])
 if len(frame_counts) < 2 or frame_counts[-1] <= frame_counts[0]:
     failures.append("the frame loop is not running")
+
+# ---- A character of the user's own, from the chosen folder ----
+syncs = re.findall(r"characters folder synced: (\d+) character\(s\) \(([^)]*)\)", log)
+print("characters folder read:", syncs or "never")
+if "characters folder chosen" not in log:
+    failures.append("no folder was chosen in the folder picker")
+if not any("kori" in names.split(", ") for _, names in syncs):
+    failures.append("the character put in the chosen folder was not copied in")
+if "mate 'kori' on screen" not in log:
+    failures.append("the character from the folder was not put on the screen")
+kori = load("7-kori")
+if kori is not None and home is not None:
+    windows = overlay_windows(read("7-kori-windows.txt"))
+    skip = int(home.shape[0] * 0.06)
+    if len(windows) >= 2:
+        diff = difference(home, kori)
+        diff[:skip] = 0
+        on_body = box(diff.shape, windows[1], skip)
+        share = (diff > 40)[on_body].mean() if on_body.any() else 0
+        print(f"the character from the folder: {share:.0%} of its body area changed")
+        print(outline(diff > 40))
+        if share < 0.05:
+            failures.append(f"the character from the folder is not visible ({share:.0%} of its body area changed)")
+    else:
+        failures.append("the character from the folder has no windows on the screen")
+resumed = [l.strip() for l in read("8-activities.txt").splitlines() if "ResumedActivity" in l]
+print("in front after opening the folder:", resumed[:2])
+if not any("documentsui" in l for l in resumed):
+    failures.append("the folder did not open in the Files app")
+if "move 'backflip' switched off" not in log:
+    failures.append("unticking Backflip in the settings did not switch it off")
 
 if failures:
     print("\nFAILED:")

@@ -493,6 +493,30 @@ public static class Moves
 
     public static DanceMove? Find(string id) => All.FirstOrDefault(m => m.Id == id);
 
+    /// <summary>
+    /// Every dance a character knows, switched on or not: its own clips first, each played
+    /// for at least four beats at the given tempo, then the built-in moves.
+    /// </summary>
+    public static IReadOnlyList<DanceMove> ForCharacter(Characters.ICharacter character, double bpm)
+    {
+        var list = new List<DanceMove>();
+        foreach (var clip in character.DanceClips)
+        {
+            double beats = Math.Max(0.25, clip.Seconds * bpm / 60);
+            double total = beats;
+            while (total < 4) total += beats;
+            list.Add(FromClip(clip.Id, clip.Name, total));
+        }
+        list.AddRange(All);
+        return list;
+    }
+
+    /// <summary>
+    /// How a move is named in the settings: a built-in move by its id, a character's own
+    /// dance by the character and its clip, as its clips are no one else's.
+    /// </summary>
+    public static string KeyOf(DanceMove move, string characterId) => move.Clip == null ? move.Id : $"{characterId}/{move.Id}";
+
     /// <summary>Wraps an artist-made animation clip so it can be queued like any other move.</summary>
     public static DanceMove FromClip(string clip, string name, double beats) => new()
     {

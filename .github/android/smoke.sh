@@ -5,7 +5,10 @@
 #
 # Installs the APK, grants "display over other apps" the way a person would in Settings,
 # puts Mochi on the home screen, makes it dance and drags it, taking screenshots along the
-# way. check.py then looks at the screenshots and the log and decides whether it passed.
+# way. Then it puts a character in a folder on the phone, chooses that folder in the
+# phone's folder picker by tapping through it, shows the character, opens the folder in the
+# Files app and switches a move off in the settings. check.py then looks at the screenshots
+# and the log and decides whether it passed.
 set -uo pipefail
 
 apk=$1
@@ -101,6 +104,86 @@ log "putting the mate away"
 adb shell am start -W -n $pkg/.MainActivity --es command stop
 sleep 4
 shot 5-home-after
+
+# ---- A character of the user's own, in a folder chosen in the phone's folder picker ----
+
+# Taps the first thing on the screen whose text, in any case, is $1, as uiautomator sees the
+# screen; what it saw is kept as ui-$2.xml.
+tap_text() {
+  local want=$1 tag=$2 xy
+  adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
+  adb pull /sdcard/ui.xml "$out/ui-$tag.xml" > /dev/null 2>&1
+  xy=$(python3 - "$out/ui-$tag.xml" "$want" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+want = sys.argv[2].lower()
+try:
+    nodes = list(ET.parse(sys.argv[1]).iter("node"))
+except Exception:
+    nodes = []
+for node in nodes:
+    if want in (node.get("text", "").strip().lower(), node.get("content-desc", "").strip().lower()):
+        x0, y0, x1, y1 = map(int, re.findall(r"-?\d+", node.get("bounds", "")))
+        print((x0 + x1) // 2, (y0 + y1) // 2)
+        break
+PY
+)
+  if [ -z "$xy" ]; then
+    echo "nothing on the screen says '$want'"
+    return 1
+  fi
+  echo "tapping '$want' at $xy"
+  adb shell input tap $xy
+}
+
+log "putting a character in a folder on the phone"
+folder=/sdcard/Documents/DeskDancer
+adb shell mkdir -p "$folder/kori"
+adb push characters/kori/character.json characters/kori/*.webp "$folder/kori/" > /dev/null
+adb shell ls "$folder/kori"
+
+log "choosing the folder in the folder picker"
+adb shell am start -W -n $pkg/.MainActivity --es command choose-folder --es folder Documents/DeskDancer
+sleep 5
+shot 6-picker
+for step in "Use this folder" "Allow"; do
+  for try in 1 2 3; do
+    tap_text "$step" "${step// /-}-$try" && break
+    sleep 2
+  done
+  sleep 3
+done
+# The character is copied in and the characters read again.
+sleep 6
+shot 6-folder-chosen
+adb logcat -d -s DeskDancer:I | grep -E "characters folder|command" | tail -6
+
+log "the character from the folder, on the screen"
+adb shell am start -W -n $pkg/.MainActivity --es command start --es character kori --ez calm true
+sleep 10
+shot 7-kori
+adb shell dumpsys window windows > "$out/7-kori-windows.txt"
+adb shell am start -W -n $pkg/.MainActivity --es command stop
+sleep 3
+
+log "opening the folder in the Files app"
+adb shell am start -W -n $pkg/.MainActivity --es command open-folder
+sleep 5
+shot 8-files
+adb shell dumpsys activity activities > "$out/8-activities.txt"
+grep -m3 -E "ResumedActivity" "$out/8-activities.txt" || true
+
+log "switching a move off in the settings"
+adb shell am start -W -n $pkg/.MainActivity --es command show-moves --es move backflip
+sleep 3
+shot 9-moves
+for try in 1 2 3; do
+  tap_text "Backflip" "backflip-$try" && break
+  sleep 2
+done
+sleep 2
+shot 9-moves-after
+adb shell input keyevent KEYCODE_HOME
+sleep 2
 
 adb logcat -d > "$out/logcat.txt"
 log "app log"

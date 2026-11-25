@@ -10,6 +10,10 @@ A character is a folder of images. Put the folder in either of these places:
 
 Then right-click the mate and choose **Character > Reload characters**.
 
+On Android, put the folder in a folder of your own on the phone and choose that folder in
+DeskDancer's settings, under **Your own characters**. See "Your own characters on Android"
+in the [main README](../README.md#platform-notes).
+
 Only use artwork you made or have permission to use.
 
 ## The quick version

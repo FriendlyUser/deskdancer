@@ -19,6 +19,8 @@ public sealed class MateService : Service
     public const string ActionDance = "io.github.friendlyuser.deskdancer.DANCE";
     public const string ActionStop = "io.github.friendlyuser.deskdancer.STOP";
     public const string ActionRest = "io.github.friendlyuser.deskdancer.REST";
+    /// <summary>Reads the mate's character afresh, after the characters were scanned again.</summary>
+    public const string ActionReload = "io.github.friendlyuser.deskdancer.RELOAD";
     public const string ExtraCharacter = "character";
 
     const int NotificationId = 1;
@@ -50,6 +52,8 @@ public sealed class MateService : Service
             if (character != null) Stage.CharacterId = character;
             if (_overlay == null)
                 _overlay = new MateOverlay(this, Stage.CharacterId);
+            else if (action == ActionReload)
+                _overlay.SetCharacter(Stage.CharacterId);
             else if (character != null && !character.Equals(_overlay.Character.Id, StringComparison.OrdinalIgnoreCase))
                 _overlay.SetCharacter(character);
             _overlay.Refresh();
