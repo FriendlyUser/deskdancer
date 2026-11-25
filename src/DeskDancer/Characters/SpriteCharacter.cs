@@ -220,61 +220,80 @@ public static partial class SpritePackLoader
         Discover(dir, sources, claimed);
         if (sources.Count == 0) throw new InvalidDataException("No image files found in this folder.");
 
-        var decoded = new Dictionary<string, (ClipSource Source, List<SKBitmap> Frames, List<double> Durations)>();
+        // Decoded frames are full size and uncompressed. Each clip is therefore turned into
+        // its finished bitmaps, and its decoded frames let go, before the next one is read,
+        // so that no more than one clip at a time is held in both forms.
+        var built = new Dictionary<string, SpriteClip>();
         try
         {
-            foreach (var src in sources.Values)
-            {
-                var frames = new List<SKBitmap>();
-                var durations = new List<double>();
-                double fps = Math.Clamp(src.Fps ?? options.Fps, 0.5, 120);
-                if (src.Folder != null)
-                {
-                    string folder = Path.Combine(dir, src.Folder);
-                    if (!Directory.Exists(folder)) throw new InvalidDataException($"Folder not found: {src.Folder}");
-                    foreach (var file in Directory.EnumerateFiles(folder).Where(IsImage).OrderBy(f => f, NaturalOrder.Instance))
-                        DecodeFile(file, 1, 1, 0, fps, options, frames, durations);
-                }
-                else
-                {
-                    string file = Path.Combine(dir, src.File!);
-                    if (!File.Exists(file)) throw new InvalidDataException($"File not found: {src.File}");
-                    DecodeFile(file, src.Columns, src.Rows, src.Count, fps, options, frames, durations);
-                }
-                if (frames.Count == 0) throw new InvalidDataException($"Clip '{src.Key}' has no frames.");
-                decoded[src.Key] = (src, frames, durations);
-            }
-
-            if (!decoded.ContainsKey("idle"))
-            {
-                // No idle supplied: stand still on the first frame of whatever there is.
-                var donor = decoded.Values.FirstOrDefault(d => KnownClips.Contains(d.Source.Key));
-                if (donor.Frames == null) donor = decoded.Values.First();
-                decoded["idle"] = (new ClipSource { Key = "idle" }, [donor.Frames[0].Copy()], [1.0]);
-            }
-
-            var clips = new Dictionary<string, SpriteClip>();
             double idleHeight = 0, idleShrink = 1;
-            foreach (var key in decoded.Keys.OrderBy(k => k == "idle" ? 0 : 1))
+
+            void Build(ClipSource src, List<SKBitmap> frames, List<double> durations)
             {
-                var (src, frames, durations) = decoded[key];
                 var clip = BuildClip(src, frames, durations, options, idleHeight, idleShrink, out double shrink);
-                if (key == "idle")
+                built[src.Key] = clip;
+                if (src.Key == "idle")
                 {
                     idleHeight = clip.ContentHeight;
                     idleShrink = shrink;
                 }
-                clips[key] = clip;
             }
+
+            // Idle is built first because every other clip is scaled relative to it. A pack
+            // without one stands still on the first frame of whatever else it has.
+            bool hasIdle = sources.TryGetValue("idle", out var first);
+            first ??= sources.Values.FirstOrDefault(s => KnownClips.Contains(s.Key)) ?? sources.Values.First();
+
+            foreach (var src in sources.Values.OrderBy(s => s == first ? 0 : 1))
+            {
+                var frames = new List<SKBitmap>();
+                var durations = new List<double>();
+                try
+                {
+                    DecodeClip(dir, src, options, frames, durations);
+                    if (src == first && !hasIdle) Build(new ClipSource { Key = "idle" }, [frames[0]], [1.0]);
+                    Build(src, frames, durations);
+                }
+                finally
+                {
+                    foreach (var bmp in frames) bmp.Dispose();
+                }
+            }
+
+            // Idle heads the list; the rest follow in the order they were found.
+            var clips = new Dictionary<string, SpriteClip> { ["idle"] = built["idle"] };
+            foreach (var key in sources.Keys) clips.TryAdd(key, built[key]);
 
             string name = options.Name ?? Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             return new SpriteCharacter(id, name, clips, options.Height, options.Facing, options.PixelArt);
         }
-        finally
+        catch
         {
-            foreach (var entry in decoded.Values)
-                foreach (var bmp in entry.Frames) bmp.Dispose();
+            // This pack will not be used, so its finished frames should not sit in memory
+            // until the garbage collector happens to notice them.
+            foreach (var clip in built.Values)
+                foreach (var frame in clip.Frames) frame.Dispose();
+            throw;
         }
+    }
+
+    static void DecodeClip(string dir, ClipSource src, PackOptions options, List<SKBitmap> frames, List<double> durations)
+    {
+        double fps = Math.Clamp(src.Fps ?? options.Fps, 0.5, 120);
+        if (src.Folder != null)
+        {
+            string folder = Path.Combine(dir, src.Folder);
+            if (!Directory.Exists(folder)) throw new InvalidDataException($"Folder not found: {src.Folder}");
+            foreach (var file in Directory.EnumerateFiles(folder).Where(IsImage).OrderBy(f => f, NaturalOrder.Instance))
+                DecodeFile(file, 1, 1, 0, fps, options, frames, durations);
+        }
+        else
+        {
+            string file = Path.Combine(dir, src.File!);
+            if (!File.Exists(file)) throw new InvalidDataException($"File not found: {src.File}");
+            DecodeFile(file, src.Columns, src.Rows, src.Count, fps, options, frames, durations);
+        }
+        if (frames.Count == 0) throw new InvalidDataException($"Clip '{src.Key}' has no frames.");
     }
 
     // ---- Manifest and file discovery ----
