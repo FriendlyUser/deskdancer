@@ -119,6 +119,37 @@ jobs:
           kill "$watchdog" 2>/dev/null || true
           [ -f smoke/smoke-result.txt ] || echo "::warning::No smoke-result.txt was written; the app exited before the test started"
           echo "Exit code: $code"
+          # Above 128 a signal stopped the app: it crashed. macOS writes a report a few seconds
+          # later. Keep it with the results, and show here what each thread was doing.
+          if [ "$code" -gt 128 ]; then
+            sleep 15
+            report="$(ls -t "$HOME"/Library/Logs/DiagnosticReports/DeskDancer*.ips 2>/dev/null | head -1)" || true
+            if [ -n "$report" ]; then
+              cp "$report" smoke/crash-report.ips
+              python3 - "$report" <<'PY' || echo "::warning::Could not read the crash report; it is kept with the smoke test's results"
+          import json, sys
+          body = open(sys.argv[1], encoding="utf-8", errors="replace").read().partition("\n")[2]
+          report = json.loads(body)
+          crash = report.get("exception", {})
+          images = report.get("usedImages", [])
+          def where(frame):
+              i = frame.get("imageIndex", -1)
+              name = images[i].get("name", "?") if 0 <= i < len(images) else "?"
+              return f"{name}  {frame.get('symbol', '?')} +{frame.get('symbolLocation', frame.get('imageOffset', 0))}"
+          print("::group::Crash report")
+          print("Crashed with", crash.get("type"), crash.get("signal"), crash.get("subtype") or "",
+                "| under Rosetta:", report.get("translated"), "| macOS", report.get("osVersion", {}).get("train"))
+          for thread in report.get("threads", []):
+              crashed = thread.get("triggered")
+              print(("CRASHED " if crashed else "") + f"thread {thread.get('id')} {thread.get('name') or thread.get('queue') or ''}")
+              for frame in thread.get("frames", [])[: 60 if crashed else 6]:
+                  print("   ", where(frame))
+          print("::endgroup::")
+          PY
+            else
+              echo "::warning::The app crashed and macOS left no crash report"
+            fi
+          fi
           exit "$code"
 
       - name: Upload smoke test output
