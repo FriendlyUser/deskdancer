@@ -1,0 +1,61 @@
+{
+  "name": "Lyra",
+  "height": 160,
+  "facing": "right",
+  "removeBackground": false,
+  "clips": {
+    "idle": {
+      "file": "idle.webp",
+      "anchor": [
+        172.6,
+        474.9
+      ]
+    },
+    "dance": {
+      "file": "dance.webp",
+      "anchor": [
+        172.6,
+        474.9
+      ],
+      "name": "Sing Along"
+    },
+    "dance_serenade": {
+      "file": "dance_serenade.webp",
+      "anchor": [
+        206.6,
+        475.9
+      ],
+      "name": "Serenade"
+    },
+    "dance_hair_flip": {
+      "file": "dance_hair_flip.webp",
+      "anchor": [
+        222.6,
+        494.9
+      ],
+      "name": "Hair Flip"
+    },
+    "dance_wave": {
+      "file": "dance_wave.webp",
+      "anchor": [
+        202.6,
+        501.9
+      ],
+      "name": "Wave Hello"
+    },
+    "drag": {
+      "file": "drag.webp",
+      "anchor": [
+        168.6,
+        492.9
+      ]
+    },
+    "sleep": {
+      "file": "sleep.png",
+      "anchor": [
+        149.6,
+        446.9
+      ]
+    }
+  }
+}
