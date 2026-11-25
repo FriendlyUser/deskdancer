@@ -4,21 +4,21 @@ A little mate that lives on your desktop and dances. It stands on your taskbar, 
 about, sits down, naps, and breaks into dance moves on its own or whenever you ask.
 Written in C# with [Avalonia](https://avaloniaui.net/); runs on Windows and Linux.
 
+![Mochi, the character you start with, in five poses](docs/mochi.png)
+
+The mate you start with is **Mochi**. It is an image pack, animated from a single photo.
+Standing, it blinks, flicks an ear and tilts its head; it waddles from foot to foot when
+it wanders, puts on a happy face and flaps its ears for every dance move, and has two
+dances of its own, Bunny Hop and Ear Wave. Its ears swing on springs, so they trail and
+flop as it moves. How it was made, and how to change it, is in
+[characters/mochi/_source](characters/mochi/_source/README.md).
+
 ![Remix, the built-in character, in five poses](docs/remix.png)
 
-The built-in character is **Remix**, a DJ robot drawn entirely in code. You can also drop
-in a folder of your own images and it becomes a character that walks and dances too:
-see [characters/README.md](characters/README.md).
-
-![Mochi in five poses](docs/mochi.png)
-
-**Mochi** ships as an image pack, animated from a single photo. Standing, it blinks,
-flicks an ear and tilts its head; it waddles from foot to foot when it wanders, puts on
-a happy face and flaps its ears for every dance move, and has two dances of its own,
-Bunny Hop and Ear Wave. Its ears swing on springs, so they trail and flop as it moves.
-Pick it under **Character** in the menu, or start with `--character mochi`. How it was
-made, and how to change it, is in
-[characters/mochi/_source](characters/mochi/_source/README.md).
+**Remix** is a DJ robot drawn entirely in code, with arms, legs and a face of its own.
+Switch between the two under **Character** in the menu. You can also drop in a folder of
+your own images and it becomes a character that walks and dances too: see
+[characters/README.md](characters/README.md).
 
 ## Run it
 
@@ -40,7 +40,8 @@ dist/linux-x64/DeskDancer
 ```
 
 Either script takes a runtime name if you want to build for the other system, for
-example `./publish.sh win-x64`. Keep the `characters` folder next to the program.
+example `./publish.sh win-x64`. Keep the `characters` folder next to the program: Mochi
+lives in it, and without it the mate is Remix.
 
 Every push is also built by GitHub Actions. If you would rather not install .NET, open
 the latest run under the repository's **Actions** tab and download `DeskDancer-win-x64`
@@ -92,12 +93,14 @@ walking; during a dance the whole window (roughly 1.7 x 2 character heights) tak
 clicks. Turn the feature off in the menu if it misbehaves with your setup.
 
 Settings are remembered in `%APPDATA%\DeskDancer` on Windows and `~/.config/DeskDancer`
-on Linux, along with a log file if something goes wrong.
+on Linux, along with a log file if something goes wrong. That includes which character
+each mate is, so a mate you already have stays as it was when the program is updated.
 
 ## Command line
 
 ```
---character <id>        Start with this character ("builtin" or a folder name)
+--character <id>        Start with this character: "builtin" for Remix, or a folder
+                        name such as "mochi"
 --characters <folder>   Also look for character folders here
 --fresh                 Ignore saved settings for this run
 --smoke-test            Run every feature for a few seconds, exit 0 on success
@@ -122,9 +125,10 @@ characters/     Character packs that ship with the app
 
 The GitHub Actions workflow builds both systems and runs the smoke test on each. The
 smoke test starts the real app and drives it: dancing, a two-mate party, the menu,
-dragging and throwing. On Windows it also reads pixels back off the screen to confirm
-that the window is see-through and the character is visible, checks that clicks pass
-through the empty part of the window, and saves pictures of the desktop as artifacts.
+dragging and throwing, with Mochi, Remix and the example pack each taking a turn. On
+Windows it also reads pixels back off the screen to confirm that the window is
+see-through and the character is visible, checks that clicks pass through the empty part
+of the window, and saves pictures of the desktop as artifacts.
 
 One thing to know when building: Avalonia's build step sends anonymous usage data to
 its vendor. The publish scripts and the workflow switch that off with
