@@ -32,6 +32,10 @@ dist/linux-x64/DeskDancer
 Either script takes a runtime name if you want to build for the other system, for
 example `./publish.sh win-x64`. Keep the `characters` folder next to the program.
 
+Every push is also built by GitHub Actions. If you would rather not install .NET, open
+the latest run under the repository's **Actions** tab and download `DeskDancer-win-x64`
+or `DeskDancer-linux-x64` from its artifacts.
+
 To run straight from source instead: `dotnet run --project src/DeskDancer`.
 
 ## Using it
@@ -107,7 +111,10 @@ characters/     Character packs that ship with the app
 ```
 
 The GitHub Actions workflow builds both systems and runs the smoke test on each. The
-Windows job also saves pictures of the real desktop as build artifacts.
+smoke test starts the real app and drives it: dancing, a two-mate party, the menu,
+dragging and throwing. On Windows it also reads pixels back off the screen to confirm
+that the window is see-through and the character is visible, checks that clicks pass
+through the empty part of the window, and saves pictures of the desktop as artifacts.
 
 One thing to know when building: Avalonia's build step sends anonymous usage data to
 its vendor. The publish scripts and the workflow switch that off with
