@@ -60,6 +60,16 @@ public static class Stage
         set => _prefs?.Edit()?.PutBoolean("solid", value)?.Apply();
     }
 
+    /// <summary>
+    /// The folder of the user's own characters, chosen in Android's folder picker: the picker's
+    /// address for it (a content:// tree URI), or null if none has been chosen.
+    /// </summary>
+    public static string? CharactersFolder
+    {
+        get => _prefs?.GetString("characters-folder", null);
+        set => _prefs?.Edit()?.PutString("characters-folder", value)?.Apply();
+    }
+
     public static string CharacterId
     {
         get => Settings.Mates.Count > 0 ? Settings.Mates[0].Character : new MateSettings().Character;

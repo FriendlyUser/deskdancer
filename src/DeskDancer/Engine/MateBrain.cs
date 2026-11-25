@@ -112,19 +112,7 @@ public sealed class MateBrain
     // ---- Commands ----
 
     /// <summary>Every dance this mate knows, switched on or not: the character's own clips first, then the built-in moves.</summary>
-    public IReadOnlyList<DanceMove> AllMoves()
-    {
-        var list = new List<DanceMove>();
-        foreach (var clip in _character.DanceClips)
-        {
-            double beats = Math.Max(0.25, clip.Seconds * _clock.Bpm / 60);
-            double total = beats;
-            while (total < 4) total += beats;
-            list.Add(Moves.FromClip(clip.Id, clip.Name, total));
-        }
-        list.AddRange(Moves.All);
-        return list;
-    }
+    public IReadOnlyList<DanceMove> AllMoves() => Moves.ForCharacter(_character, _clock.Bpm);
 
     /// <summary>
     /// The dances this mate does: its own and the built-in ones, less any that are switched
@@ -140,7 +128,7 @@ public sealed class MateBrain
     /// How a move is named in the settings: a built-in move by its id, the character's own
     /// dance by the character and its clip, as its clips are no one else's.
     /// </summary>
-    public string KeyOf(DanceMove move) => move.Clip == null ? move.Id : $"{_character.Id}/{move.Id}";
+    public string KeyOf(DanceMove move) => Moves.KeyOf(move, _character.Id);
 
     public void StartDance(IEnumerable<DanceMove> moves)
     {
