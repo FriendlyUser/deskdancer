@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using DeskDancer.Characters;
 using DeskDancer.Engine;
 using DeskDancer.Platform;
 using DeskDancer.Ui;
@@ -151,6 +152,12 @@ public static class SmokeTest
             return b.State != MateState.Fall && Math.Abs(b.FootY - b.Floor) <= 2 ? null : $"footY={b.FootY:0.#} floor={b.Floor:0.#} state={b.State}";
         }
 
+        // An image pack reads a clip in when it is first shown, so it is not there at once.
+        string? ClipNotInMemory() => app.Mates
+            .Select(m => m.Character is SpriteCharacter pack && !pack.InMemory(m.Brain.Clip)
+                ? $"'{pack.Id}' has not read its '{m.Brain.Clip}' clip into memory" : null)
+            .FirstOrDefault(missing => missing != null);
+
         string? AreaNotApplied() => ClickThrough.Supported && First().SolidArea == null ? "the click-through area was not applied" : null;
 
         // Two spots on the screen inside the first mate's window: the middle of the rectangle
@@ -261,6 +268,14 @@ public static class SmokeTest
                 MustBe(second, id);
                 app.SetParty(true);
             }),
+            new(0.42, "drop clips", () =>
+            {
+                // An image pack keeps only the clips it is showing. Take away everything it can
+                // read again, mid-dance; what the mates are showing has to come back by itself.
+                app.Library.ReleaseUnusedClips(TimeSpan.Zero);
+            }),
+            new(0.46, "clips back", () => Note("every mate has the clip it is showing in memory"),
+                WaitingFor: ClipNotInMemory),
             new(0.50, "party", () =>
             {
                 Snap(app.Mates[0], "3-party-a");

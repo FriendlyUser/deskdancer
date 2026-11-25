@@ -53,6 +53,15 @@ public sealed class App : Application
             }
             Clock.Bpm = Settings.Bpm;
 
+            // With mates on screen an image pack holds only the clips it is showing. Every so
+            // often the ones that have gone unshown for a while are dropped; see CharacterLibrary.
+            Library.ClipsOnDemand = true;
+            DispatcherTimer.Run(() =>
+            {
+                Library.ReleaseUnusedClips();
+                return true;
+            }, TimeSpan.FromSeconds(10));
+
             int index = 0, count = Settings.Mates.Count;
             foreach (var mate in Settings.Mates.ToList())
                 Spawn(mate, count > 1 ? (index++ + 1.0) / (count + 1) : null);

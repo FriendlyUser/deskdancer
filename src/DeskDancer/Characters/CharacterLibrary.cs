@@ -1,3 +1,5 @@
+using DeskDancer.Platform;
+
 namespace DeskDancer.Characters;
 
 /// <summary>A character the user can pick, before any of its images are loaded.</summary>
@@ -16,6 +18,17 @@ public sealed class CharacterLibrary
 
     /// <summary>Extra folder to scan, from the command line.</summary>
     public string? ExtraFolder { get; set; }
+
+    /// <summary>
+    /// True while mates are on screen. An image pack loaded from then on keeps only its idle
+    /// clip in memory the whole time: the others are read when they are first drawn, and
+    /// <see cref="ReleaseUnusedClips"/> lets them go again. The offline tools leave this off
+    /// and get every frame of a pack up front.
+    /// </summary>
+    public bool ClipsOnDemand { get; set; }
+
+    /// <summary>How long a clip stays in memory after it was last drawn.</summary>
+    static readonly TimeSpan ClipLifetime = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// The packs that ship with the program: a "characters" folder next to it or, in a
@@ -92,7 +105,7 @@ public sealed class CharacterLibrary
 
         try
         {
-            var character = SpritePackLoader.Load(info.Id, info.Folder);
+            var character = SpritePackLoader.Load(info.Id, info.Folder, ClipsOnDemand);
             _loaded[id] = character;
             _errors.Remove(id);
             return character;
@@ -103,6 +116,23 @@ public sealed class CharacterLibrary
             Log.Error($"Could not load character '{id}' from {info.Folder}", ex);
             return _builtIn;
         }
+        finally
+        {
+            // Decoding a pack goes through far more memory than the pack ends up holding.
+            FreedMemory.Return();
+        }
+    }
+
+    /// <summary>
+    /// Lets go of the frames of clips that no mate has drawn for a while and that can be read
+    /// from disk again. They come back by themselves the next time they are drawn.
+    /// </summary>
+    public void ReleaseUnusedClips(TimeSpan? unusedFor = null)
+    {
+        bool any = false;
+        foreach (var character in _loaded.Values.OfType<SpriteCharacter>())
+            any |= character.ReleaseUnused(unusedFor ?? ClipLifetime);
+        if (any) FreedMemory.Return();
     }
 
     /// <summary>Creates the per-user characters folder with a short how-to in it, and returns its path.</summary>
