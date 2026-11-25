@@ -79,6 +79,10 @@ that walk, a hand that waves, an arm that strums her lute and a redrawn face.
 draws every frame. It is the one to copy if you would rather describe a character in
 shapes than paint it, and it has clips for sitting and napping as well.
 
+`domo-plush` is the same character painted in fleece. Its `_source` folder holds only a
+painter; the shapes and the clips come from `domo`'s script, which shows how one
+character can be given a second look without drawing it twice.
+
 `sprig` is another drawing, and the one to copy if your character holds something that
 should move: its `_source` folder cuts the sword arm out in one piece, paints in what was
 behind it so the arm can swing anywhere, and turns the whole character round for a spin

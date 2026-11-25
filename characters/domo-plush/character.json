@@ -1,0 +1,90 @@
+{
+  "name": "Plush Domo",
+  "height": 151,
+  "facing": "right",
+  "removeBackground": false,
+  "clips": {
+    "idle": {
+      "file": "idle.webp",
+      "anchor": [
+        146.0,
+        335.0
+      ]
+    },
+    "walk": {
+      "file": "walk.webp",
+      "anchor": [
+        158.0,
+        340.0
+      ]
+    },
+    "sit": {
+      "file": "sit.webp",
+      "anchor": [
+        159.0,
+        312.0
+      ]
+    },
+    "sleep": {
+      "file": "sleep.webp",
+      "anchor": [
+        147.0,
+        313.0
+      ]
+    },
+    "dance": {
+      "file": "dance.webp",
+      "anchor": [
+        191.0,
+        334.0
+      ],
+      "name": "Happy Arms"
+    },
+    "dance_bubble_tea": {
+      "file": "dance_bubble_tea.webp",
+      "anchor": [
+        172.0,
+        351.0
+      ],
+      "name": "Bubble Tea"
+    },
+    "dance_chomp": {
+      "file": "dance_chomp.webp",
+      "anchor": [
+        212.0,
+        369.0
+      ],
+      "name": "Chomp"
+    },
+    "dance_fart": {
+      "file": "dance_fart.webp",
+      "anchor": [
+        212.0,
+        371.0
+      ],
+      "name": "Fart"
+    },
+    "dance_stomp": {
+      "file": "dance_stomp.webp",
+      "anchor": [
+        198.0,
+        355.0
+      ],
+      "name": "Monster Stomp"
+    },
+    "drag": {
+      "file": "drag.webp",
+      "anchor": [
+        194.0,
+        349.0
+      ]
+    },
+    "fall": {
+      "file": "fall.webp",
+      "anchor": [
+        168.0,
+        357.0
+      ]
+    }
+  }
+}

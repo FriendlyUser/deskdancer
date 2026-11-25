@@ -40,6 +40,14 @@
       ],
       "name": "Happy Arms"
     },
+    "dance_bubble_tea": {
+      "file": "dance_bubble_tea.webp",
+      "anchor": [
+        172.0,
+        349.0
+      ],
+      "name": "Bubble Tea"
+    },
     "dance_chomp": {
       "file": "dance_chomp.webp",
       "anchor": [
@@ -47,6 +55,14 @@
         367.0
       ],
       "name": "Chomp"
+    },
+    "dance_fart": {
+      "file": "dance_fart.webp",
+      "anchor": [
+        208.0,
+        370.0
+      ],
+      "name": "Fart"
     },
     "dance_stomp": {
       "file": "dance_stomp.webp",
