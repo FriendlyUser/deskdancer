@@ -1,0 +1,59 @@
+{
+  "name": "Sprig",
+  "height": 165,
+  "facing": "right",
+  "removeBackground": false,
+  "clips": {
+    "idle": {
+      "file": "idle.webp",
+      "anchor": [
+        148.1,
+        501.0
+      ]
+    },
+    "walk": {
+      "file": "walk.webp",
+      "anchor": [
+        127.1,
+        462.0
+      ]
+    },
+    "sit": {
+      "file": "sit.webp",
+      "anchor": [
+        142.1,
+        417.0
+      ]
+    },
+    "dance": {
+      "file": "dance.webp",
+      "anchor": [
+        144.1,
+        507.0
+      ],
+      "name": "Sword Pump"
+    },
+    "dance_spin_attack": {
+      "file": "dance_spin_attack.webp",
+      "anchor": [
+        383.1,
+        557.0
+      ],
+      "name": "Spin Attack"
+    },
+    "drag": {
+      "file": "drag.webp",
+      "anchor": [
+        139.1,
+        500.0
+      ]
+    },
+    "sleep": {
+      "file": "sleep.png",
+      "anchor": [
+        158.1,
+        417.0
+      ]
+    }
+  }
+}

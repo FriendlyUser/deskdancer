@@ -55,6 +55,30 @@ leaned, spun and flipped as a whole. Pick it under **Character**, or start with
 [characters/piplup/_source](characters/piplup/_source/README.md). Piplup is a Pokémon and
 belongs to Nintendo, Creatures and Game Freak, who had no part in this pack.
 
+![Sprig in five poses](docs/sprig.png)
+
+**Sprig**, a little swordsman in a green cap, is an image pack animated from a single
+commissioned drawing. He blinks, the long tail of his cap swings and flops after him when
+he moves, and now and then he gives his sword a flourish. He walks on his own two feet and
+kneels with the point of his sword in the ground. He punches the sword up on every beat of
+the built-in dance moves, and his special move is the **Spin Attack**: he crouches while
+the blade charges up with light, spins round twice leaving a ring of light behind it, and
+comes out of it with the sword held high in a shower of sparks. Pick him under
+**Character**, or start with `--character sprig`. How he was made is in
+[characters/sprig/_source](characters/sprig/_source/README.md). Sprig is fan art of a
+Nintendo character, and Nintendo had no part in it.
+
+![Kori in six poses](docs/kori.png)
+
+**Kori** is an ice cube with stubby arms and legs, an original character drawn entirely by
+a script, like Domo. It is a real cube turned in three dimensions, so the light moves across
+its faces as it turns, with glints, a crack and trapped bubbles in the ice. It blinks,
+shivers, drips meltwater, waddles about and sits on a little puddle. It has three dances of
+its own: **Ice Skate**, gliding on one foot and spinning on the spot; **Meltdown**, melting
+into a puddle and freezing back up with a sparkle; and **Brr!**, shivering until it sneezes
+out a puff of frost. Pick it under **Character**, or start with `--character kori`. How it
+is drawn, and how to change it, is in [characters/kori/_source](characters/kori/_source/README.md).
+
 Switch between them under **Character** in the menu. You can also drop in a folder of
 your own images and it becomes a character that walks and dances too: see
 [characters/README.md](characters/README.md).
