@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Avalonia;
@@ -225,27 +226,46 @@ public static partial class SpritePackLoader
         var decoded = new Dictionary<string, (ClipSource Source, List<SKBitmap> Frames, List<double> Durations)>();
         try
         {
-            foreach (var src in sources.Values)
+            // Decoding is most of the time a pack takes to load, and each clip is its own
+            // file or folder, so the clips are decoded side by side. Results and errors are
+            // kept in the order the clips were found, so a pack loads the same way, and
+            // reports the same problem, every time.
+            var order = sources.Values.ToArray();
+            var frameLists = new List<SKBitmap>[order.Length];
+            var durationLists = new List<double>[order.Length];
+            var errors = new Exception?[order.Length];
+            Parallel.For(0, order.Length, i =>
             {
-                var frames = new List<SKBitmap>();
-                var durations = new List<double>();
-                double fps = Math.Clamp(src.Fps ?? options.Fps, 0.5, 120);
-                if (src.Folder != null)
+                var src = order[i];
+                var frames = frameLists[i] = [];
+                var durations = durationLists[i] = [];
+                try
                 {
-                    string folder = Path.Combine(dir, src.Folder);
-                    if (!Directory.Exists(folder)) throw new InvalidDataException($"Folder not found: {src.Folder}");
-                    foreach (var file in Directory.EnumerateFiles(folder).Where(IsImage).OrderBy(f => f, NaturalOrder.Instance))
-                        DecodeFile(file, 1, 1, 0, fps, options, frames, durations);
+                    double fps = Math.Clamp(src.Fps ?? options.Fps, 0.5, 120);
+                    if (src.Folder != null)
+                    {
+                        string folder = Path.Combine(dir, src.Folder);
+                        if (!Directory.Exists(folder)) throw new InvalidDataException($"Folder not found: {src.Folder}");
+                        foreach (var file in Directory.EnumerateFiles(folder).Where(IsImage).OrderBy(f => f, NaturalOrder.Instance))
+                            DecodeFile(file, 1, 1, 0, fps, options, frames, durations);
+                    }
+                    else
+                    {
+                        string file = Path.Combine(dir, src.File!);
+                        if (!File.Exists(file)) throw new InvalidDataException($"File not found: {src.File}");
+                        DecodeFile(file, src.Columns, src.Rows, src.Count, fps, options, frames, durations);
+                    }
+                    if (frames.Count == 0) throw new InvalidDataException($"Clip '{src.Key}' has no frames.");
                 }
-                else
+                catch (Exception ex)
                 {
-                    string file = Path.Combine(dir, src.File!);
-                    if (!File.Exists(file)) throw new InvalidDataException($"File not found: {src.File}");
-                    DecodeFile(file, src.Columns, src.Rows, src.Count, fps, options, frames, durations);
+                    errors[i] = ex;
                 }
-                if (frames.Count == 0) throw new InvalidDataException($"Clip '{src.Key}' has no frames.");
-                decoded[src.Key] = (src, frames, durations);
-            }
+            });
+            for (int i = 0; i < order.Length; i++)
+                decoded[order[i].Key] = (order[i], frameLists[i], durationLists[i]);
+            if (errors.FirstOrDefault(e => e != null) is { } first)
+                ExceptionDispatchInfo.Capture(first).Throw();
 
             if (!decoded.ContainsKey("idle"))
             {
@@ -516,11 +536,13 @@ public static partial class SpritePackLoader
 
     static unsafe bool HasTransparency(SKBitmap bmp)
     {
+        // Each of these is a call into Skia, so they are read once, not once per pixel.
+        int w = bmp.Width, h = bmp.Height, stride = bmp.RowBytes;
         byte* px = (byte*)bmp.GetPixels();
-        for (int y = 0; y < bmp.Height; y++)
+        for (int y = 0; y < h; y++)
         {
-            byte* row = px + y * bmp.RowBytes;
-            for (int x = 0; x < bmp.Width; x++)
+            byte* row = px + y * stride;
+            for (int x = 0; x < w; x++)
                 if (row[x * 4 + 3] < 250) return true;
         }
         return false;
@@ -601,11 +623,13 @@ public static partial class SpritePackLoader
         int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
         foreach (var bmp in frames)
         {
+            // Each of these is a call into Skia, so they are read once, not once per pixel.
+            int w = bmp.Width, h = bmp.Height, stride = bmp.RowBytes;
             byte* px = (byte*)bmp.GetPixels();
-            for (int y = 0; y < bmp.Height; y++)
+            for (int y = 0; y < h; y++)
             {
-                byte* row = px + y * bmp.RowBytes;
-                for (int x = 0; x < bmp.Width; x++)
+                byte* row = px + y * stride;
+                for (int x = 0; x < w; x++)
                 {
                     if (row[x * 4 + 3] <= 12) continue;
                     if (x < minX) minX = x;
@@ -618,7 +642,7 @@ public static partial class SpritePackLoader
         return maxX < 0 ? SKRectI.Empty : new SKRectI(minX, minY, maxX + 1, maxY + 1);
     }
 
-    static SpriteClip BuildClip(ClipSource src, List<SKBitmap> frames, List<double> durations, PackOptions options,
+    static unsafe SpriteClip BuildClip(ClipSource src, List<SKBitmap> frames, List<double> durations, PackOptions options,
         double idleHeight, double idleShrink, out double shrink)
     {
         // Frames in one clip must share a size so they can share an anchor.
@@ -639,8 +663,30 @@ public static partial class SpritePackLoader
         var ends = new double[frames.Count];
         double t = 0;
         var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
+        byte[]? rows = null;
         for (int i = 0; i < frames.Count; i++)
         {
+            t += Math.Max(durations[i], 1.0 / 240);
+            ends[i] = t;
+
+            // Nothing to resize, which is the usual case: copy the trimmed rows straight
+            // across. Drawing them through a canvas gives the same pixels far more slowly.
+            var frame = frames[i];
+            if (shrink == 1 && frame.Width >= crop.Right && frame.Height >= crop.Bottom)
+            {
+                int rowBytes = outW * 4;
+                rows ??= new byte[rowBytes * outH];
+                fixed (byte* to = rows)
+                {
+                    byte* from = (byte*)frame.GetPixels() + crop.Top * frame.RowBytes + crop.Left * 4;
+                    for (int y = 0; y < outH; y++)
+                        Buffer.MemoryCopy(from + (long)y * frame.RowBytes, to + (long)y * rowBytes, rowBytes, rowBytes);
+                    bitmaps[i] = new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, (nint)to,
+                        new PixelSize(outW, outH), new Vector(96, 96), rowBytes);
+                }
+                continue;
+            }
+
             using var cell = new SKBitmap(InfoFor(outW, outH));
             cell.Erase(SKColors.Transparent);
             using (var canvas = new SKCanvas(cell))
@@ -652,8 +698,6 @@ public static partial class SpritePackLoader
             }
             bitmaps[i] = new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, cell.GetPixels(),
                 new PixelSize(outW, outH), new Vector(96, 96), cell.RowBytes);
-            t += Math.Max(durations[i], 1.0 / 240);
-            ends[i] = t;
         }
 
         double contentH = bounds.Height * shrink, contentW = bounds.Width * shrink;

@@ -20,6 +20,15 @@ Switch between the two under **Character** in the menu. You can also drop in a f
 your own images and it becomes a character that walks and dances too: see
 [characters/README.md](characters/README.md).
 
+![Lyra in five poses](docs/lyra.png)
+
+**Lyra**, a bard with a lute, is an image pack animated from a single drawing by
+@thaissingarts. She blinks, her long hair sways and swings after her when she moves, and
+now and then she waves. She walks on her own two feet, sits down on her heels, sings
+along to every dance move and has three dances of her own: Serenade, Hair Flip and Wave
+Hello. Pick her under **Character**, or start with `--character lyra`. How she was made
+is in [characters/lyra/_source](characters/lyra/_source/README.md).
+
 ## Run it
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) to build. The result

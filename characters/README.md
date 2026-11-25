@@ -64,6 +64,10 @@ frames and single stills. Copy it and replace the images to get started.
 has the scripts that cut the character out and drew the animations, if you want to do
 the same with a picture of your own.
 
+`lyra` is the same idea for a drawing: its `_source` folder sharpens the drawing,
+takes it off a white background, and animates it with hair that swings on a spring, legs
+that walk, a hand that waves and a redrawn face.
+
 ## character.json (optional)
 
 Add this file to the folder to adjust things. Every setting is optional.
