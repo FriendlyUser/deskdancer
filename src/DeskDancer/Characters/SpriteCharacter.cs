@@ -214,6 +214,7 @@ public static partial class SpritePackLoader
     static readonly string[] ImageExtensions = [".png", ".gif", ".webp", ".jpg", ".jpeg", ".bmp"];
     const int MaxFramesPerClip = 400;
     const int MaxFrameSide = 640;
+    const int MaxClipsAtOnce = 4;
 
     static readonly Dictionary<string, string> Aliases = new()
     {
@@ -329,61 +330,84 @@ public static partial class SpritePackLoader
         Discover(dir, sources, claimed);
         if (sources.Count == 0) throw new InvalidDataException("No image files found in this folder.");
 
-        // Decoded frames are full size and uncompressed. Each clip is therefore turned into
-        // its finished bitmaps, and its decoded frames let go, before the next one is read,
-        // so that no more than one clip at a time is held in both forms.
-        var built = new Dictionary<string, SpriteClip>();
-        try
+        // Decoded frames are full size and uncompressed, so no clip keeps its own for longer
+        // than it takes to turn them into what the character holds: each is decoded, finished
+        // and its decoded frames let go before the thread that did it takes on another.
+        var order = sources.Values.ToArray();
+        var built = new SpriteClip?[order.Length];
+        var errors = new Exception?[order.Length];
+        SpriteClip? idle = null;
+        double idleHeight = 0, idleShrink = 1;
+
+        // Idle is built first because every other clip is scaled relative to it. A pack
+        // without one stands still on the first frame of whatever else it has.
+        int first = Array.FindIndex(order, s => s.Key == "idle");
+        bool hasIdle = first >= 0;
+        if (!hasIdle) first = Math.Max(0, Array.FindIndex(order, s => KnownClips.Contains(s.Key)));
+
+        SpriteClip Build(ClipSource src, List<SKBitmap> frames, List<double> durations)
         {
-            double idleHeight = 0, idleShrink = 1;
-
-            void Build(ClipSource src, List<SKBitmap> frames, List<double> durations)
+            string? readFrom = onDemand && src.Key != "idle" ? dir : null;
+            var clip = BuildClip(src, frames, durations, options, idleHeight, idleShrink, out double shrink, readFrom);
+            if (src.Key == "idle")
             {
-                string? readFrom = onDemand && src.Key != "idle" ? dir : null;
-                var clip = BuildClip(src, frames, durations, options, idleHeight, idleShrink, out double shrink, readFrom);
-                built[src.Key] = clip;
-                if (src.Key == "idle")
-                {
-                    idleHeight = clip.ContentHeight;
-                    idleShrink = shrink;
-                }
+                idle = clip;
+                idleHeight = clip.ContentHeight;
+                idleShrink = shrink;
             }
-
-            // Idle is built first because every other clip is scaled relative to it. A pack
-            // without one stands still on the first frame of whatever else it has.
-            bool hasIdle = sources.TryGetValue("idle", out var first);
-            first ??= sources.Values.FirstOrDefault(s => KnownClips.Contains(s.Key)) ?? sources.Values.First();
-
-            foreach (var src in sources.Values.OrderBy(s => s == first ? 0 : 1))
-            {
-                var frames = new List<SKBitmap>();
-                var durations = new List<double>();
-                try
-                {
-                    DecodeClip(dir, src, options, frames, durations);
-                    if (src == first && !hasIdle) Build(new ClipSource { Key = "idle" }, [frames[0]], [1.0]);
-                    Build(src, frames, durations);
-                }
-                finally
-                {
-                    foreach (var bmp in frames) bmp.Dispose();
-                }
-            }
-
-            // Idle heads the list; the rest follow in the order they were found.
-            var clips = new Dictionary<string, SpriteClip> { ["idle"] = built["idle"] };
-            foreach (var key in sources.Keys) clips.TryAdd(key, built[key]);
-
-            string name = options.Name ?? Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            return new SpriteCharacter(id, name, clips, options.Height, options.Facing, options.PixelArt);
+            return clip;
         }
-        catch
+
+        void LoadClip(int i, bool build)
+        {
+            var frames = new List<SKBitmap>();
+            var durations = new List<double>();
+            try
+            {
+                DecodeClip(dir, order[i], options, frames, durations);
+                if (!build) return;
+                if (i == first && !hasIdle) Build(new ClipSource { Key = "idle" }, [frames[0]], [1.0]);
+                built[i] = Build(order[i], frames, durations);
+            }
+            catch (Exception ex)
+            {
+                errors[i] = ex;
+            }
+            finally
+            {
+                foreach (var bmp in frames) bmp.Dispose();
+            }
+        }
+
+        LoadClip(first, build: true);
+
+        // Decoding is most of the time a pack takes to load, and each clip is its own file or
+        // folder, so the rest are done side by side: a few at once, so that however many
+        // cores there are, the decoded frames of a whole pack are never in memory together.
+        // If idle could not be built they are only decoded, to find out what else is wrong.
+        bool measured = idle != null;
+        Parallel.For(0, order.Length, new ParallelOptions { MaxDegreeOfParallelism = MaxClipsAtOnce }, i =>
+        {
+            if (i != first) LoadClip(i, build: measured);
+        });
+
+        // Errors are reported in the order the clips were found, so a broken pack reports
+        // the same problem every time.
+        if (errors.FirstOrDefault(e => e != null) is { } error)
         {
             // This pack will not be used, so its finished frames should not sit in memory
             // until the garbage collector happens to notice them.
-            foreach (var clip in built.Values) clip.Discard();
-            throw;
+            idle?.Discard();
+            foreach (var clip in built) clip?.Discard();
+            ExceptionDispatchInfo.Capture(error).Throw();
         }
+
+        // Idle heads the list; the rest follow in the order they were found.
+        var clips = new Dictionary<string, SpriteClip> { ["idle"] = idle! };
+        for (int i = 0; i < order.Length; i++) clips.TryAdd(order[i].Key, built[i]!);
+
+        string name = options.Name ?? Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return new SpriteCharacter(id, name, clips, options.Height, options.Facing, options.PixelArt);
     }
 
     static void DecodeClip(string dir, ClipSource src, PackOptions options, List<SKBitmap> frames, List<double> durations)

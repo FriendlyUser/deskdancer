@@ -60,7 +60,8 @@ they trail behind a hop, float at the top of it and flop on landing.
 
 Sitting has no clip of its own; the app squashes the idle clip, which suits Mochi.
 
-The app keeps every frame of every clip unpacked in memory, so frames are not free.
+Frames are not free. The app keeps the idle clip unpacked in memory the whole time, and
+each other clip while it is being shown and for a minute afterwards.
 `make_frames.py` prints the total when it finishes (about 90 MB). Three things keep it
 down: the frames are saved at 1.1 times the photo's size (`OUT`), which the sharp
 picture can afford; each clip is cropped to what it uses; and a frame is held for as
