@@ -76,6 +76,10 @@ public sealed class App : Application
 
     MateWindow Spawn(MateSettings settings, double? fraction = null)
     {
+        // The window asks for its character as soon as it exists. Building the window takes
+        // longer than opening an image pack does, so the pack is opened on another thread
+        // meanwhile and is there when it is asked for.
+        Library.Preload(settings.Character);
         var window = new MateWindow(this, settings);
         Mates.Add(window);
         window.PlaceOnScreen(fraction);

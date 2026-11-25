@@ -57,6 +57,10 @@ Draw every animation at the same size as your idle picture so the character does
 grow or shrink between them. Empty margins are trimmed automatically and the bottom
 of the artwork is treated as the floor.
 
+Only the idle animation is read when the mate appears. Each of the others is read the
+first time the mate uses it, so a pack can carry as many as you like: they do not make
+it slower to start, and one that is never used takes up no memory.
+
 `remix-example` in this folder is a complete pack made of sprite sheets, a folder of
 frames and single stills. Copy it and replace the images to get started.
 
@@ -119,6 +123,8 @@ Per animation, inside `clips`:
   folder and inside a character's own folder. That makes them a good place for working
   files: `mochi/_source` is one.
 - If the menu shows "could not load", the reason is in `deskdancer.log` in the
-  settings folder. The mate uses the built-in character until it is fixed.
+  settings folder. The mate uses the built-in character until it is fixed. A file that
+  is there but damaged part way through only comes to light when its animation is first
+  used: the mate then keeps its other animations and stands still for that one.
 - Very large images are scaled down to 640 pixels on their longest side when loaded,
   and an animation is limited to 400 frames.

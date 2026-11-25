@@ -261,6 +261,9 @@ public sealed class MateWindow : Window
             return;
         }
 
+        // A press may turn into a drag a moment from now; have its clip on the way already.
+        _character.Prepare("drag");
+
         var at = this.PointToScreen(point.Position);
         _pressed = true;
         _dragging = false;

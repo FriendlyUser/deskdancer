@@ -43,5 +43,10 @@ public interface ICharacter
     int NaturalFacing { get; }
     IReadOnlyList<DanceClip> DanceClips { get; }
     bool HasClip(string clip);
+    /// <summary>
+    /// Says that a clip is about to be shown. A character that loads its pictures as they
+    /// are needed uses the warning to have them ready in time; the others ignore it.
+    /// </summary>
+    void Prepare(string clip) { }
     void Draw(DrawingContext ctx, double height, in CharacterFrame frame);
 }

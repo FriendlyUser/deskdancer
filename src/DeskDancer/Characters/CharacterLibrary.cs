@@ -10,6 +10,7 @@ public sealed record CharacterInfo(string Id, string Name, string? Folder);
 public sealed class CharacterLibrary
 {
     readonly Dictionary<string, ICharacter> _loaded = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, Task<SpriteCharacter>> _opening = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string> _errors = new(StringComparer.OrdinalIgnoreCase);
     readonly RemixCharacter _builtIn = new();
     List<CharacterInfo> _available = [];
@@ -23,12 +24,23 @@ public sealed class CharacterLibrary
     public IReadOnlyList<CharacterInfo> Available => _available;
     public ICharacter BuiltIn => _builtIn;
 
-    /// <summary>Why a pack failed to load, if it did.</summary>
-    public string? ErrorFor(string id) => _errors.GetValueOrDefault(id);
+    /// <summary>
+    /// Why a pack failed to load, if it did. A pack is refused as a whole when it is opened;
+    /// one whose clip turns out to be unreadable later, when that clip is first wanted, keeps
+    /// going without it and reports the clip here.
+    /// </summary>
+    public string? ErrorFor(string id) =>
+        _errors.GetValueOrDefault(id) ?? (_loaded.GetValueOrDefault(id) as SpriteCharacter)?.Error;
 
     public void Scan()
     {
+        // The packs are about to be read afresh, so what was loaded from them is let go of
+        // now, not left for the garbage collector to find. The caller gives every mate its
+        // new character straight afterwards.
+        foreach (var character in _loaded.Values) (character as IDisposable)?.Dispose();
+        foreach (var opening in _opening.Values) DisposeWhenOpened(opening);
         _loaded.Clear();
+        _opening.Clear();
         _errors.Clear();
         var list = new List<CharacterInfo> { new(CharacterIds.BuiltIn, _builtIn.DisplayName, null) };
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { CharacterIds.BuiltIn };
@@ -55,6 +67,23 @@ public sealed class CharacterLibrary
         _available = list;
     }
 
+    /// <summary>
+    /// Starts opening a pack on another thread, for a caller that is about to <see cref="Load"/>
+    /// it and has other work to do first. For a new mate that work is building its window,
+    /// which takes longer than the pack does, so the pack ends up costing no time at all.
+    /// </summary>
+    public void Preload(string id)
+    {
+        if (string.IsNullOrEmpty(id) || id.Equals(CharacterIds.BuiltIn, StringComparison.OrdinalIgnoreCase)) return;
+        if (_loaded.ContainsKey(id) || _opening.ContainsKey(id)) return;
+        var info = _available.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (info?.Folder is not { } folder) return;
+        _opening[id] = Task.Run(() => SpritePackLoader.Load(info.Id, folder));
+    }
+
+    static void DisposeWhenOpened(Task<SpriteCharacter> opening) =>
+        opening.ContinueWith(done => done.Result.Dispose(), TaskContinuationOptions.OnlyOnRanToCompletion);
+
     /// <summary>Loads a character, falling back to the built-in one if the pack is missing or broken.</summary>
     public ICharacter Load(string id)
     {
@@ -78,7 +107,11 @@ public sealed class CharacterLibrary
 
         try
         {
-            var character = SpritePackLoader.Load(info.Id, info.Folder);
+            // Waiting for a pack that Preload started gives the same result, and the same
+            // error, as opening it here would.
+            var character = _opening.Remove(id, out var opening)
+                ? opening.GetAwaiter().GetResult()
+                : SpritePackLoader.Load(info.Id, info.Folder);
             _loaded[id] = character;
             _errors.Remove(id);
             return character;

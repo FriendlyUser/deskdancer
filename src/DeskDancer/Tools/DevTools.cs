@@ -37,6 +37,9 @@ public static class DevTools
     {
         Directory.CreateDirectory(dir);
         var character = App.Instance.Library.Load(characterId ?? CharacterIds.BuiltIn);
+        // An image pack decodes a clip when it is first shown and stands still meanwhile.
+        // The sheets draw each clip once, so they need every one of them decoded beforehand.
+        (character as SpriteCharacter)?.LoadAll();
         const int columns = 10, cellW = 170, cellH = 230, labelW = 110;
         const double h = 100;
         var backdrop = new SolidColorBrush(Color.FromRgb(0x3B, 0x42, 0x5C));

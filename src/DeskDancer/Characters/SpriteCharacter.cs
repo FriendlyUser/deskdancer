@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using DeskDancer.Platform;
 using SkiaSharp;
 
 namespace DeskDancer.Characters;
@@ -37,10 +38,132 @@ public sealed class SpriteClip
         i = i < 0 ? ~i : i + 1;
         return Frames[Math.Min(i, Frames.Length - 1)];
     }
+
+    /// <summary>
+    /// Frees the frames; the clip cannot be drawn afterwards. Safe from any thread, and safe
+    /// while a frame is still on screen: whatever is drawing a bitmap keeps its own hold on it.
+    /// </summary>
+    internal void Free()
+    {
+        foreach (var frame in Frames) frame.Dispose();
+    }
+}
+
+/// <summary>
+/// One of a pack's animations, and its frames once they have been decoded. Opening a pack
+/// reads only what each clip is called and how long it runs. The frames of everything but
+/// the idle clip are decoded on a background thread the first time the clip is wanted, so
+/// a clip that is never shown is never loaded.
+/// </summary>
+sealed class ClipSlot
+{
+    // Background decoding leaves a core for the window, which is drawing all the while.
+    static readonly int BackgroundThreads = Math.Max(1, Environment.ProcessorCount - 1);
+
+    readonly Func<int, SpriteClip>? _decode;
+    readonly string _pack;
+    readonly object _gate = new();
+    volatile SpriteClip? _clip;
+    volatile string? _error;
+    Task? _loading;
+    bool _closed;
+
+    /// <summary>A clip whose frames are decoded when it is first wanted.</summary>
+    public ClipSlot(string pack, string key, string name, double seconds, Func<int, SpriteClip> decode)
+    {
+        _pack = pack;
+        _decode = decode;
+        Key = key;
+        Name = name;
+        Seconds = seconds;
+    }
+
+    /// <summary>A clip that is already decoded.</summary>
+    public ClipSlot(string pack, string key, SpriteClip clip)
+    {
+        _pack = pack;
+        _clip = clip;
+        Key = key;
+        Name = clip.Name;
+        Seconds = clip.Duration;
+    }
+
+    public string Key { get; }
+    public string Name { get; }
+    /// <summary>How long the clip runs, from the headers of its files.</summary>
+    public double Seconds { get; }
+    /// <summary>The decoded clip, or null while its frames are not in memory.</summary>
+    public SpriteClip? Clip => _clip;
+    /// <summary>Why the frames could not be decoded, if that was tried and failed.</summary>
+    public string? Error => _error;
+
+    /// <summary>
+    /// Starts decoding the frames in the background, unless they are here, on their way, or
+    /// already known to be unreadable. Returns at once.
+    /// </summary>
+    public void Request()
+    {
+        if (_clip != null) return;
+        lock (_gate)
+        {
+            if (_clip == null && _loading == null && _error == null && !_closed && _decode != null)
+                _loading = Task.Run(Decode);
+        }
+    }
+
+    /// <summary>Returns once the frames are in memory, or have failed to load.</summary>
+    public void Load()
+    {
+        Request();
+        Task? loading;
+        lock (_gate) loading = _loading;
+        loading?.Wait();
+    }
+
+    void Decode()
+    {
+        SpriteClip? clip = null;
+        string? error = null;
+        try
+        {
+            clip = _decode!(BackgroundThreads);
+        }
+        catch (Exception ex)
+        {
+            // Not tried again: the file will not have changed, and the idle clip stands in.
+            error = $"{Key}: {ex.Message}";
+            Log.Error($"Could not load the '{Key}' animation of character '{_pack}'", ex);
+        }
+
+        lock (_gate)
+        {
+            _loading = null;
+            _error = error;
+            if (!_closed)
+            {
+                _clip = clip;
+                clip = null;
+            }
+        }
+        clip?.Free();       // the character was let go of while this was being decoded
+        NativeHeap.Trim();
+    }
+
+    /// <summary>Takes the frames away for good and hands them to the caller to free.</summary>
+    public SpriteClip? Close()
+    {
+        lock (_gate)
+        {
+            _closed = true;
+            var clip = _clip;
+            _clip = null;
+            return clip;
+        }
+    }
 }
 
 /// <summary>A character made from the user's own image files.</summary>
-public sealed class SpriteCharacter : ICharacter
+public sealed class SpriteCharacter : ICharacter, IDisposable
 {
     // Which clip stands in when the requested one was not supplied.
     static readonly Dictionary<string, string[]> Fallbacks = new()
@@ -50,23 +173,25 @@ public sealed class SpriteCharacter : ICharacter
         ["sleep"] = ["sit"],
     };
 
-    readonly Dictionary<string, SpriteClip> _clips;
-    readonly SpriteClip _idle;
+    readonly Dictionary<string, ClipSlot> _clips;
+    readonly ClipSlot _idle;
 
-    public SpriteCharacter(string id, string name, Dictionary<string, SpriteClip> clips, double height, int facing, bool pixelArt)
+    internal SpriteCharacter(string id, string name, Dictionary<string, ClipSlot> clips, double height, int facing, bool pixelArt)
     {
         Id = id;
         DisplayName = name;
         _clips = clips;
         _idle = clips["idle"];
+        // Everything is drawn relative to the idle clip, so the loader decodes that one itself.
+        var idle = _idle.Clip ?? throw new ArgumentException("The idle clip has to be decoded before the character is made.", nameof(clips));
         PreferredHeight = height;
         NaturalFacing = facing;
         PixelArt = pixelArt;
-        AspectRatio = Math.Clamp(_idle.ContentWidth / Math.Max(1, _idle.ContentHeight), 0.3, 2.5);
+        AspectRatio = Math.Clamp(idle.ContentWidth / Math.Max(1, idle.ContentHeight), 0.3, 2.5);
         DanceClips = clips
             .Where(c => c.Key.StartsWith("dance", StringComparison.Ordinal))
             .OrderBy(c => c.Key, StringComparer.Ordinal)
-            .Select(c => new DanceClip(c.Key, c.Value.Name, c.Value.Duration))
+            .Select(c => new DanceClip(c.Key, c.Value.Name, c.Value.Seconds))
             .ToList();
     }
 
@@ -80,9 +205,46 @@ public sealed class SpriteCharacter : ICharacter
     public IReadOnlyList<DanceClip> DanceClips { get; }
     public IReadOnlyCollection<string> ClipNames => _clips.Keys;
 
+    /// <summary>What went wrong with a clip that could not be decoded when it was wanted, if any could not.</summary>
+    public string? Error => _clips.Values.Select(c => c.Error).FirstOrDefault(e => e != null);
+
     public bool HasClip(string clip) => _clips.ContainsKey(clip);
 
-    SpriteClip Resolve(string clip)
+    /// <summary>True when the clip, or whatever stands in for one the pack lacks, can be drawn this instant.</summary>
+    public bool IsReady(string clip) => Resolve(clip).Clip != null;
+
+    /// <summary>Starts decoding a clip that is about to be shown, so it is ready by the time it is.</summary>
+    public void Prepare(string clip) => Resolve(clip).Request();
+
+    /// <summary>
+    /// Decodes every clip and waits for them all. For the tools that draw each clip once
+    /// and need the real frames on the first try.
+    /// </summary>
+    public void LoadAll()
+    {
+        foreach (var slot in _clips.Values) slot.Request();
+        foreach (var slot in _clips.Values) slot.Load();
+    }
+
+    /// <summary>
+    /// Lets go of every frame, for a character that is being replaced. Drawing it afterwards
+    /// draws nothing.
+    /// </summary>
+    public void Dispose() => Free(_clips.Values.Select(slot => slot.Close()).OfType<SpriteClip>().ToList());
+
+    // Freeing this many bitmaps and handing the memory back takes a few milliseconds, which
+    // the thread that draws should not spend.
+    static void Free(List<SpriteClip> clips)
+    {
+        if (clips.Count == 0) return;
+        Task.Run(() =>
+        {
+            foreach (var clip in clips) clip.Free();
+            NativeHeap.Trim();
+        });
+    }
+
+    ClipSlot Resolve(string clip)
     {
         if (_clips.TryGetValue(clip, out var found)) return found;
         if (Fallbacks.TryGetValue(clip, out var alternatives))
@@ -93,9 +255,20 @@ public sealed class SpriteCharacter : ICharacter
 
     public void Draw(DrawingContext ctx, double height, in CharacterFrame frame)
     {
-        var clip = Resolve(frame.Clip);
+        var idle = _idle.Clip;
+        if (idle == null) return;       // disposed
+
+        var slot = Resolve(frame.Clip);
+        var clip = slot.Clip;
+        if (clip == null)
+        {
+            // Its frames are not in memory yet. Drawing must not wait for them, so ask for
+            // them and stand still for the few frames it takes.
+            slot.Request();
+            clip = idle;
+        }
         var bitmap = clip.FrameAt(frame.ClipTime);
-        double s = height / _idle.ContentHeight * clip.Scale;
+        double s = height / idle.ContentHeight * clip.Scale;
         var size = bitmap.Size;
         var dest = new Rect(-clip.AnchorX * s, -clip.AnchorY * s, size.Width * s, size.Height * s);
         ctx.DrawImage(bitmap, new Rect(size), dest);
@@ -223,79 +396,100 @@ public static partial class SpritePackLoader
         Discover(dir, sources, claimed);
         if (sources.Count == 0) throw new InvalidDataException("No image files found in this folder.");
 
-        var decoded = new Dictionary<string, (ClipSource Source, List<SKBitmap> Frames, List<double> Durations)>();
+        // Opening the pack decodes the idle clip and nothing else. For every other clip only
+        // the file headers are read: they give its length, which the dance menu needs, and
+        // catch the usual mistakes (a missing file, a grid that does not fit) while the pack
+        // can still be refused as a whole. Problems are reported in the order the clips were
+        // found, so a pack reports the same one every time.
+        int threads = Environment.ProcessorCount;
+        var order = sources.Values.ToArray();
+        var seconds = new double[order.Length];
+        Each(order.Length, threads, i => seconds[i] = ReadLength(dir, order[i], options));
+
+        SpriteClip idle;
+        double idleShrink;
+        if (sources.TryGetValue("idle", out var idleSource))
+        {
+            idle = LoadClip(dir, idleSource, options, 0, 1, threads, out idleShrink);
+        }
+        else
+        {
+            // No idle supplied: stand still on the first frame of whatever there is.
+            var donor = order.FirstOrDefault(s => KnownClips.Contains(s.Key)) ?? order[0];
+            var first = new List<SKBitmap>();
+            try
+            {
+                DecodeClip(dir, donor, options, threads, 1, first, []);
+                idle = BuildClip(new ClipSource { Key = "idle" }, first, [1.0], options, 0, 1, threads, out idleShrink);
+            }
+            finally
+            {
+                foreach (var bmp in first) bmp.Dispose();
+            }
+        }
+
+        // Every other clip is drawn relative to the idle one, which is why that had to come first.
+        double idleHeight = idle.ContentHeight;
+        var clips = new Dictionary<string, ClipSlot> { ["idle"] = new ClipSlot(id, "idle", idle) };
+        for (int i = 0; i < order.Length; i++)
+        {
+            var src = order[i];
+            if (src.Key == "idle") continue;
+            clips[src.Key] = new ClipSlot(id, src.Key, src.Name ?? PrettyName(src.Key), seconds[i],
+                decodeThreads => LoadClip(dir, src, options, idleHeight, idleShrink, decodeThreads, out _));
+        }
+
+        // The decoded frames of the idle clip have been freed; give that memory back.
+        Task.Run(NativeHeap.Trim);
+
+        string name = options.Name ?? Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return new SpriteCharacter(id, name, clips, options.Height, options.Facing, options.PixelArt);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="body"/> for 0 to count-1 on up to <paramref name="threads"/> threads.
+    /// If any of them fail, the failure with the lowest number is the one thrown, which is the
+    /// one that would have been met first had they run in order.
+    /// </summary>
+    static void Each(int count, int threads, Action<int> body)
+    {
+        if (threads <= 1 || count <= 1)
+        {
+            for (int i = 0; i < count; i++) body(i);
+            return;
+        }
+        var errors = new Exception?[count];
+        Parallel.For(0, count, new ParallelOptions { MaxDegreeOfParallelism = threads }, i =>
+        {
+            try
+            {
+                body(i);
+            }
+            catch (Exception ex)
+            {
+                errors[i] = ex;
+            }
+        });
+        if (errors.FirstOrDefault(e => e != null) is { } first)
+            ExceptionDispatchInfo.Capture(first).Throw();
+    }
+
+    /// <summary>Decodes one clip and turns it into bitmaps, letting go of the decoded frames as it goes.</summary>
+    static SpriteClip LoadClip(string dir, ClipSource src, PackOptions options, double idleHeight, double idleShrink,
+        int threads, out double shrink)
+    {
+        var frames = new List<SKBitmap>();
+        var durations = new List<double>();
         try
         {
-            // Decoding is most of the time a pack takes to load, and each clip is its own
-            // file or folder, so the clips are decoded side by side. Results and errors are
-            // kept in the order the clips were found, so a pack loads the same way, and
-            // reports the same problem, every time.
-            var order = sources.Values.ToArray();
-            var frameLists = new List<SKBitmap>[order.Length];
-            var durationLists = new List<double>[order.Length];
-            var errors = new Exception?[order.Length];
-            Parallel.For(0, order.Length, i =>
-            {
-                var src = order[i];
-                var frames = frameLists[i] = [];
-                var durations = durationLists[i] = [];
-                try
-                {
-                    double fps = Math.Clamp(src.Fps ?? options.Fps, 0.5, 120);
-                    if (src.Folder != null)
-                    {
-                        string folder = Path.Combine(dir, src.Folder);
-                        if (!Directory.Exists(folder)) throw new InvalidDataException($"Folder not found: {src.Folder}");
-                        foreach (var file in Directory.EnumerateFiles(folder).Where(IsImage).OrderBy(f => f, NaturalOrder.Instance))
-                            DecodeFile(file, 1, 1, 0, fps, options, frames, durations);
-                    }
-                    else
-                    {
-                        string file = Path.Combine(dir, src.File!);
-                        if (!File.Exists(file)) throw new InvalidDataException($"File not found: {src.File}");
-                        DecodeFile(file, src.Columns, src.Rows, src.Count, fps, options, frames, durations);
-                    }
-                    if (frames.Count == 0) throw new InvalidDataException($"Clip '{src.Key}' has no frames.");
-                }
-                catch (Exception ex)
-                {
-                    errors[i] = ex;
-                }
-            });
-            for (int i = 0; i < order.Length; i++)
-                decoded[order[i].Key] = (order[i], frameLists[i], durationLists[i]);
-            if (errors.FirstOrDefault(e => e != null) is { } first)
-                ExceptionDispatchInfo.Capture(first).Throw();
-
-            if (!decoded.ContainsKey("idle"))
-            {
-                // No idle supplied: stand still on the first frame of whatever there is.
-                var donor = decoded.Values.FirstOrDefault(d => KnownClips.Contains(d.Source.Key));
-                if (donor.Frames == null) donor = decoded.Values.First();
-                decoded["idle"] = (new ClipSource { Key = "idle" }, [donor.Frames[0].Copy()], [1.0]);
-            }
-
-            var clips = new Dictionary<string, SpriteClip>();
-            double idleHeight = 0, idleShrink = 1;
-            foreach (var key in decoded.Keys.OrderBy(k => k == "idle" ? 0 : 1))
-            {
-                var (src, frames, durations) = decoded[key];
-                var clip = BuildClip(src, frames, durations, options, idleHeight, idleShrink, out double shrink);
-                if (key == "idle")
-                {
-                    idleHeight = clip.ContentHeight;
-                    idleShrink = shrink;
-                }
-                clips[key] = clip;
-            }
-
-            string name = options.Name ?? Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            return new SpriteCharacter(id, name, clips, options.Height, options.Facing, options.PixelArt);
+            DecodeClip(dir, src, options, threads, int.MaxValue, frames, durations);
+            return BuildClip(src, frames, durations, options, idleHeight, idleShrink, threads, out shrink);
         }
         finally
         {
-            foreach (var entry in decoded.Values)
-                foreach (var bmp in entry.Frames) bmp.Dispose();
+            // BuildClip disposes each frame as soon as it has been copied; this is for a
+            // load that failed part way.
+            foreach (var bmp in frames) bmp.Dispose();
         }
     }
 
@@ -436,53 +630,161 @@ public static partial class SpritePackLoader
 
     static SKImageInfo InfoFor(int w, int h) => new(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
 
-    static unsafe void DecodeFile(string path, int columns, int rows, int count, double fps, PackOptions options,
-        List<SKBitmap> frames, List<double> durations)
-    {
-        using var codec = SKCodec.Create(path, out var status)
-                          ?? throw new InvalidDataException($"Could not read {Path.GetFileName(path)} ({status}).");
-        var info = InfoFor(codec.Info.Width, codec.Info.Height);
-        if (info.Width <= 0 || info.Height <= 0 || (long)info.Width * info.Height > 64_000_000)
-            throw new InvalidDataException($"{Path.GetFileName(path)} is too large.");
+    static double FrameRate(ClipSource src, PackOptions options) => Math.Clamp(src.Fps ?? options.Fps, 0.5, 120);
 
+    /// <summary>How long a frame of an animated file is shown, from the time stored with it.</summary>
+    static double FrameSeconds(int milliseconds) => milliseconds <= 10 ? 0.1 : milliseconds / 1000.0;
+
+    /// <summary>How many cells of a sprite sheet are used.</summary>
+    static int CellCount(int columns, int rows, int count) =>
+        Math.Min(count > 0 ? Math.Min(count, columns * rows) : columns * rows, MaxFramesPerClip);
+
+    /// <summary>The time in seconds at which each frame ends.</summary>
+    static double[] FrameEnds(List<double> durations)
+    {
+        var ends = new double[durations.Count];
+        double t = 0;
+        for (int i = 0; i < ends.Length; i++)
+        {
+            t += Math.Max(durations[i], 1.0 / 240);
+            ends[i] = t;
+        }
+        return ends;
+    }
+
+    static string ClipFile(string dir, ClipSource src)
+    {
+        string file = Path.Combine(dir, src.File!);
+        if (!File.Exists(file)) throw new InvalidDataException($"File not found: {src.File}");
+        return file;
+    }
+
+    static string[] FolderFiles(string dir, ClipSource src)
+    {
+        string folder = Path.Combine(dir, src.Folder!);
+        if (!Directory.Exists(folder)) throw new InvalidDataException($"Folder not found: {src.Folder}");
+        return Directory.EnumerateFiles(folder).Where(IsImage).OrderBy(f => f, NaturalOrder.Instance).ToArray();
+    }
+
+    static SKCodec OpenCodec(string path, out SKImageInfo info)
+    {
+        var codec = SKCodec.Create(path, out var status)
+                    ?? throw new InvalidDataException($"Could not read {Path.GetFileName(path)} ({status}).");
+        info = InfoFor(codec.Info.Width, codec.Info.Height);
+        if (info.Width <= 0 || info.Height <= 0 || (long)info.Width * info.Height > 64_000_000)
+        {
+            codec.Dispose();
+            throw new InvalidDataException($"{Path.GetFileName(path)} is too large.");
+        }
+        return codec;
+    }
+
+    /// <summary>
+    /// How long a clip runs, from the headers of its files alone: no frame is decoded. This
+    /// counts frames exactly as <see cref="DecodeFile"/> goes on to produce them.
+    /// </summary>
+    static double ReadLength(string dir, ClipSource src, PackOptions options)
+    {
+        double fps = FrameRate(src, options);
+        var durations = new List<double>();
+        if (src.Folder != null)
+        {
+            foreach (var file in FolderFiles(dir, src)) ReadTimings(file, 1, 1, 0, fps, durations);
+        }
+        else
+        {
+            ReadTimings(ClipFile(dir, src), src.Columns, src.Rows, src.Count, fps, durations);
+        }
+        if (durations.Count == 0) throw new InvalidDataException($"Clip '{src.Key}' has no frames.");
+        return FrameEnds(durations)[^1];
+    }
+
+    static void ReadTimings(string path, int columns, int rows, int count, double fps, List<double> durations)
+    {
+        using var codec = OpenCodec(path, out var info);
         int animated = codec.FrameCount;
         if (animated > 1)
         {
-            // Animated GIF / WebP. Later frames are often stored as changes to an earlier one,
-            // so every composed frame is kept until the whole file has been read.
             var frameInfo = codec.FrameInfo;
             int n = Math.Min(animated, MaxFramesPerClip);
-            var composed = new SKBitmap[n];
-            for (int i = 0; i < n; i++)
+            for (int i = 0; i < n; i++) durations.Add(FrameSeconds(frameInfo[i].Duration));
+            return;
+        }
+
+        int cells = 1;
+        if (columns * rows > 1)
+        {
+            if (info.Width / columns < 1 || info.Height / rows < 1)
+                throw new InvalidDataException($"{Path.GetFileName(path)} is smaller than its {columns}x{rows} grid.");
+            cells = CellCount(columns, rows, count);
+        }
+        for (int i = 0; i < cells; i++) durations.Add(1 / fps);
+    }
+
+    /// <summary>
+    /// Decodes the frames of one clip, or only the first <paramref name="limit"/> of them. The
+    /// caller owns the bitmaps, including any that were added before a failure.
+    /// </summary>
+    static void DecodeClip(string dir, ClipSource src, PackOptions options, int threads, int limit,
+        List<SKBitmap> frames, List<double> durations)
+    {
+        double fps = FrameRate(src, options);
+        if (src.Folder != null)
+        {
+            // Each file in the folder is a picture of its own, so they are decoded side by
+            // side and put back in name order.
+            var files = FolderFiles(dir, src);
+            int wanted = Math.Min(files.Length, limit);
+            var parts = new (List<SKBitmap> Frames, List<double> Durations)[wanted];
+            for (int i = 0; i < wanted; i++) parts[i] = ([], []);
+            try
             {
-                var bmp = new SKBitmap(info);
-                int required = frameInfo[i].RequiredFrame;
-                SKCodecOptions opts;
-                if (required >= 0 && required < i)
+                Each(wanted, threads, i =>
+                    DecodeFile(files[i], 1, 1, 0, fps, options, wanted > 1 ? 1 : threads, limit, parts[i].Frames, parts[i].Durations));
+            }
+            finally
+            {
+                foreach (var part in parts)
                 {
-                    Buffer.MemoryCopy((void*)composed[required].GetPixels(), (void*)bmp.GetPixels(), bmp.ByteCount, bmp.ByteCount);
-                    opts = new SKCodecOptions(i, required);
+                    frames.AddRange(part.Frames);
+                    durations.AddRange(part.Durations);
                 }
-                else
-                {
-                    bmp.Erase(SKColors.Transparent);
-                    opts = new SKCodecOptions(i);
-                }
-                var result = codec.GetPixels(info, bmp.GetPixels(), opts);
-                if (result is not (SKCodecResult.Success or SKCodecResult.IncompleteInput))
-                {
-                    bmp.Dispose();
-                    foreach (var c in composed) c?.Dispose();
-                    throw new InvalidDataException($"Could not decode frame {i + 1} of {Path.GetFileName(path)} ({result}).");
-                }
-                composed[i] = bmp;
+            }
+        }
+        else
+        {
+            DecodeFile(ClipFile(dir, src), src.Columns, src.Rows, src.Count, fps, options, threads, limit, frames, durations);
+        }
+        if (frames.Count == 0) throw new InvalidDataException($"Clip '{src.Key}' has no frames.");
+    }
+
+    static void DecodeFile(string path, int columns, int rows, int count, double fps, PackOptions options,
+        int threads, int limit, List<SKBitmap> frames, List<double> durations)
+    {
+        using var codec = OpenCodec(path, out var info);
+        int animated = codec.FrameCount;
+        if (animated > 1)
+        {
+            // Animated GIF / WebP.
+            var frameInfo = codec.FrameInfo;
+            int n = Math.Min(Math.Min(animated, MaxFramesPerClip), limit);
+            var composed = new SKBitmap?[n];
+            try
+            {
+                DecodeAnimation(path, codec, info, frameInfo, composed, threads);
+                // Only once every frame is composed: a frame that others build on has to be
+                // as it was decoded when they do.
+                Each(n, threads, i => MaybeRemoveBackground(composed[i]!, options));
+            }
+            catch
+            {
+                foreach (var bmp in composed) bmp?.Dispose();
+                throw;
             }
             for (int i = 0; i < n; i++)
             {
-                int ms = frameInfo[i].Duration;
-                MaybeRemoveBackground(composed[i], options);
-                frames.Add(composed[i]);
-                durations.Add(ms <= 10 ? 0.1 : ms / 1000.0);
+                frames.Add(composed[i]!);
+                durations.Add(FrameSeconds(frameInfo[i].Duration));
             }
             return;
         }
@@ -501,7 +803,7 @@ public static partial class SpritePackLoader
         {
             int cw = sheet.Width / columns, ch = sheet.Height / rows;
             if (cw < 1 || ch < 1) throw new InvalidDataException($"{Path.GetFileName(path)} is smaller than its {columns}x{rows} grid.");
-            int total = Math.Min(count > 0 ? Math.Min(count, columns * rows) : columns * rows, MaxFramesPerClip);
+            int total = Math.Min(CellCount(columns, rows, count), limit);
             for (int i = 0; i < total; i++)
             {
                 var cell = new SKBitmap(InfoFor(cw, ch));
@@ -515,6 +817,98 @@ public static partial class SpritePackLoader
                 frames.Add(cell);
                 durations.Add(1 / fps);
             }
+        }
+    }
+
+    /// <summary>
+    /// Composes the frames of an animated file. A frame is often stored as the changes to an
+    /// earlier one, so in general they can only be decoded in order. But these files also
+    /// hold a complete picture every few frames, and a run of frames that starts at one
+    /// needs nothing from before it. Those runs are decoded side by side, which is most of
+    /// what makes a long clip quick to load.
+    /// </summary>
+    static void DecodeAnimation(string path, SKCodec codec, SKImageInfo info, SKCodecFrameInfo[] frameInfo,
+        SKBitmap?[] composed, int threads)
+    {
+        var runs = IndependentRuns(frameInfo, composed.Length);
+        if (threads <= 1 || runs.Count <= 1)
+        {
+            DecodeRun(path, codec, info, frameInfo, composed, 0, composed.Length);
+            return;
+        }
+
+        // A codec decodes one frame at a time, so each thread opens the file for itself.
+        var errors = new Exception?[runs.Count];
+        Parallel.For(0, runs.Count, new ParallelOptions { MaxDegreeOfParallelism = threads },
+            () => (SKCodec?)null,
+            (r, loop, own) =>
+            {
+                try
+                {
+                    own ??= OpenCodec(path, out _);
+                    DecodeRun(path, own, info, frameInfo, composed, runs[r].Start, runs[r].End);
+                }
+                catch (Exception ex)
+                {
+                    errors[r] = ex;
+                }
+                return own;
+            },
+            own => own?.Dispose());
+        if (errors.FirstOrDefault(e => e != null) is { } first)
+            ExceptionDispatchInfo.Capture(first).Throw();
+    }
+
+    /// <summary>
+    /// Splits the frames into runs that can each be decoded without any frame outside the run:
+    /// a run starts at a frame that builds on nothing, and no later frame reaches back past it.
+    /// </summary>
+    static List<(int Start, int End)> IndependentRuns(SKCodecFrameInfo[] frameInfo, int count)
+    {
+        var runs = new List<(int Start, int End)>();
+        int end = count, earliestNeeded = int.MaxValue;
+        for (int i = count - 1; i >= 0; i--)
+        {
+            int required = frameInfo[i].RequiredFrame;
+            if (required >= 0 && required < i)
+            {
+                earliestNeeded = Math.Min(earliestNeeded, required);
+            }
+            else if (earliestNeeded >= i)
+            {
+                runs.Add((i, end));
+                end = i;
+            }
+        }
+        runs.Reverse();
+        return runs;
+    }
+
+    static unsafe void DecodeRun(string path, SKCodec codec, SKImageInfo info, SKCodecFrameInfo[] frameInfo,
+        SKBitmap?[] composed, int start, int end)
+    {
+        for (int i = start; i < end; i++)
+        {
+            var bmp = new SKBitmap(info);
+            int required = frameInfo[i].RequiredFrame;
+            SKCodecOptions opts;
+            if (required >= 0 && required < i)
+            {
+                Buffer.MemoryCopy((void*)composed[required]!.GetPixels(), (void*)bmp.GetPixels(), bmp.ByteCount, bmp.ByteCount);
+                opts = new SKCodecOptions(i, required);
+            }
+            else
+            {
+                bmp.Erase(SKColors.Transparent);
+                opts = new SKCodecOptions(i);
+            }
+            var result = codec.GetPixels(info, bmp.GetPixels(), opts);
+            if (result is not (SKCodecResult.Success or SKCodecResult.IncompleteInput))
+            {
+                bmp.Dispose();
+                throw new InvalidDataException($"Could not decode frame {i + 1} of {Path.GetFileName(path)} ({result}).");
+            }
+            composed[i] = bmp;
         }
     }
 
@@ -618,36 +1012,102 @@ public static partial class SpritePackLoader
 
     // ---- Clip assembly ----
 
-    static unsafe SKRectI ContentBounds(List<SKBitmap> frames)
+    /// <summary>The rectangle that holds everything drawn in any of the frames.</summary>
+    static SKRectI ContentBounds(List<SKBitmap> frames, int threads)
     {
-        int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
-        foreach (var bmp in frames)
+        var each = new SKRectI[frames.Count];
+        Each(frames.Count, threads, i => each[i] = ContentBounds(frames[i]));
+
+        int left = int.MaxValue, top = int.MaxValue, right = 0, bottom = 0;
+        foreach (var r in each)
         {
-            // Each of these is a call into Skia, so they are read once, not once per pixel.
-            int w = bmp.Width, h = bmp.Height, stride = bmp.RowBytes;
-            byte* px = (byte*)bmp.GetPixels();
-            for (int y = 0; y < h; y++)
-            {
-                byte* row = px + y * stride;
-                for (int x = 0; x < w; x++)
-                {
-                    if (row[x * 4 + 3] <= 12) continue;
-                    if (x < minX) minX = x;
-                    if (x > maxX) maxX = x;
-                    if (y < minY) minY = y;
-                    if (y > maxY) maxY = y;
-                }
-            }
+            if (r.IsEmpty) continue;
+            left = Math.Min(left, r.Left);
+            top = Math.Min(top, r.Top);
+            right = Math.Max(right, r.Right);
+            bottom = Math.Max(bottom, r.Bottom);
         }
-        return maxX < 0 ? SKRectI.Empty : new SKRectI(minX, minY, maxX + 1, maxY + 1);
+        return right == 0 ? SKRectI.Empty : new SKRectI(left, top, right, bottom);
     }
 
-    static unsafe SpriteClip BuildClip(ClipSource src, List<SKBitmap> frames, List<double> durations, PackOptions options,
-        double idleHeight, double idleShrink, out double shrink)
+    /// <summary>
+    /// The rectangle that holds everything drawn in one frame. Only the empty margin is
+    /// looked at: each side is searched inwards and the search stops where the drawing starts.
+    /// </summary>
+    static unsafe SKRectI ContentBounds(SKBitmap bmp)
+    {
+        // Each of these is a call into Skia, so they are read once, not once per pixel.
+        int w = bmp.Width, h = bmp.Height, stride = bmp.RowBytes;
+        byte* px = (byte*)bmp.GetPixels();
+
+        static bool Drawn(byte* row, int from, int to)
+        {
+            for (int x = from; x < to; x++)
+                if (row[x * 4 + 3] > 12) return true;
+            return false;
+        }
+
+        int top = 0;
+        while (top < h && !Drawn(px + (long)top * stride, 0, w)) top++;
+        if (top == h) return SKRectI.Empty;
+        int bottom = h - 1;
+        while (bottom > top && !Drawn(px + (long)bottom * stride, 0, w)) bottom--;
+
+        // A pixel can only move the left edge if it lies to the left of it, and likewise on
+        // the right, so each row is searched no further in than the edges found so far.
+        int left = w, right = -1;
+        for (int y = top; y <= bottom; y++)
+        {
+            byte* row = px + (long)y * stride;
+            for (int x = 0; x < left; x++)
+                if (row[x * 4 + 3] > 12) { left = x; break; }
+            for (int x = w - 1; x > right; x--)
+                if (row[x * 4 + 3] > 12) { right = x; break; }
+        }
+        return new SKRectI(left, top, right + 1, bottom + 1);
+    }
+
+    static readonly SKSamplingOptions Smooth = new(SKFilterMode.Linear, SKMipmapMode.Linear);
+
+    /// <summary>
+    /// Cuts the kept part out of a decoded frame, scaled down if the pack's pictures are
+    /// too large, as a bitmap that can be drawn.
+    /// </summary>
+    static unsafe Bitmap Trim(SKBitmap frame, SKRectI crop, int outW, int outH, double shrink)
+    {
+        var size = new PixelSize(outW, outH);
+        var dpi = new Vector(96, 96);
+
+        // Nothing to resize, which is the usual case. The bitmap takes its own copy of the
+        // rows it is given, so it is given the kept rows where they lie in the frame: no
+        // canvas, and no copy of our own in between.
+        if (shrink == 1 && frame.Width >= crop.Right && frame.Height >= crop.Bottom)
+        {
+            byte* from = (byte*)frame.GetPixels() + (long)crop.Top * frame.RowBytes + crop.Left * 4;
+            return new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, (nint)from, size, dpi, frame.RowBytes);
+        }
+
+        // An image made from a bitmap that might still change starts by copying it. This
+        // frame is finished with, and saying so spares that copy.
+        frame.SetImmutable();
+        using var cell = new SKBitmap(InfoFor(outW, outH));
+        cell.Erase(SKColors.Transparent);
+        using (var canvas = new SKCanvas(cell))
+        using (var image = SKImage.FromBitmap(frame))
+        using (var paint = new SKPaint { BlendMode = SKBlendMode.Src })
+        {
+            var from = SKRect.Create(crop.Left, crop.Top, crop.Width, crop.Height);
+            canvas.DrawImage(image, from, SKRect.Create(outW, outH), shrink < 1 ? Smooth : SKSamplingOptions.Default, paint);
+        }
+        return new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, cell.GetPixels(), size, dpi, cell.RowBytes);
+    }
+
+    static SpriteClip BuildClip(ClipSource src, List<SKBitmap> frames, List<double> durations, PackOptions options,
+        double idleHeight, double idleShrink, int threads, out double shrink)
     {
         // Frames in one clip must share a size so they can share an anchor.
         int fw = frames.Max(f => f.Width), fh = frames.Max(f => f.Height);
-        var bounds = ContentBounds(frames);
+        var bounds = ContentBounds(frames, threads);
         if (bounds.IsEmpty) bounds = new SKRectI(0, 0, fw, fh);
 
         // Trim the empty margin, leaving a pixel of breathing room for smooth edges.
@@ -658,47 +1118,25 @@ public static partial class SpritePackLoader
         int longest = Math.Max(crop.Width, crop.Height);
         if (!options.PixelArt && longest > MaxFrameSide) shrink = (double)MaxFrameSide / longest;
         int outW = Math.Max(1, (int)Math.Round(crop.Width * shrink)), outH = Math.Max(1, (int)Math.Round(crop.Height * shrink));
+        double scaleDown = shrink;
 
-        var bitmaps = new Bitmap[frames.Count];
-        var ends = new double[frames.Count];
-        double t = 0;
-        var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
-        byte[]? rows = null;
-        for (int i = 0; i < frames.Count; i++)
+        var bitmaps = new Bitmap?[frames.Count];
+        try
         {
-            t += Math.Max(durations[i], 1.0 / 240);
-            ends[i] = t;
-
-            // Nothing to resize, which is the usual case: copy the trimmed rows straight
-            // across. Drawing them through a canvas gives the same pixels far more slowly.
-            var frame = frames[i];
-            if (shrink == 1 && frame.Width >= crop.Right && frame.Height >= crop.Bottom)
+            Each(frames.Count, threads, i =>
             {
-                int rowBytes = outW * 4;
-                rows ??= new byte[rowBytes * outH];
-                fixed (byte* to = rows)
-                {
-                    byte* from = (byte*)frame.GetPixels() + crop.Top * frame.RowBytes + crop.Left * 4;
-                    for (int y = 0; y < outH; y++)
-                        Buffer.MemoryCopy(from + (long)y * frame.RowBytes, to + (long)y * rowBytes, rowBytes, rowBytes);
-                    bitmaps[i] = new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, (nint)to,
-                        new PixelSize(outW, outH), new Vector(96, 96), rowBytes);
-                }
-                continue;
-            }
-
-            using var cell = new SKBitmap(InfoFor(outW, outH));
-            cell.Erase(SKColors.Transparent);
-            using (var canvas = new SKCanvas(cell))
-            using (var image = SKImage.FromBitmap(frames[i]))
-            using (var paint = new SKPaint { BlendMode = SKBlendMode.Src })
-            {
-                var from = SKRect.Create(crop.Left, crop.Top, crop.Width, crop.Height);
-                canvas.DrawImage(image, from, SKRect.Create(outW, outH), shrink < 1 ? sampling : SKSamplingOptions.Default, paint);
-            }
-            bitmaps[i] = new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, cell.GetPixels(),
-                new PixelSize(outW, outH), new Vector(96, 96), cell.RowBytes);
+                bitmaps[i] = Trim(frames[i], crop, outW, outH, scaleDown);
+                // The decoded frame has done its job. Letting go of it here, not when the
+                // whole pack is done, is what keeps a load from holding every frame twice.
+                frames[i].Dispose();
+            });
         }
+        catch
+        {
+            foreach (var bitmap in bitmaps) bitmap?.Dispose();
+            throw;
+        }
+        var ends = FrameEnds(durations);
 
         double contentH = bounds.Height * shrink, contentW = bounds.Width * shrink;
         double anchorX = src.AnchorX is { } ax ? (ax - crop.Left) * shrink : (bounds.MidX - crop.Left) * shrink;
@@ -716,7 +1154,7 @@ public static partial class SpritePackLoader
 
         return new SpriteClip
         {
-            Frames = bitmaps,
+            Frames = bitmaps!,
             Ends = ends,
             Name = src.Name ?? PrettyName(src.Key),
             Loop = src.Loop,

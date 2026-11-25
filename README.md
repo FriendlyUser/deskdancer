@@ -127,14 +127,15 @@ src/DeskDancer/
     Conductor.cs    Beat clock and the shared session behind the dance party
   Characters/   Remix (drawn in code) and the loader for image packs
   Ui/           The transparent window, its menu and the renderer
-  Platform/     Click-through for Windows and X11
+  Platform/     Click-through for Windows and X11, handing freed memory back on Linux
   Tools/        Smoke test, contact sheets and the example pack exporter
 characters/     Character packs that ship with the app
 ```
 
 The GitHub Actions workflow builds both systems and runs the smoke test on each. The
 smoke test starts the real app and drives it: dancing, a two-mate party, the menu,
-dragging and throwing, with Mochi, Remix and the example pack each taking a turn. On
+dragging and throwing, with Mochi, Remix and the example pack each taking a turn, and
+it finishes by decoding every animation of every pack. On
 Windows it also reads pixels back off the screen to confirm that the window is
 see-through and the character is visible, checks that clicks pass through the empty part
 of the window, and saves pictures of the desktop as artifacts.

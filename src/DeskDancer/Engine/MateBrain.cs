@@ -104,6 +104,7 @@ public sealed class MateBrain
     {
         _vx = vx;
         _vy = vy;
+        _character.Prepare("fall");
         SetState(MateState.Fall, 0, 0.1);
     }
 
@@ -126,7 +127,11 @@ public sealed class MateBrain
 
     public void StartDance(IEnumerable<DanceMove> moves)
     {
-        var session = DanceSession.FromList(_clock.Beat, moves);
+        // The whole list is known here, so the clips of the later moves can be on their way
+        // long before their turn, not asked for at the moment they are due.
+        var list = moves.ToList();
+        foreach (var move in list) _character.Prepare(move.Clip ?? "dance");
+        var session = DanceSession.FromList(_clock.Beat, list);
         if (session != null) BeginSession(session);
     }
 
@@ -172,6 +177,8 @@ public sealed class MateBrain
     public void BeginDrag()
     {
         StopOwnSession();
+        // What is picked up is put down again, usually in mid-air.
+        _character.Prepare("fall");
         _dragX = FootX;
         _dragY = FootY;
         _swing = _swingV = 0;

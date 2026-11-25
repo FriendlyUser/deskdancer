@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
+using DeskDancer.Characters;
 using DeskDancer.Engine;
 using DeskDancer.Platform;
 using DeskDancer.Ui;
@@ -77,8 +78,10 @@ public static class SmokeTest
         // character it was asked to be, not the built-in one standing in for a broken pack.
         var packs = app.Library.Available.Where(c => c.Folder != null).Select(c => c.Id).ToList();
 
-        // Load them all now. A big pack takes a second or more, and the steps below are on a
-        // clock: loaded on the spot, a new mate would still be dropping in when it is checked.
+        // Open them all now, so that each one's loading time and dances are in the report and
+        // the steps below, which are on a clock, never wait for one. Opening a pack decodes
+        // its idle clip only. The rest are decoded as the steps come to show them, just as
+        // they are for anyone using the app, and the last step decodes whatever is left.
         foreach (string id in packs)
         {
             var loading = Stopwatch.StartNew();
@@ -87,6 +90,13 @@ public static class SmokeTest
                  (character.DanceClips.Count == 0 ? "none" : string.Join(", ", character.DanceClips.Select(d => d.Name))));
         }
         bool Same(string a, string b) => a.Equals(b, StringComparison.OrdinalIgnoreCase);
+
+        // A clip that a step has been showing for a while must have been decoded by now.
+        void MustHave(MateWindow mate, string clip)
+        {
+            if (mate.Character is SpriteCharacter pack && !pack.IsReady(clip))
+                throw new InvalidOperationException($"'{pack.Id}' is still without its '{clip}' animation");
+        }
         void MustBe(MateWindow mate, string id)
         {
             if (app.Library.ErrorFor(id) is { } error)
@@ -161,6 +171,7 @@ public static class SmokeTest
             (0.27, "mid-dance", () =>
             {
                 if (!First().Brain.IsDancing) throw new InvalidOperationException("mate is not dancing");
+                MustHave(First(), "dance");
                 Snap(First(), "2-dancing");
 
                 if (backdrop == null) return;
@@ -186,6 +197,7 @@ public static class SmokeTest
             (0.50, "party", () =>
             {
                 if (app.Mates.Any(m => !m.Brain.IsDancing)) throw new InvalidOperationException("not every mate joined the party");
+                foreach (var mate in app.Mates) MustHave(mate, "dance");
                 Snap(app.Mates[0], "3-party-a");
                 Snap(app.Mates[1], "3-party-b");
             }),
@@ -214,6 +226,7 @@ public static class SmokeTest
             {
                 var b = First().Brain;
                 if (b.State != MateState.Drag) throw new InvalidOperationException($"expected Drag, was {b.State}");
+                MustHave(First(), "drag");
                 Snap(First(), "4-carried");
                 b.EndDrag();
             }),
@@ -240,6 +253,20 @@ public static class SmokeTest
                 Snap(app.Mates[1], "5-swapped");
                 app.RemoveMate(app.Mates[1]);
                 if (app.Mates.Count != 1) throw new InvalidOperationException("second mate was not removed");
+            }),
+            (0.97, "every animation", () =>
+            {
+                // The steps above showed only some of each pack's clips, and only those have
+                // been decoded. Decode the rest, so that a damaged file in a pack fails the
+                // test here and does not wait for someone to play that clip.
+                foreach (string id in packs)
+                {
+                    var decoding = Stopwatch.StartNew();
+                    if (app.Library.Load(id) is SpriteCharacter pack) pack.LoadAll();
+                    if (app.Library.ErrorFor(id) is { } error)
+                        throw new InvalidOperationException($"character '{id}' failed to load: {error}");
+                    Note($"every animation of '{id}' decoded in {decoding.ElapsedMilliseconds} ms");
+                }
             }),
         };
 
