@@ -79,6 +79,11 @@ that walk, a hand that waves, an arm that strums her lute and a redrawn face.
 draws every frame. It is the one to copy if you would rather describe a character in
 shapes than paint it, and it has clips for sitting and napping as well.
 
+`sprig` is another drawing, and the one to copy if your character holds something that
+should move: its `_source` folder cuts the sword arm out in one piece, paints in what was
+behind it so the arm can swing anywhere, and turns the whole character round for a spin
+with motion blur and a ring of light.
+
 ## character.json (optional)
 
 Add this file to the folder to adjust things. Every setting is optional.

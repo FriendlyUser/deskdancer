@@ -36,6 +36,19 @@ Stomp. How he is drawn, and how to change him, is in
 [characters/domo/_source](characters/domo/_source/README.md). Domo is NHK's mascot; this
 is a fan drawing, and NHK had no part in it.
 
+![Sprig in five poses](docs/sprig.png)
+
+**Sprig**, a little swordsman in a green cap, is an image pack animated from a single
+commissioned drawing. He blinks, the long tail of his cap swings and flops after him when
+he moves, and now and then he gives his sword a flourish. He walks on his own two feet and
+kneels with the point of his sword in the ground. He punches the sword up on every beat of
+the built-in dance moves, and his special move is the **Spin Attack**: he crouches while
+the blade charges up with light, spins round twice leaving a ring of light behind it, and
+comes out of it with the sword held high in a shower of sparks. Pick him under
+**Character**, or start with `--character sprig`. How he was made is in
+[characters/sprig/_source](characters/sprig/_source/README.md). Sprig is fan art of a
+Nintendo character, and Nintendo had no part in it.
+
 Switch between them under **Character** in the menu. You can also drop in a folder of
 your own images and it becomes a character that walks and dances too: see
 [characters/README.md](characters/README.md).
