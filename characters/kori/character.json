@@ -1,0 +1,82 @@
+{
+  "name": "Kori",
+  "height": 150,
+  "facing": "right",
+  "removeBackground": false,
+  "clips": {
+    "idle": {
+      "file": "idle.webp",
+      "anchor": [
+        138.0,
+        269.0
+      ]
+    },
+    "walk": {
+      "file": "walk.webp",
+      "anchor": [
+        144.0,
+        277.0
+      ]
+    },
+    "sit": {
+      "file": "sit.webp",
+      "anchor": [
+        144.0,
+        241.0
+      ]
+    },
+    "sleep": {
+      "file": "sleep.webp",
+      "anchor": [
+        144.0,
+        232.0
+      ]
+    },
+    "dance": {
+      "file": "dance.webp",
+      "anchor": [
+        159.0,
+        273.0
+      ],
+      "name": "Cool Moves"
+    },
+    "dance_ice_skate": {
+      "file": "dance_ice_skate.webp",
+      "anchor": [
+        174.0,
+        303.0
+      ],
+      "name": "Ice Skate"
+    },
+    "dance_meltdown": {
+      "file": "dance_meltdown.webp",
+      "anchor": [
+        257.0,
+        294.0
+      ],
+      "name": "Meltdown"
+    },
+    "dance_brr": {
+      "file": "dance_brr.webp",
+      "anchor": [
+        150.0,
+        279.0
+      ],
+      "name": "Brr!"
+    },
+    "drag": {
+      "file": "drag.webp",
+      "anchor": [
+        159.0,
+        279.0
+      ]
+    },
+    "fall": {
+      "file": "fall.webp",
+      "anchor": [
+        142.0,
+        283.0
+      ]
+    }
+  }
+}

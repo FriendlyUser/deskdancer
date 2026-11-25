@@ -49,6 +49,17 @@ comes out of it with the sword held high in a shower of sparks. Pick him under
 [characters/sprig/_source](characters/sprig/_source/README.md). Sprig is fan art of a
 Nintendo character, and Nintendo had no part in it.
 
+![Kori in six poses](docs/kori.png)
+
+**Kori** is an ice cube with stubby arms and legs, an original character drawn entirely by
+a script, like Domo. It is a real cube turned in three dimensions, so the light moves across
+its faces as it turns, with glints, a crack and trapped bubbles in the ice. It blinks,
+shivers, drips meltwater, waddles about and sits on a little puddle. It has three dances of
+its own: **Ice Skate**, gliding on one foot and spinning on the spot; **Meltdown**, melting
+into a puddle and freezing back up with a sparkle; and **Brr!**, shivering until it sneezes
+out a puff of frost. Pick it under **Character**, or start with `--character kori`. How it
+is drawn, and how to change it, is in [characters/kori/_source](characters/kori/_source/README.md).
+
 Switch between them under **Character** in the menu. You can also drop in a folder of
 your own images and it becomes a character that walks and dances too: see
 [characters/README.md](characters/README.md).

@@ -84,6 +84,10 @@ should move: its `_source` folder cuts the sword arm out in one piece, paints in
 behind it so the arm can swing anywhere, and turns the whole character round for a spin
 with motion blur and a ring of light.
 
+`kori` is drawn by a script too, but as a box in three dimensions rather than flat shapes:
+the one to copy if your character should turn round on the spot with its sides lit as
+they come into view, or change shape altogether, as Kori does when it melts.
+
 ## character.json (optional)
 
 Add this file to the folder to adjust things. Every setting is optional.
