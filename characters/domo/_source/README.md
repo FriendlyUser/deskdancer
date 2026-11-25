@@ -19,7 +19,7 @@ pip install numpy pillow
 python3 make_frames.py
 ```
 
-It takes about ten seconds and overwrites the clips and `character.json` in the folder
+It takes about twenty seconds and overwrites the clips and `character.json` in the folder
 above. Then right-click the mate and choose **Character > Reload characters**.
 `python3 make_frames.py --sheet` also saves `sheet.png` with every frame on one page.
 Running it twice gives the same files, byte for byte.
@@ -47,7 +47,21 @@ the two rows meet point to point and still show.
 not pose the arms frame by frame. It says where they should be, and a spring carries them
 there, pushed about by how the shoulders are moving. That is why they lag behind a stomp
 and flop when he lands. They are drawn behind the body, so an arm lifted past about 135
-degrees starts to disappear behind his head.
+degrees starts to disappear behind his head. A pose can bring an arm round in front of
+the body instead, and can tell the spring to leave it alone, which is how he holds
+something still.
+
+**The cup and the cloud.** Two more things can be in a pose. A cup of bubble tea has a
+lid, a straw, tea that goes down as he drinks and pearls in the bottom that go up the
+straw one at a time. A cloud of gas is a handful of puffs that start small behind him,
+drift off, grow and fade.
+
+**Painters.** The script keeps what a pose is apart from how it is painted. It works out
+where every shape goes and hands them, from the back to the front, to a painter. The one
+here, `Flat`, fills each shape with one colour and gives it a dark edge. The Plush Domo
+pack ([characters/domo-plush](../../domo-plush/_source/README.md)) loads this script and
+swaps in a painter of its own, so the two characters share one set of shapes and clips.
+A change to a clip here changes both, once each pack has been rebuilt.
 
 ## The clips
 
@@ -59,20 +73,31 @@ degrees starts to disappear behind his head.
 | `sleep.webp` | Napping where he sits, mouth opening a little with each breath. The app adds the breathing and the Zs. |
 | `dance.webp` | During all 15 built-in dance moves, which add their own body motion. Also listed as **Happy Arms**. |
 | `dance_chomp.webp`, `dance_stomp.webp` | Their own entries under **Dance move**, **Chomp** and **Monster Stomp**. Clip dances get no motion from the app, so the hops and stomps are drawn in. Each loops in one second, which is two beats at the usual 120 BPM. |
+| `dance_bubble_tea.webp` | **Bubble Tea** under **Dance move**. He brings out a cup, takes three pulls at the straw, sighs and puts it away. 3.6 seconds. |
+| `dance_fart.webp` | **Fart** under **Dance move**. He strains, lets one go with a hop, looks relieved and wafts the cloud away. 3.06 seconds. |
 | `drag.webp` | Being carried. |
 | `fall.webp` | Dropping through the air. |
 
-The app keeps every frame of every clip unpacked in memory, so frames are not free.
-`make_frames.py` prints the total when it finishes (about 96 MB). Two things keep it
-down: each clip is cropped to what it uses, and a frame is held for as long as nothing
-has visibly moved, so standing still costs one frame, not hundreds. On disk the pack is
-under 1 MB, because flat colour packs down well without any loss.
+Bubble Tea and Fart are picked like any dance: the menu runs a move twice over, so he
+has a second cup, or lets another one go. Like any dance they also turn up by themselves
+when he dances on his own or you double-click him, once each time. Both are a little
+over three seconds long, which is four beats even at the slowest tempo in the menu, so
+the app never has to repeat one to fill a move.
+
+Frames are not free. The app keeps the idle clip unpacked in memory the whole time, and
+each other clip while it is being shown and for a minute afterwards. `make_frames.py`
+prints the total for every clip when it finishes (about 141 MB, of which idle is 28 and
+Bubble Tea and Fart are 45). Three things keep it down: each clip is cropped to what it uses; a
+frame is held for as long as nothing has visibly moved, so standing still costs one
+frame, not hundreds; and the two long clips are drawn at fewer frames a second than the
+dances. On disk the pack is about 1 MB, because flat colour packs down well without any
+loss.
 
 ## Changing things
 
 Each clip is a short function near the end of `make_frames.py` (`idle`, `walk`,
-`sitting`, `asleep`, `happy_arms`, `chomp`, `stomp`, `carried`, `falling`). It is given
-the time in seconds and returns a pose. A pose can set:
+`sitting`, `asleep`, `happy_arms`, `chomp`, `stomp`, `bubble_tea`, `fart`, `carried`,
+`falling`). It is given the time in seconds and returns a pose. A pose can set:
 
 - `eyes`: a pair, each `"open"`, `"wide"`, `"happy"`, `"closed"`, or a number from 0 to 1
   for how far shut
@@ -84,6 +109,13 @@ the time in seconds and returns a pose. A pose can set:
 - `legs`: for each leg, degrees swung outwards and how far it is lifted. Sitting, the
   first number tips the foot up instead.
 - `seated`: `True` to sit him down
+- `front`: for each arm, `True` to draw it in front of the body, and `loose`: for each
+  arm, how much of the spring's swing it is allowed, from 1, all of it, down to 0, held
+  exactly where the pose puts it
+- `cup`: a cup of bubble tea, as where the middle of its base is (x, y), how far it is
+  tipped, its size from 0 to 1, how full it is from 1 to 0, and how many pearls have gone
+  up the straw (1.5 is one swallowed and another half way up)
+- `gas`: a cloud of gas, by its age: 0 just let off, 1 gone
 - `squash` (positive is shorter and wider), `lean` (degrees, positive tips right), and
   `dx`, `dy` for the whole mate (negative `dy` is up)
 
@@ -92,7 +124,11 @@ many frames a second to sample it at, and whether it is a calm one. The clip mus
 it began, because it loops. To add a dance, write another function and add a line to
 `CLIPS`; any key starting with `dance_` appears under **Dance move**.
 
+Two helpers save working out angles by hand. `reach(side, x, y)` gives the lift and bend
+that put a hand at a place, and `hand_at(side, lift, bend)` says where a hand is, which
+is how the cup is kept in his grip.
+
 The arms' springiness is set by `ARM_HZ`, `ARM_DAMPING`, `ARM_PUSH` and `ARM_CURL`, just
 above the clips. His proportions and colours are the constants at the top: `BODY`,
-`SHOULDER`, `LEG`, `EYES`, `MOUTH`, `FUR` and the rest. `OUT` sets how large the frames
-are saved.
+`SHOULDER`, `LEG`, `EYES`, `MOUTH`, `FUR` and the rest, with the cup's and the cloud's
+after them. `OUT` sets how large the frames are saved.
