@@ -155,11 +155,12 @@ packaging/      What macOS needs in order to treat the build as an app
 The GitHub Actions workflow builds for Windows, Linux and both kinds of Mac, and runs
 the smoke test on each. The smoke test starts the real app and drives it: dancing, a
 two-mate party, the menu, dragging and throwing, with Mochi, Remix and the example pack
-each taking a turn. On Windows it also reads pixels back off the screen to confirm that
-the window is see-through and the character is visible, checks that clicks pass through
-the empty part of the window, and saves pictures of the desktop as artifacts. On macOS
-it moves the pointer onto the mate, off onto the empty corner of its window and back
-again, and asks the system each time what a click there would land on.
+each taking a turn. On Windows and macOS it also reads pixels back off the screen to
+confirm that the window is see-through and the character is visible, checks that clicks
+pass through the empty part of the window, and saves pictures of the desktop as
+artifacts. On macOS, where what a click lands on depends on where the pointer is, it
+moves the pointer onto the mate, off onto the empty corner of its window and back again,
+and asks the system each time.
 
 One thing to know when building: Avalonia's build step sends anonymous usage data to
 its vendor. The publish scripts and the workflow switch that off with

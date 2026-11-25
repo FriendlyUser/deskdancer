@@ -7,7 +7,7 @@ namespace DeskDancer;
 /// <summary>Command-line switches. Running with none just starts the mate.</summary>
 public sealed class CliOptions
 {
-    public bool Help, Version, Fresh, SmokeTest, Verbose;
+    public bool Help, Version, Fresh, SmokeTest, Screenshots, Verbose;
     public string? Character, CharactersFolder, ExportSample, RenderTest, Out;
     public double Seconds = 12;
     public string? Error;
@@ -31,6 +31,8 @@ public sealed class CliOptions
           --smoke-test            Start, exercise every feature for a few seconds, exit 0 on success
           --seconds <n>           How long the smoke test runs (default 12)
           --out <dir>             Where the smoke test saves its snapshots
+          --screenshots           macOS: let the smoke test take screenshots, to check what is
+                                  really on the screen. Screen recording has to be allowed.
         """;
 
     public static CliOptions Parse(string[] args)
@@ -47,6 +49,7 @@ public sealed class CliOptions
                 case "--fresh": o.Fresh = true; break;
                 case "--verbose": o.Verbose = true; break;
                 case "--smoke-test": o.SmokeTest = true; break;
+                case "--screenshots": o.Screenshots = true; break;
                 case "--character": o.Character = Next(); break;
                 case "--characters": o.CharactersFolder = Next(); break;
                 case "--export-sample": o.ExportSample = Next(); break;

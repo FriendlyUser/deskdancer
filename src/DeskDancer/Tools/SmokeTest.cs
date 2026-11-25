@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using DeskDancer.Engine;
 using DeskDancer.Platform;
@@ -64,10 +65,15 @@ public static class SmokeTest
         app.Settings.Wander = false;
         app.Settings.AutoDance = false;
 
-        // Where the screen can be read back (Windows), put a plain backdrop in a colour the
-        // characters never use behind everything. If that colour shows through the empty
-        // part of a mate's window, the window really is transparent on this machine.
+        // Where the screen can be read back (Windows, and macOS once screenshots have been
+        // allowed), put a plain backdrop in a colour the characters never use behind
+        // everything. If that colour shows through the empty part of a mate's window, the
+        // window really is transparent on this machine.
+        ScreenProbe.UseScreenshots = options.Screenshots;
         var backdropColour = Color.FromRgb(128, 96, 16);
+        // What that colour comes out as on screen. A Mac's screenshot is in the display's own
+        // colours, which are near the ones asked for but not the same.
+        var backdropSeen = backdropColour;
         if (ScreenProbe.Supported)
         {
             backdrop = new Window
@@ -75,14 +81,39 @@ public static class SmokeTest
                 Title = "DeskDancer smoke test backdrop",
                 Background = new SolidColorBrush(backdropColour),
                 WindowDecorations = WindowDecorations.None,
-                WindowState = WindowState.Maximized,
+                WindowState = OperatingSystem.IsMacOS() ? WindowState.Normal : WindowState.Maximized,
                 ShowInTaskbar = false,
                 ShowActivated = false,
             };
+            // On a Mac it is laid over the work area by hand.
+            if (OperatingSystem.IsMacOS() && MainScreen() is { } screen)
+            {
+                backdrop.WindowStartupLocation = WindowStartupLocation.Manual;
+                backdrop.Position = screen.WorkingArea.Position;
+                backdrop.Width = screen.WorkingArea.Width / screen.Scaling;
+                backdrop.Height = screen.WorkingArea.Height / screen.Scaling;
+            }
             backdrop.Show();
         }
 
+        // Has a fresh look at the screen before pixels are read off it. On a Mac that is a
+        // screenshot, which is kept with the results as a picture of the desktop, and what the
+        // backdrop looks like in it is read from a spot that shows nothing else.
+        void LookAtScreen(string picture)
+        {
+            var screen = MainScreen() ?? throw new InvalidOperationException("there is no screen");
+            if (ScreenProbe.Look(screen, Path.Combine(outDir, picture + ".png")) is { } problem)
+                throw new InvalidOperationException("could not look at the screen: " + problem);
+            if (!OperatingSystem.IsMacOS()) return;
+            var plainSpot = new PixelPoint(screen.WorkingArea.X + 24, screen.WorkingArea.Y + 24);
+            if (ScreenProbe.PixelAt(plainSpot) is not { } plain) throw new InvalidOperationException("could not read the screenshot");
+            if (!ScreenProbe.Near(plain, backdropColour, 72))
+                throw new InvalidOperationException($"the screenshot shows {plain} where the backdrop ({backdropColour}) should be, so it is not showing this program's windows. Is screen recording allowed for whatever started it?");
+            backdropSeen = plain;
+        }
+
         MateWindow First() => app.Mates[0];
+        Screen? MainScreen() => First().Screens.Primary ?? First().Screens.All.FirstOrDefault();
 
         // The image packs that are installed, and a check that a mate really became the
         // character it was asked to be, not the built-in one standing in for a broken pack.
@@ -154,8 +185,7 @@ public static class SmokeTest
                 Note($"first mate is '{First().Character.Id}' ({First().Character.DisplayName})");
                 if (Same(wanted, CharacterIds.BuiltIn) || packs.Any(p => Same(p, wanted))) MustBe(First(), wanted);
                 else Note($"character '{wanted}' is not installed; the built-in one is standing in");
-                var screen = First().Screens.Primary ?? First().Screens.All.FirstOrDefault();
-                Note($"screens: {First().Screens.All.Count}, work area: {screen?.WorkingArea}, scaling {First().RenderScaling}");
+                Note($"screens: {First().Screens.All.Count}, work area: {MainScreen()?.WorkingArea}, scaling {First().RenderScaling}");
             }),
             new(0.16, "landed", () => Snap(First(), "1-landed"),
                 WaitingFor: () => NotOnTheFloor(First()) is { } where ? "mate did not land: " + where : null),
@@ -182,18 +212,19 @@ public static class SmokeTest
                 if (backdrop == null) return;
                 // Read the real screen. Just inside the clickable rectangle's top corner there is
                 // window but no character, so the backdrop must show through it.
+                LookAtScreen("desktop-1-standing");
                 var emptySpot = new PixelPoint(mate.Position.X + solid.X + 6, mate.Position.Y + solid.Y + 6);
                 var b = mate.Brain;
                 int painted = 0, samples = 0;
                 for (double up = 0.1; up < 0.95; up += 0.1, samples++)
                 {
                     var onBody = new PixelPoint((int)b.FootX, (int)(b.FootY - up * b.H));
-                    if (ScreenProbe.PixelAt(onBody) is { } c && !ScreenProbe.Near(c, backdropColour)) painted++;
+                    if (ScreenProbe.PixelAt(onBody) is { } c && !ScreenProbe.Near(c, backdropSeen)) painted++;
                 }
                 var seen = ScreenProbe.PixelAt(emptySpot);
-                Note($"on screen: empty part of the window shows {seen} (backdrop is {backdropColour}); character painted at {painted} of {samples} sample points");
+                Note($"on screen: empty part of the window shows {seen} (backdrop is {backdropSeen}); character painted at {painted} of {samples} sample points");
                 if (seen is not { } colour) throw new InvalidOperationException("could not read the screen");
-                if (!ScreenProbe.Near(colour, backdropColour)) throw new InvalidOperationException("the window is not transparent: something is painted where it should be see-through");
+                if (!ScreenProbe.Near(colour, backdropSeen)) throw new InvalidOperationException("the window is not transparent: something is painted where it should be see-through");
                 if (painted < 3) throw new InvalidOperationException("the character is not visible on screen");
             }, WaitingFor: AreaNotApplied),
             new(0.18, "backflip", () => First().Brain.StartDance([Moves.Backflip, Moves.Twirl])),
@@ -204,12 +235,13 @@ public static class SmokeTest
 
                 if (backdrop == null) return;
                 // While dancing the whole window is in play, so its far corners must be see-through too.
+                LookAtScreen("desktop-2-dancing");
                 var mate = First();
                 var size = PixelSize.FromSize(mate.Bounds.Size, mate.RenderScaling);
                 var left = ScreenProbe.PixelAt(new PixelPoint(mate.Position.X + 4, mate.Position.Y + 4));
                 var right = ScreenProbe.PixelAt(new PixelPoint(mate.Position.X + size.Width - 5, mate.Position.Y + 4));
                 Note($"on screen while dancing: window corners show {left} and {right}");
-                bool clear = left is { } l && ScreenProbe.Near(l, backdropColour) || right is { } r && ScreenProbe.Near(r, backdropColour);
+                bool clear = left is { } l && ScreenProbe.Near(l, backdropSeen) || right is { } r && ScreenProbe.Near(r, backdropSeen);
                 if (!clear) throw new InvalidOperationException("the window is not transparent while dancing");
             }),
             new(0.33, "second mate + party", () =>
@@ -226,6 +258,8 @@ public static class SmokeTest
             {
                 Snap(app.Mates[0], "3-party-a");
                 Snap(app.Mates[1], "3-party-b");
+                // On a Mac this leaves a picture of the party among the results.
+                if (backdrop != null) LookAtScreen("desktop-3-party");
             }, WaitingFor: () => app.Mates.All(m => m.Brain.IsDancing) ? null
                 : "not every mate joined the party: they are " + string.Join(", ", app.Mates.Select(m => m.Brain.State))),
             new(0.55, "party off, resize, menu", () =>

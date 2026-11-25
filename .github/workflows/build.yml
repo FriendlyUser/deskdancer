@@ -103,20 +103,20 @@ jobs:
             exit 0
           fi
           mkdir -p smoke
-          "$app/Contents/MacOS/DeskDancer" --smoke-test --seconds 20 --out "$PWD/smoke" &
+          # --screenshots: the test takes screenshots of the real desktop and reads them, to
+          # check that the mate is visible and the rest of its window see-through. They are
+          # kept with its other results. The runner allows screenshots; a Mac of your own
+          # asks first.
+          "$app/Contents/MacOS/DeskDancer" --smoke-test --screenshots --seconds 20 --out "$PWD/smoke" &
           pid=$!
-          # Pictures of the real desktop: standing still, then mid-party with two mates. They
-          # are nice to have; failing to take one must not fail the build.
-          ( sleep 4; screencapture -x smoke/desktop-1-standing.png
-            sleep 6; screencapture -x smoke/desktop-2-party.png ) >/dev/null 2>&1 &
           # If the app hangs, stop it so the job fails here and not on a timeout hours later.
-          ( sleep 90; kill -9 "$pid" ) >/dev/null 2>&1 &
+          # Under Rosetta it can take 20 seconds just to appear.
+          ( sleep 180; kill -9 "$pid" ) >/dev/null 2>&1 &
           watchdog=$!
+          disown 2>/dev/null || true    # or bash reports stopping it, below, as "Terminated"
           code=0
           wait "$pid" || code=$?
-          # Stop the watchdog, quietly: bash would otherwise report it as "Terminated".
           kill "$watchdog" 2>/dev/null || true
-          wait "$watchdog" 2>/dev/null || true
           [ -f smoke/smoke-result.txt ] || echo "::warning::No smoke-result.txt was written; the app exited before the test started"
           echo "Exit code: $code"
           exit "$code"
