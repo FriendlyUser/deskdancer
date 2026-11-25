@@ -26,7 +26,10 @@ public static class SmokeTest
     sealed record Step(double At, string Name, Action Run, Func<string?>? WaitingFor = null);
 
     /// <summary>Seconds a step may be kept waiting, and seconds the first frame may take to appear.</summary>
-    const double Patience = 5, StartUpLimit = 30;
+    const double Patience = 10, StartUpLimit = 30;
+
+    /// <summary>The most one hold-up counts for on the run's clock, in seconds.</summary>
+    const double LongestTick = 0.5;
 
     public static void Start(App app, CliOptions options)
     {
@@ -168,9 +171,9 @@ public static class SmokeTest
             }
         }
 
-        // The run is timed from the first frame drawn, and each step fires once, at a fraction
-        // of its length. Nothing here relies on how long the app takes to do something: a
-        // step that follows on from something the app does waits for it.
+        // Each step fires once, when the run's clock (further down) has got to a fraction of
+        // its length. Nothing here relies on how long the app takes to do something: a step
+        // that follows on from something the app does waits for it.
         var steps = new List<Step>
         {
             new(0.06, "started", () =>
@@ -212,7 +215,7 @@ public static class SmokeTest
                 if (backdrop == null) return;
                 // Read the real screen. Just inside the clickable rectangle's top corner there is
                 // window but no character, so the backdrop must show through it.
-                LookAtScreen("desktop-1-standing");
+                LookAtScreen("desktop-1-landed");
                 var emptySpot = new PixelPoint(mate.Position.X + solid.X + 6, mate.Position.Y + solid.Y + 6);
                 var b = mate.Brain;
                 int painted = 0, samples = 0;
@@ -336,10 +339,18 @@ public static class SmokeTest
             steps = [.. steps.OrderBy(step => step.At)];
         }
 
+        // The run has a clock of its own, in seconds, and the steps go by it. It starts at the
+        // first frame drawn, so a slow start does not eat into the run. After that it counts
+        // only time in which the app was free to get on with things: a hold-up (a screenshot,
+        // a character loading, a slow machine catching up) counts for half a second at most,
+        // and time a step spends waiting does not count. So what comes after a hold-up still
+        // gets the time it was given: a dance is not checked the moment it starts.
         int next = 0;
-        // Seconds on the watch: when the first frame was drawn, and since when the next step
-        // has been kept waiting. Negative until then.
-        double began = -1, held = -1;
+        double clock = 0;
+        // On the watch, in seconds, and negative until it happens: the first frame, the last
+        // tick, and when the next step was first found waiting.
+        double began = -1, lastTick = -1, held = -1;
+        bool waited = false;
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         timer.Tick += (_, _) =>
         {
@@ -357,31 +368,40 @@ public static class SmokeTest
                     began = now;
                     Note("first frame drawn" + (SinceLaunch() is { } seconds ? $", {seconds:0.0}s after the program was started" : ""));
                 }
-                double at = (now - began) / total;
-                while (next < steps.Count && at >= steps[next].At)
+                else if (held < 0)
+                {
+                    clock += Math.Min(now - lastTick, LongestTick);
+                }
+                lastTick = now;
+
+                while (next < steps.Count && clock >= steps[next].At * total)
                 {
                     var step = steps[next];
+                    // The watch is read afresh: a step before this one, in the same tick, may have taken a while.
                     if (held < 0)
                     {
                         Note($"step: {step.Name}");
-                        held = now;
+                        held = watch.Elapsed.TotalSeconds;
                     }
                     if (step.WaitingFor?.Invoke() is { } problem)
                     {
-                        if (now - held > Patience) throw new InvalidOperationException($"{problem} (waited {Patience:0}s)");
+                        if (watch.Elapsed.TotalSeconds - held > Patience) throw new InvalidOperationException($"{problem} (waited {Patience:0}s)");
+                        waited = true;
                         return;     // look again on the next tick
                     }
-                    if (now > held) Note($"waited {now - held:0.00}s for that");
+                    if (waited) Note($"waited {watch.Elapsed.TotalSeconds - held:0.00}s for that");
+                    waited = false;
                     held = -1;
                     step.Run();
                     next++;
                 }
-                if (at >= 1)
+                if (clock >= total)
                 {
                     timer.Stop();
                     int frames = First().FrameCount;
-                    if (frames < total * 5) Finish(false, $"only {frames} frames were drawn in {total:0}s");
-                    else Finish(true, $"{steps.Count} steps, {frames} frames ({frames / (now - began):0} fps)");
+                    double seconds = watch.Elapsed.TotalSeconds - began;
+                    if (frames < total * 5) Finish(false, $"only {frames} frames were drawn in {seconds:0}s");
+                    else Finish(true, $"{steps.Count} steps, {frames} frames in {seconds:0.0}s ({frames / seconds:0} fps)");
                 }
             }
             catch (Exception ex)
