@@ -100,6 +100,23 @@ public sealed class MainActivity : Activity
         };
         column.AddView(_characters);
 
+        // Before Android 12 taps pass the mate whatever it looks like, so there is no choice to make.
+        if (OperatingSystem.IsAndroidVersionAtLeast(31))
+        {
+            var solid = new CheckBox(this)
+            {
+                Text = "Solid mate: draw it at full strength. Taps right around it then stop " +
+                       "reaching the app underneath, which Android allows only for see-through overlays.",
+                Checked = Stage.Solid,
+            };
+            solid.CheckedChange += (_, e) =>
+            {
+                Stage.Solid = e.IsChecked;
+                if (MateService.Running) Send(MateService.ActionShow);
+            };
+            column.AddView(solid);
+        }
+
         Action("Put the mate on the screen", () => Start(null));
         Action("Dance", () => Send(MateService.ActionDance));
         Action("Put it away", Stop);

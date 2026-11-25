@@ -174,9 +174,9 @@ An app you build yourself has no such flag and just opens. DeskDancer shows in t
 while it runs; quit from there or from the mate's menu. The mate stands on the Dock, or
 on the bottom of the screen if the Dock is hidden or at the side.
 
-**Android (prototype).** Android 8 or later. The `android` workflow builds an APK, signed
-with a throwaway key for installing by hand rather than from a store: download the
-`DeskDancer-android` artifact from a run, open `DeskDancer.apk` on the phone, and allow
+**Android (prototype).** Android 8 or later. Each release has an APK for installing by
+hand rather than from a store, and the `android` workflow builds one for every change
+(the `DeskDancer-android` artifact of a run). Open the APK on the phone and allow
 installing from that app when Android asks. In DeskDancer, tap **Allow display over other
 apps** and switch it on; on recent Android versions a sideloaded app may first need
 **Allow restricted settings** from its App info page. Then put the mate on the screen.
@@ -186,7 +186,9 @@ while it is out, because Android only keeps an app on the screen that way; it ha
 and Put away buttons. The APK carries Mochi and Remix; other packs are one line each in
 `src/DeskDancer.Android/DeskDancer.Android.csproj`. Touches around the mate go to the app
 underneath, which on Android 12 and later means the mate is drawn slightly see-through,
-as Android requires of anything that lets touches pass.
+as Android requires of anything that lets touches pass. Tick **Solid mate** in the
+settings to draw it at full strength instead; taps right around it then stop reaching
+the app underneath.
 
 **Clicking through.** The mate lives in a small transparent window. So that the empty
 part of it does not block what is underneath, only the area around the character

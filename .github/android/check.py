@@ -161,6 +161,15 @@ if "drag started" not in log:
 if "dancing: True" not in log:
     failures.append("the dance command did not start a dance")
 
+# Frame rate and the time spent drawing, as the app logged them every two seconds. The
+# emulator draws everything in software, so these are a floor, not what a phone does.
+for state in ("Dance", "Idle"):
+    rows = re.findall(r"state=" + state + r" .*?fps=(\d+) render=([\d.]+)ms", log)
+    if rows:
+        fps = [int(f) for f, _ in rows]
+        ms = [float(r) for _, r in rows]
+        print(f"{state.lower()}: {min(fps)}-{max(fps)} frames a second, drawing {min(ms):.1f}-{max(ms):.1f} ms a frame")
+
 frame_counts = [int(x) for x in re.findall(r"DeskDancer: frame (\d+) ", log)]
 print("frames drawn, as logged:", frame_counts[-5:])
 if len(frame_counts) < 2 or frame_counts[-1] <= frame_counts[0]:

@@ -353,7 +353,14 @@ public static partial class SpritePackLoader
 
     static readonly string[] ImageExtensions = [".png", ".gif", ".webp", ".jpg", ".jpeg", ".bmp"];
     const int MaxFramesPerClip = 400;
-    const int MaxFrameSide = 640;
+
+    /// <summary>
+    /// Frames longer than this on their longest side are shrunk when a pack is read. The
+    /// shrink is cancelled out when drawing, so it changes how sharp a mate is, never how
+    /// big. The Android app lowers it to about the size a mate is drawn there, so each frame
+    /// is smoothed down once, when it is read, instead of every time it is drawn.
+    /// </summary>
+    public static int MaxFrameSide { get; set; } = 640;
 
     static readonly Dictionary<string, string> Aliases = new()
     {

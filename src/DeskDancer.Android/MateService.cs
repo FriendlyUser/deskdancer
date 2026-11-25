@@ -52,6 +52,7 @@ public sealed class MateService : Service
                 _overlay = new MateOverlay(this, Stage.CharacterId);
             else if (character != null && !character.Equals(_overlay.Character.Id, StringComparison.OrdinalIgnoreCase))
                 _overlay.SetCharacter(character);
+            _overlay.Refresh();
             if (action == ActionDance) _overlay.ToggleDance();
             else if (action == ActionRest) _overlay.Rest();
         }

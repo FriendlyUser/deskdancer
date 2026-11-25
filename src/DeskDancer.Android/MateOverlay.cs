@@ -29,9 +29,6 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
 {
     public const string Tag = "DeskDancer";
 
-    /// <summary>Phones are held closer than monitors, so mates start a little smaller there.</summary>
-    const double PhoneScale = 0.8;
-
     readonly Context _context;
     readonly IWindowManager _windows;
     readonly StageCanvas _stage;
@@ -48,6 +45,9 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
     double _stageW, _stageH, _feetY, _heightDip;
     double _areaCheckIn, _releaseIn = 10, _logIn;
     long _lastFrameNanos;
+    readonly System.Diagnostics.Stopwatch _renderTime = new();
+    int _framesSinceLog;
+    double _logElapsed;
     bool _attached, _closed, _skippedFrame;
 
     bool _pressed, _dragging, _longPressed;
@@ -69,11 +69,7 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
 
         _stage = new StageCanvas(context, _density);
         _stageLp = NewParams(touchable: false);
-        // From Android 12 a touch only gets through another app's window when that window is
-        // see-through enough, so the stage is drawn just under that limit.
-        if (OperatingSystem.IsAndroidVersionAtLeast(31)
-            && context.GetSystemService(Context.InputService) is Android.Hardware.Input.InputManager input)
-            _stageLp.Alpha = Math.Min(1f, input.MaximumObscuringOpacityForTouch);
+        _stageLp.Alpha = StageAlpha();
 
         _hitBox = new AView(context);
         _hitBox.Touch += OnTouch;
@@ -116,6 +112,29 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
         return lp;
     }
 
+    /// <summary>
+    /// From Android 12 a touch only gets through another app's window when that window is
+    /// see-through enough, so the stage is normally drawn just under that limit. A solid
+    /// mate is drawn at full strength, and Android then keeps taps right around it from
+    /// the app underneath.
+    /// </summary>
+    float StageAlpha()
+    {
+        if (Stage.Solid || !OperatingSystem.IsAndroidVersionAtLeast(31)) return 1f;
+        return _context.GetSystemService(Context.InputService) is Android.Hardware.Input.InputManager input
+            ? Math.Min(1f, input.MaximumObscuringOpacityForTouch)
+            : 0.8f;
+    }
+
+    /// <summary>Picks up settings changed on the settings screen.</summary>
+    public void Refresh()
+    {
+        float alpha = StageAlpha();
+        if (alpha == _stageLp.Alpha) return;
+        _stageLp.Alpha = alpha;
+        if (_attached) _windows.UpdateViewLayout(_stage, _stageLp);
+    }
+
     // ---- Character and layout ----
 
     public void SetCharacter(string id)
@@ -129,11 +148,15 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
     void ApplyCharacter()
     {
         _view.Character = _character;
+        // Plain bilinear smoothing. The desktop asks for more, which Skia does with mipmaps; on
+        // the phone the mate is drawn on the processor, where that cost about 12 ms a frame
+        // against half a millisecond. Frames are read at about the size they are shown (see
+        // Stage.EnsureReady), and at that size mipmaps add nothing to how it looks.
         RenderOptions.SetBitmapInterpolationMode(_view,
-            _character.PixelArt ? BitmapInterpolationMode.None : BitmapInterpolationMode.HighQuality);
+            _character.PixelArt ? BitmapInterpolationMode.None : BitmapInterpolationMode.LowQuality);
         double scale = Stage.Settings.Mates.Count > 0 ? Stage.Settings.Mates[0].Scale : 1;
         // Same stage as on the desktop: wide enough for arms and side steps, tall enough for a backflip.
-        double h = _heightDip = Math.Clamp(_character.PreferredHeight * scale * PhoneScale, 24, 1200);
+        double h = _heightDip = Math.Clamp(_character.PreferredHeight * scale * Stage.PhoneScale, 24, 1200);
         _stageW = Math.Ceiling(Math.Max(1.7 * h, (_character.AspectRatio + 1.0) * h));
         _stageH = Math.Ceiling(1.95 * h);
         _feetY = _stageH - Math.Round(0.14 * h);
@@ -266,8 +289,12 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
         Brain.Update(dt);
         ApplyPosition();
         ApplyHitBox();
+        _renderTime.Start();
         _stage.Render(_view, _stageLp.Width, _stageLp.Height);
+        _renderTime.Stop();
         FrameCount++;
+        _framesSinceLog++;
+        _logElapsed += dt;
 
         _releaseIn -= dt;
         if (_releaseIn <= 0)
@@ -280,9 +307,15 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
         if (_logIn <= 0)
         {
             _logIn = 2;
+            double fps = _logElapsed > 0 ? _framesSinceLog / _logElapsed : 0;
+            double renderMs = _framesSinceLog > 0 ? _renderTime.Elapsed.TotalMilliseconds / _framesSinceLog : 0;
             Android.Util.Log.Info(Tag, $"frame {FrameCount} state={Brain.State} clip={Brain.Clip} foot=({Brain.FootX:0},{Brain.FootY:0}) " +
                                        $"stage=({_stageLp.X},{_stageLp.Y} {_stageLp.Width}x{_stageLp.Height}) " +
-                                       $"hit=({_hitLp.X},{_hitLp.Y} {_hitLp.Width}x{_hitLp.Height})");
+                                       $"hit=({_hitLp.X},{_hitLp.Y} {_hitLp.Width}x{_hitLp.Height}) " +
+                                       $"fps={fps:0} render={renderMs:0.0}ms");
+            _framesSinceLog = 0;
+            _logElapsed = 0;
+            _renderTime.Reset();
         }
     }
 
