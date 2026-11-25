@@ -64,9 +64,30 @@ echo "last hit box: $hit"
 if [[ $hit =~ hit=\((-?[0-9]+),(-?[0-9]+)\ ([0-9]+)x([0-9]+)\) ]]; then
   x=$(( BASH_REMATCH[1] + BASH_REMATCH[3] / 2 ))
   y=$(( BASH_REMATCH[2] + BASH_REMATCH[4] / 2 ))
+  echo "swiping from ($x,$y)"
   adb shell input swipe $x $y $(( x - 150 )) $(( y - 500 )) 700
   sleep 0.3
   shot 3-thrown
+  # If the touch never reached the mate, keep what Android knew about where it went.
+  if ! adb logcat -d -s DeskDancer:I | grep -q "touch down"; then
+    echo "no touch reached the mate; input and window state follow"
+    adb shell dumpsys input > "$out/3-input.txt"
+    adb shell dumpsys window windows > "$out/3-after-drag-windows.txt"
+    # Every window input is offered to, top first, with what each does with a touch.
+    sed -n '/Windows:/,/^  [A-Z]/p' "$out/3-input.txt" | grep -E "^ +[0-9]+: name=" \
+      | sed -E 's/, (globalScale|applicationInfo\.(name|token)|ownerPid|dispatchingTimeout|hasToken)=[^,]*//g' | head -24
+    adb logcat -d | grep -i -E "InputDispatcher|untrusted touch|obscur" | tail -20 || true
+    # Where across the mate a touch does get through: taps along the middle of the hit box.
+    w=${BASH_REMATCH[3]}
+    for fx in 15 35 50 65 85; do
+      tx=$(( BASH_REMATCH[1] + w * fx / 100 ))
+      before=$(adb logcat -d -s DeskDancer:I | grep -c "touch down")
+      adb shell input tap $tx $y
+      sleep 1
+      after=$(adb logcat -d -s DeskDancer:I | grep -c "touch down")
+      echo "tap at ($tx,$y): $([ "$after" -gt "$before" ] && echo reached the mate || echo LOST)"
+    done
+  fi
   sleep 4
   shot 4-landed
 else

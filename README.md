@@ -85,7 +85,9 @@ your own images and it becomes a character that walks and dances too: see
 
 ## Run it
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) to build. The result
+Ready-made downloads for Windows, Linux, macOS and Android are on the
+[Releases](https://github.com/FriendlyUser/deskdancer/releases) page. To build it yourself,
+you need the [.NET 10 SDK](https://dotnet.microsoft.com/download). The result
 is a single self-contained program that needs nothing installed to run.
 
 Windows (PowerShell):
@@ -174,9 +176,9 @@ An app you build yourself has no such flag and just opens. DeskDancer shows in t
 while it runs; quit from there or from the mate's menu. The mate stands on the Dock, or
 on the bottom of the screen if the Dock is hidden or at the side.
 
-**Android (prototype).** Android 8 or later. The `android` workflow builds an APK, signed
-with a throwaway key for installing by hand rather than from a store: download the
-`DeskDancer-android` artifact from a run, open `DeskDancer.apk` on the phone, and allow
+**Android (prototype).** Android 8 or later. Each release has an APK for installing by
+hand rather than from a store, and the `android` workflow builds one for every change
+(the `DeskDancer-android` artifact of a run). Open the APK on the phone and allow
 installing from that app when Android asks. In DeskDancer, tap **Allow display over other
 apps** and switch it on; on recent Android versions a sideloaded app may first need
 **Allow restricted settings** from its App info page. Then put the mate on the screen.
@@ -186,7 +188,9 @@ while it is out, because Android only keeps an app on the screen that way; it ha
 and Put away buttons. The APK carries Mochi and Remix; other packs are one line each in
 `src/DeskDancer.Android/DeskDancer.Android.csproj`. Touches around the mate go to the app
 underneath, which on Android 12 and later means the mate is drawn slightly see-through,
-as Android requires of anything that lets touches pass.
+as Android requires of anything that lets touches pass. Tick **Solid mate** in the
+settings to draw it at full strength instead; taps right around it then stop reaching
+the app underneath.
 
 **Clicking through.** The mate lives in a small transparent window. So that the empty
 part of it does not block what is underneath, only the area around the character
@@ -256,6 +260,28 @@ with a scripted swipe, then compares screenshots with one of the bare home scree
 mate has to be visible, the stage around it has to be see-through, the dancing frames have
 to differ, and the drag has to reach the mate. The screenshots are saved as artifacts, and
 a rough outline of what appeared on the screen is printed in the job's log.
+
+### Making a release
+
+Set `<Version>` in `src/DeskDancer/DeskDancer.csproj` to the new number, then on GitHub open
+**Actions > release > Run workflow**, pick `main` and give the same number, like `1.0.0`. The
+workflow builds and tests every platform exactly as the two workflows above do, then
+publishes release `v1.0.0` on that commit with a download for each platform.
+
+**Signing the Android app.** Android only installs a new version of an app over the old one
+when both are signed with the same key. Without a key of the repository's own, each build
+is signed with a key made up for it, so a newer APK has to replace the old one by
+uninstalling it first. To sign every release with one key, make it once and keep it safe:
+
+```bash
+keytool -genkeypair -v -keystore deskdancer.keystore -alias deskdancer -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Then add four repository secrets under **Settings > Secrets and variables > Actions**:
+`ANDROID_KEYSTORE_BASE64` (the output of `base64 -w0 deskdancer.keystore`),
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`deskdancer` above) and
+`ANDROID_KEY_PASSWORD`. Losing the key means the next release cannot install over the
+last, so keep a copy somewhere other than GitHub.
 
 One thing to know when building: Avalonia's build step sends anonymous usage data to
 its vendor. The publish scripts and the workflow switch that off with

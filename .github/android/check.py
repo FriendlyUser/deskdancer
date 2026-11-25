@@ -119,7 +119,9 @@ else:
         around = box(diff.shape, stage, top_skip) & ~on_body
         body_share = changed[on_body].mean() if on_body.any() else 0
         print(f"over the body: {body_share:.0%} of pixels changed")
-        if body_share < 0.15:
+        # The hit box is sized for a mate standing up; sitting or napping it fills less of it
+        # (about 12% for Mochi), and a mate that is not drawn at all leaves close to nothing.
+        if body_share < 0.05:
             failures.append(f"the mate is not visible: only {body_share:.0%} of its body area changed")
         if around.any():
             d = diff[around]
@@ -156,10 +158,22 @@ else:
             print(f"{title}:")
             print(outline(m))
 
+before_drag = overlay_windows(read("3-before-drag-windows.txt"))
+if before_drag:
+    print("overlay windows just before the drag (x, y, w, h):", before_drag)
 if "drag started" not in log:
     failures.append("the mate did not pick up the scripted drag")
 if "dancing: True" not in log:
     failures.append("the dance command did not start a dance")
+
+# Frame rate and the time spent drawing, as the app logged them every two seconds. The
+# emulator draws everything in software, so these are a floor, not what a phone does.
+for state in ("Dance", "Idle"):
+    rows = re.findall(r"state=" + state + r" .*?fps=(\d+) render=([\d.]+)ms", log)
+    if rows:
+        fps = [int(f) for f, _ in rows]
+        ms = [float(r) for _, r in rows]
+        print(f"{state.lower()}: {min(fps)}-{max(fps)} frames a second, drawing {min(ms):.1f}-{max(ms):.1f} ms a frame")
 
 frame_counts = [int(x) for x in re.findall(r"DeskDancer: frame (\d+) ", log)]
 print("frames drawn, as logged:", frame_counts[-5:])

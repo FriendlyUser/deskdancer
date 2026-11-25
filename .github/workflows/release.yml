@@ -1,0 +1,101 @@
+name: release
+
+# Publishes a release: builds DeskDancer for Windows, Linux, both kinds of Mac and Android,
+# runs the same tests as every other change (the build and android workflows), and puts
+# the downloads on a new GitHub release, tagged on the commit it was run from.
+#
+# Start it from the Actions tab: choose "release", then "Run workflow", pick the branch
+# (normally main) and give the version, like 1.0.0. Set <Version> in
+# src/DeskDancer/DeskDancer.csproj to the same number first; the Android app takes its
+# version from here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, like 1.0.0. The release is tagged v1.0.0.
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the version
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The version should look like 1.0.0, not '$VERSION'"
+            exit 1
+          fi
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::v$VERSION has already been released"
+            exit 1
+          fi
+
+  desktop:
+    needs: check
+    uses: ./.github/workflows/build.yml
+
+  android:
+    needs: check
+    uses: ./.github/workflows/android.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets: inherit
+
+  publish:
+    needs: [desktop, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: DeskDancer-*
+          path: artifacts
+
+      - name: Package the downloads
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          out="$GITHUB_WORKSPACE/out"
+          mkdir -p "$out"
+          (cd artifacts/DeskDancer-win-x64 && zip -qr9 "$out/DeskDancer-$VERSION-windows-x64.zip" .)
+          # Artifacts do not keep file permissions, so the program is made runnable again.
+          chmod +x artifacts/DeskDancer-linux-x64/DeskDancer
+          tar -C artifacts/DeskDancer-linux-x64 -czf "$out/DeskDancer-$VERSION-linux-x64.tar.gz" .
+          # The Mac builds are already zipped with ditto, which keeps the app's signature.
+          cp artifacts/DeskDancer-osx-arm64/DeskDancer-osx-arm64.zip "$out/DeskDancer-$VERSION-macos-apple-silicon.zip"
+          cp artifacts/DeskDancer-osx-x64/DeskDancer-osx-x64.zip "$out/DeskDancer-$VERSION-macos-intel.zip"
+          cp artifacts/DeskDancer-android/DeskDancer.apk "$out/DeskDancer-$VERSION-android.apk"
+          ls -la "$out"
+
+      - name: Publish the release
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<EOF
+          ## Downloads
+
+          | File | For |
+          | --- | --- |
+          | \`DeskDancer-$VERSION-windows-x64.zip\` | Windows 10 and 11. Unzip and run \`DeskDancer.exe\`. |
+          | \`DeskDancer-$VERSION-linux-x64.tar.gz\` | Linux (X11, or Wayland with XWayland). Unpack and run \`DeskDancer\`. |
+          | \`DeskDancer-$VERSION-macos-apple-silicon.zip\` | Macs with Apple silicon, macOS 12 or later. |
+          | \`DeskDancer-$VERSION-macos-intel.zip\` | Intel Macs, macOS 12 or later. |
+          | \`DeskDancer-$VERSION-android.apk\` | Android 8 or later, installed by hand (a prototype). |
+
+          Keep the \`characters\` folder next to the program. The Mac app is not signed with an
+          Apple developer ID, so macOS asks before opening it the first time. Installing the
+          APK needs "install unknown apps" allowed for the app that opens it. The README's
+          Platform notes cover each of these.
+
+          EOF
+          gh release create "v$VERSION" "$GITHUB_WORKSPACE"/out/* \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "DeskDancer $VERSION" --notes-file notes.md --generate-notes

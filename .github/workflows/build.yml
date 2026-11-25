@@ -8,6 +8,8 @@ on:
       mac_smoke_runs:
         description: Times to run the smoke test on each Mac, to chase a failure that only happens now and then
         default: "1"
+  # The release workflow runs this one to build and test what it publishes.
+  workflow_call:
 
 env:
   DOTNET_NOLOGO: true
