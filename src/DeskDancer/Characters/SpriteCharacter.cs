@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using DeskDancer.Platform;
 using SkiaSharp;
 
 namespace DeskDancer.Characters;
@@ -11,7 +12,23 @@ namespace DeskDancer.Characters;
 /// <summary>One animation: a run of frames with their timings and where the feet are.</summary>
 public sealed class SpriteClip
 {
-    public required Bitmap[] Frames { get; init; }
+    // Uncompressed frames are where an image pack's memory goes, so a clip does not have to
+    // hold on to its own. One that is given its frames keeps them for good. One that is given
+    // a way to read them from disk instead fetches them on a background thread when it is
+    // first wanted on screen, and can be told to let them go again. Only the reading happens
+    // on that other thread; everything else here is called from the UI thread.
+    readonly Func<Bitmap[]>? _read;
+    volatile Bitmap[]? _frames;
+    volatile bool _reading, _unreadable;
+    long _lastWanted;
+
+    public SpriteClip(Bitmap[]? frames, Func<Bitmap[]>? read = null)
+    {
+        if (frames == null && read == null) throw new ArgumentNullException(nameof(frames));
+        _frames = frames;
+        _read = read;
+    }
+
     /// <summary>Time in seconds at which each frame ends.</summary>
     public required double[] Ends { get; init; }
     public required string Name { get; init; }
@@ -27,14 +44,78 @@ public sealed class SpriteClip
 
     public double Duration => Ends[^1];
 
-    public Bitmap FrameAt(double time)
+    /// <summary>True while the frames are in memory.</summary>
+    public bool InMemory => _frames != null;
+
+    /// <summary>
+    /// The frame to show at a time into the clip, or null if the frames are not in memory.
+    /// Asking is what brings them in: the first null starts reading them in the background.
+    /// </summary>
+    public Bitmap? FrameAt(double time)
     {
-        if (Frames.Length == 1) return Frames[0];
+        _lastWanted = Environment.TickCount64;
+
+        // The flag is looked at before the frames: with no read under way, nothing but this
+        // thread can change the frames, so finding none really does mean they are not there.
+        bool reading = _reading;
+        var frames = _frames;
+        if (frames == null)
+        {
+            if (!reading && !_unreadable && _read != null)
+            {
+                _reading = true;
+                Task.Run(Read);
+            }
+            return null;
+        }
+
+        if (frames.Length == 1) return frames[0];
         double t = Loop ? time % Duration : Math.Min(time, Duration - 1e-6);
         if (t < 0) t = 0;
         int i = Array.BinarySearch(Ends, t);
         i = i < 0 ? ~i : i + 1;
-        return Frames[Math.Min(i, Frames.Length - 1)];
+        return frames[Math.Min(i, frames.Length - 1)];
+    }
+
+    void Read()
+    {
+        try
+        {
+            _frames = _read!();
+        }
+        catch (Exception ex)
+        {
+            // The whole clip was decoded when the pack was loaded, so its files have changed
+            // or gone since. It is not tried again; reloading the characters starts afresh.
+            _unreadable = true;
+            Log.Error($"Could not read the '{Name}' animation", ex);
+        }
+        finally
+        {
+            _reading = false;
+            FreedMemory.Return();
+        }
+    }
+
+    /// <summary>
+    /// Lets the frames go if the clip has not been wanted on screen for this long and can
+    /// read them again. Returns true if it did.
+    /// </summary>
+    public bool Unload(TimeSpan unwantedFor)
+    {
+        if (_read == null || _reading) return false;
+        if (Environment.TickCount64 - _lastWanted < unwantedFor.TotalMilliseconds) return false;
+        return Discard();
+    }
+
+    /// <summary>Lets the frames go whether or not they can be read again. Returns true if there were any.</summary>
+    public bool Discard()
+    {
+        var frames = _frames;
+        if (frames == null) return false;
+        _frames = null;
+        foreach (var frame in frames) frame.Dispose();
+        return true;
     }
 }
 
@@ -81,6 +162,20 @@ public sealed class SpriteCharacter : ICharacter
 
     public bool HasClip(string clip) => _clips.ContainsKey(clip);
 
+    /// <summary>True if the frames that would be drawn for this clip are in memory right now.</summary>
+    public bool InMemory(string clip) => Resolve(clip).InMemory;
+
+    /// <summary>
+    /// Lets go of the frames of every clip that has not been drawn for at least this long and
+    /// can be read from disk again. Returns true if any were let go.
+    /// </summary>
+    public bool ReleaseUnused(TimeSpan unusedFor)
+    {
+        bool any = false;
+        foreach (var clip in _clips.Values) any |= clip.Unload(unusedFor);
+        return any;
+    }
+
     SpriteClip Resolve(string clip)
     {
         if (_clips.TryGetValue(clip, out var found)) return found;
@@ -94,6 +189,12 @@ public sealed class SpriteCharacter : ICharacter
     {
         var clip = Resolve(frame.Clip);
         var bitmap = clip.FrameAt(frame.ClipTime);
+        if (bitmap == null)
+        {
+            // Still being read from disk. Idle is always in memory, so stand on that until then.
+            clip = _idle;
+            bitmap = clip.FrameAt(frame.ClipTime)!;
+        }
         double s = height / _idle.ContentHeight * clip.Scale;
         var size = bitmap.Size;
         var dest = new Rect(-clip.AnchorX * s, -clip.AnchorY * s, size.Width * s, size.Height * s);
@@ -198,7 +299,12 @@ public static partial class SpritePackLoader
         AllowTrailingCommas = true,
     });
 
-    public static SpriteCharacter Load(string id, string dir)
+    /// <summary>
+    /// Loads a pack. With <paramref name="onDemand"/> only the idle clip's frames are kept: every
+    /// other clip is still decoded once, to check it and to measure it, but its frames are read
+    /// again when it is first drawn. Without it every frame is in memory when this returns.
+    /// </summary>
+    public static SpriteCharacter Load(string id, string dir, bool onDemand = false)
     {
         var options = new PackOptions();
         var sources = new Dictionary<string, ClipSource>();
@@ -230,7 +336,8 @@ public static partial class SpritePackLoader
 
             void Build(ClipSource src, List<SKBitmap> frames, List<double> durations)
             {
-                var clip = BuildClip(src, frames, durations, options, idleHeight, idleShrink, out double shrink);
+                string? readFrom = onDemand && src.Key != "idle" ? dir : null;
+                var clip = BuildClip(src, frames, durations, options, idleHeight, idleShrink, out double shrink, readFrom);
                 built[src.Key] = clip;
                 if (src.Key == "idle")
                 {
@@ -271,8 +378,7 @@ public static partial class SpritePackLoader
         {
             // This pack will not be used, so its finished frames should not sit in memory
             // until the garbage collector happens to notice them.
-            foreach (var clip in built.Values)
-                foreach (var frame in clip.Frames) frame.Dispose();
+            foreach (var clip in built.Values) clip.Discard();
             throw;
         }
     }
@@ -632,8 +738,13 @@ public static partial class SpritePackLoader
         return maxX < 0 ? SKRectI.Empty : new SKRectI(minX, minY, maxX + 1, maxY + 1);
     }
 
+    /// <summary>
+    /// Works out how a clip's decoded frames are trimmed, scaled and anchored. The clip keeps the
+    /// finished frames, unless <paramref name="readFrom"/> names the pack folder: then it keeps
+    /// none and decodes its files again whenever it needs them.
+    /// </summary>
     static SpriteClip BuildClip(ClipSource src, List<SKBitmap> frames, List<double> durations, PackOptions options,
-        double idleHeight, double idleShrink, out double shrink)
+        double idleHeight, double idleShrink, out double shrink, string? readFrom = null)
     {
         // Frames in one clip must share a size so they can share an anchor.
         int fw = frames.Max(f => f.Width), fh = frames.Max(f => f.Height);
@@ -649,25 +760,33 @@ public static partial class SpritePackLoader
         if (!options.PixelArt && longest > MaxFrameSide) shrink = (double)MaxFrameSide / longest;
         int outW = Math.Max(1, (int)Math.Round(crop.Width * shrink)), outH = Math.Max(1, (int)Math.Round(crop.Height * shrink));
 
-        var bitmaps = new Bitmap[frames.Count];
-        var ends = new double[frames.Count];
+        int count = frames.Count;
+        var ends = new double[count];
         double t = 0;
-        var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
-        for (int i = 0; i < frames.Count; i++)
+        for (int i = 0; i < count; i++)
         {
-            using var cell = new SKBitmap(InfoFor(outW, outH));
-            cell.Erase(SKColors.Transparent);
-            using (var canvas = new SKCanvas(cell))
-            using (var image = SKImage.FromBitmap(frames[i]))
-            using (var paint = new SKPaint { BlendMode = SKBlendMode.Src })
-            {
-                var from = SKRect.Create(crop.Left, crop.Top, crop.Width, crop.Height);
-                canvas.DrawImage(image, from, SKRect.Create(outW, outH), shrink < 1 ? sampling : SKSamplingOptions.Default, paint);
-            }
-            bitmaps[i] = new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, cell.GetPixels(),
-                new PixelSize(outW, outH), new Vector(96, 96), cell.RowBytes);
             t += Math.Max(durations[i], 1.0 / 240);
             ends[i] = t;
+        }
+
+        // Cutting the frames out is the same job whether it is done now or when the clip is
+        // read again later, and both must give the same pictures.
+        double scaled = shrink;
+        Bitmap[] Cut(List<SKBitmap> decoded) => CutFrames(decoded, crop, scaled, outW, outH);
+        Bitmap[] ReadAgain()
+        {
+            var decoded = new List<SKBitmap>();
+            try
+            {
+                DecodeClip(readFrom!, src, options, decoded, []);
+                if (decoded.Count != count)
+                    throw new InvalidDataException($"Clip '{src.Key}' had {count} frames when it was loaded and has {decoded.Count} now.");
+                return Cut(decoded);
+            }
+            finally
+            {
+                foreach (var bmp in decoded) bmp.Dispose();
+            }
         }
 
         double contentH = bounds.Height * shrink, contentW = bounds.Width * shrink;
@@ -684,9 +803,9 @@ public static partial class SpritePackLoader
             else scale *= idleShrink / shrink;
         }
 
-        return new SpriteClip
+        bool keep = readFrom == null;
+        return new SpriteClip(keep ? Cut(frames) : null, keep ? null : ReadAgain)
         {
-            Frames = bitmaps,
             Ends = ends,
             Name = src.Name ?? PrettyName(src.Key),
             Loop = src.Loop,
@@ -696,6 +815,35 @@ public static partial class SpritePackLoader
             ContentHeight = contentH,
             Scale = scale,
         };
+    }
+
+    static Bitmap[] CutFrames(List<SKBitmap> frames, SKRectI crop, double shrink, int outW, int outH)
+    {
+        var bitmaps = new Bitmap[frames.Count];
+        var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
+        try
+        {
+            for (int i = 0; i < frames.Count; i++)
+            {
+                using var cell = new SKBitmap(InfoFor(outW, outH));
+                cell.Erase(SKColors.Transparent);
+                using (var canvas = new SKCanvas(cell))
+                using (var image = SKImage.FromBitmap(frames[i]))
+                using (var paint = new SKPaint { BlendMode = SKBlendMode.Src })
+                {
+                    var from = SKRect.Create(crop.Left, crop.Top, crop.Width, crop.Height);
+                    canvas.DrawImage(image, from, SKRect.Create(outW, outH), shrink < 1 ? sampling : SKSamplingOptions.Default, paint);
+                }
+                bitmaps[i] = new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, cell.GetPixels(),
+                    new PixelSize(outW, outH), new Vector(96, 96), cell.RowBytes);
+            }
+        }
+        catch
+        {
+            foreach (var bitmap in bitmaps) bitmap?.Dispose();
+            throw;
+        }
+        return bitmaps;
     }
 
     /// <summary>Orders "frame2" before "frame10".</summary>

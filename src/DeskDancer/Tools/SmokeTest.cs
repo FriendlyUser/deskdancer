@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
+using DeskDancer.Characters;
 using DeskDancer.Engine;
 using DeskDancer.Platform;
 using DeskDancer.Ui;
@@ -153,6 +154,12 @@ public static class SmokeTest
                     throw new InvalidOperationException($"image pack '{spritePack}' failed to load: {error}");
                 app.SetParty(true);
             }),
+            (0.42, "drop clips", () =>
+            {
+                // An image pack keeps only the clips it is showing. Take away everything it can
+                // read again, mid-dance; what the mates are showing has to come back by itself.
+                app.Library.ReleaseUnusedClips(TimeSpan.Zero);
+            }),
             (0.50, "party", () =>
             {
                 if (app.Mates.Any(m => !m.Brain.IsDancing)) throw new InvalidOperationException("not every mate joined the party");
@@ -161,6 +168,9 @@ public static class SmokeTest
             }),
             (0.55, "party off, resize, menu", () =>
             {
+                foreach (var mate in app.Mates)
+                    if (mate.Character is SpriteCharacter pack && !pack.InMemory(mate.Brain.Clip))
+                        throw new InvalidOperationException($"'{pack.Id}' has not read its '{mate.Brain.Clip}' clip into memory");
                 app.SetParty(false);
                 app.SetTempo(140);
                 app.Mates[1].SetScale(1.5);
