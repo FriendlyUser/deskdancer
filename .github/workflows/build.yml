@@ -1,0 +1,86 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  # Avalonia's build step sends anonymous usage data to its vendor unless this is set.
+  AVALONIA_TELEMETRY_OPTOUT: 1
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish
+        run: >
+          dotnet publish src/DeskDancer -c Release -r ${{ matrix.rid }} --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=none -o dist/${{ matrix.rid }}
+
+      # The smoke test starts the real app, drives every feature for a few seconds and
+      # exits non-zero if a step fails, a window stops drawing or anything throws.
+      - name: Smoke test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb openbox
+          xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
+            openbox & sleep 1
+            dist/linux-x64/DeskDancer --smoke-test --seconds 15 --out smoke'
+
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Save-Desktop($path) {
+            $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $op = [System.Drawing.CopyPixelOperation]::SourceCopy -bor [System.Drawing.CopyPixelOperation]::CaptureBlt
+            $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size, $op)
+            $bmp.Save($path)
+            $g.Dispose(); $bmp.Dispose()
+          }
+          New-Item -ItemType Directory -Force smoke | Out-Null
+          $out = (Resolve-Path smoke).Path
+          $app = Start-Process -FilePath dist\win-x64\DeskDancer.exe -PassThru `
+            -ArgumentList '--smoke-test', '--seconds', '20', '--out', "`"$out`""
+          # Pictures of the real desktop: standing still, then mid-party with two mates.
+          Start-Sleep -Milliseconds 3000; Save-Desktop "$out\desktop-1-standing.png"
+          Start-Sleep -Milliseconds 5500; Save-Desktop "$out\desktop-2-party.png"
+          if (-not $app.WaitForExit(60000)) { $app.Kill(); throw "The smoke test did not finish" }
+          Get-Content "$out\smoke-result.txt"
+          exit $app.ExitCode
+
+      - name: Upload smoke test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.rid }}
+          path: smoke
+          if-no-files-found: warn
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskDancer-${{ matrix.rid }}
+          path: dist/${{ matrix.rid }}

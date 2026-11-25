@@ -1,0 +1,30 @@
+{
+  "name": "Remix (example image pack)",
+  "height": 150,
+  "facing": "right",
+  "fps": 8,
+  "clips": {
+    "idle": {
+      "folder": "idle",
+      "fps": 6
+    },
+    "walk": {
+      "file": "walk_8x1.png",
+      "fps": 12
+    },
+    "fall": {
+      "file": "fall_4x1.png",
+      "fps": 12
+    },
+    "dance_groove": {
+      "file": "dance_groove_8x2.png",
+      "name": "Groove",
+      "fps": 8
+    },
+    "dance_star_jump": {
+      "file": "dance_star_jump_6x1.png",
+      "name": "Star Jump (frames)",
+      "fps": 12
+    }
+  }
+}
