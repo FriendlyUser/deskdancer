@@ -26,14 +26,23 @@ adb logcat -c
 
 log "home screen, before"
 adb shell input keyevent KEYCODE_HOME
-sleep 4
-shot 0-home
+# A freshly booted emulator's launcher keeps drawing for a while; wait until it holds still.
+for i in $(seq 1 15); do
+  sleep 2
+  shot 0-home-a
+  sleep 1
+  shot 0-home
+  cmp -s "$out/0-home-a.png" "$out/0-home.png" && { echo "home screen settled"; break; }
+done
+rm -f "$out/0-home-a.png"
 
 log "putting the mate on the screen"
 adb shell am start -W -n $pkg/.MainActivity --es command start --es character mochi
 # First start unpacks the characters and drops the mate in from above.
 sleep 12
 shot 1-standing
+# Where Android has put the mate's two windows at this moment.
+adb shell dumpsys window windows > "$out/1-standing-windows.txt"
 
 log "dancing"
 adb shell am start -W -n $pkg/.MainActivity --es command dance
@@ -62,7 +71,11 @@ fi
 
 log "still running?"
 adb shell pidof $pkg && echo "running" || echo "NOT RUNNING"
-adb shell dumpsys window windows | grep -E "Window #|mOwnerUid|ty=|mFrame=|mAlpha" | grep -B2 -A3 -i "$pkg" | head -40 || true
+
+log "putting the mate away"
+adb shell am start -W -n $pkg/.MainActivity --es command stop
+sleep 4
+shot 5-home-after
 
 adb logcat -d > "$out/logcat.txt"
 log "app log"

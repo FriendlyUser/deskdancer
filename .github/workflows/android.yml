@@ -73,6 +73,8 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
+          # A phone-sized screen, so the mate is scaled the way it is on a real phone.
+          profile: pixel_6
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: bash .github/android/smoke.sh dist/apk/DeskDancer.apk smoke-android

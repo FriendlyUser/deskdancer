@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Decides whether the Android smoke test passed, from its screenshots and log.
+"""Decides whether the Android smoke test passed, from its screenshots and logs.
 
     python3 check.py out-dir
 
 Checks, in order:
   * the app is still running and nothing crashed;
-  * the mate is on the screen: the screenshot differs from the home screen taken before it,
-    in a patch about the size of a character, near the floor;
-  * the stage is see-through: inside the stage window, most pixels are still the home screen
-    (an opaque window would change all of them);
+  * the mate is on the screen: over the character's body (its hit box) the screenshot is
+    clearly different from the bare home screen;
+  * the stage is see-through: in the rest of the stage window, the home screen shows
+    through unchanged, so there is no box or tint around the mate;
   * it moves while dancing: the dancing screenshots differ from one another;
   * it can be dragged: the log shows a drag that started from the scripted swipe.
-The outline of what changed is printed as text, so the result can be read in the job log.
+Where the two windows were comes from Android itself (dumpsys window), taken right after
+the screenshot. The bare home screen is the one taken after the mate was put away, when
+the launcher has long settled. Outlines of what changed are printed as text, so the result
+can be read in the job log.
 """
 import re
 import sys
@@ -20,8 +23,16 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+PKG = "io.github.friendlyuser.deskdancer"
 out = Path(sys.argv[1])
-log = (out / "logcat.txt").read_text(errors="replace") if (out / "logcat.txt").exists() else ""
+
+
+def read(name):
+    p = out / name
+    return p.read_text(errors="replace") if p.exists() else ""
+
+
+log = read("logcat.txt")
 failures = []
 
 
@@ -32,10 +43,8 @@ def load(name):
     return np.asarray(Image.open(p).convert("RGB")).astype(np.int16)
 
 
-def changed(a, b, top_skip):
-    d = np.abs(a - b).max(axis=2) > 40
-    d[:top_skip] = False            # status bar: clock and the new notification icon
-    return d
+def difference(a, b):
+    return np.abs(a - b).max(axis=2)
 
 
 def outline(mask, cols=60):
@@ -54,9 +63,25 @@ def outline(mask, cols=60):
     return "\n".join(rows)
 
 
-def last_rect(name):
-    m = re.findall(name + r"=\((-?\d+),(-?\d+) (\d+)x(\d+)\)", log)
-    return tuple(map(int, m[-1])) if m else None
+def overlay_windows(dump):
+    """(x, y, w, h) of this app's overlay windows, biggest first."""
+    found, mine = [], False
+    for line in dump.splitlines():
+        if "Window #" in line:
+            mine = f"u0 {PKG}}}" in line
+        elif mine and "ty=APPLICATION_OVERLAY" in line:
+            m = re.search(r"mAttrs=\{\((-?\d+),(-?\d+)\)\((\d+)x(\d+)\)", line)
+            if m:
+                found.append(tuple(map(int, m.groups())))
+    return sorted(found, key=lambda r: r[2] * r[3], reverse=True)
+
+
+def box(mask_shape, rect, top_skip):
+    h, w = mask_shape
+    x, y, rw, rh = rect
+    m = np.zeros(mask_shape, bool)
+    m[max(y, top_skip):max(min(y + rh, h), 0), max(x, 0):max(min(x + rw, w), 0)] = True
+    return m
 
 
 # ---- Crashes ----
@@ -65,51 +90,71 @@ if re.search(r"FATAL EXCEPTION|Unhandled Exception|AndroidRuntime: Process: io\.
 if "on screen, area" not in log:
     failures.append("the mate never reported being put on the screen")
 
-home = load("0-home")
-standing = load("1-standing")
+before, after, standing = load("0-home"), load("5-home-after"), load("1-standing")
+home = after if after is not None else before
 if home is None or standing is None:
     failures.append("screenshots missing")
 else:
     h, w, _ = home.shape
-    top_skip = int(h * 0.06)
-    mask = changed(home, standing, top_skip)
-    n = int(mask.sum())
-    print(f"screen {w}x{h}; {n} pixels changed between the home screen and the standing mate")
-    print(outline(mask))
-    stage = last_rect("stage")
-    print("stage window:", stage, " hit box:", last_rect("hit"))
-    if n < 2000:
-        failures.append(f"the mate is not visible: only {n} pixels changed")
-    elif stage:
-        sx, sy, sw, sh = stage
-        x0, y0 = max(sx, 0), max(sy, top_skip)
-        x1, y1 = min(sx + sw, w), min(sy + sh, h)
-        if x1 > x0 and y1 > y0:
-            inside = mask[y0:y1, x0:x1]
-            share = inside.mean()
-            print(f"inside the stage window {share:.0%} of pixels changed; outside it {int(mask.sum() - inside.sum())}")
-            if share > 0.85:
-                failures.append(f"the stage is not see-through: {share:.0%} of it covers the home screen")
+    top_skip = int(h * 0.06)            # status bar: clock and the notification icon
+    print(f"screen {w}x{h}")
+    if before is not None and after is not None:
+        noise = difference(before, after) > 40
+        noise[:top_skip] = False
+        print(f"home screen before vs after the test: {int(noise.sum())} pixels differ")
+
+    diff = difference(home, standing)
+    diff[:top_skip] = 0
+    changed = diff > 40
+    print("standing mate, what differs from the home screen:")
+    print(outline(changed))
+
+    windows = overlay_windows(read("1-standing-windows.txt"))
+    print("overlay windows (x, y, w, h):", windows)
+    if len(windows) < 2:
+        failures.append(f"expected the stage and the hit box windows, found {len(windows)}")
+    else:
+        stage, hit = windows[0], windows[1]
+        on_body = box(diff.shape, hit, top_skip)
+        around = box(diff.shape, stage, top_skip) & ~on_body
+        body_share = changed[on_body].mean() if on_body.any() else 0
+        print(f"over the body: {body_share:.0%} of pixels changed")
+        if body_share < 0.15:
+            failures.append(f"the mate is not visible: only {body_share:.0%} of its body area changed")
+        if around.any():
+            d = diff[around]
+            share, median, p95 = (d > 40).mean(), float(np.median(d)), float(np.percentile(d, 95))
+            print(f"rest of the stage: {share:.1%} of pixels changed; difference median {median:.0f}, 95th percentile {p95:.0f} (of 255)")
+            # The floor shadow and the odd limb poke out past the body; a box or a tint would not stop there.
+            if share > 0.10 or median > 6:
+                failures.append(f"the stage is not see-through around the mate ({share:.0%} changed, median {median:.0f})")
+        outside = changed & ~box(diff.shape, stage, top_skip)
+        print(f"outside the stage: {int(outside.sum())} pixels changed")
 
     frames = [f for f in (load(f"2-dancing-{i}") for i in range(1, 7)) if f is not None]
     if len(frames) >= 2:
-        moves = [int(changed(a, b, top_skip).sum()) for a, b in zip(frames, frames[1:])]
+        moves = []
+        for a, b in zip(frames, frames[1:]):
+            m = difference(a, b) > 40
+            m[:top_skip] = False
+            moves.append(int(m.sum()))
         print("pixels changed between dancing screenshots:", moves)
         if max(moves) < 500:
             failures.append("the mate does not move while dancing")
-        dancing = changed(home, frames[-1], top_skip)
+        m = difference(home, frames[-1]) > 40
+        m[:top_skip] = False
         print("while dancing:")
-        print(outline(dancing))
+        print(outline(m))
     else:
         failures.append("dancing screenshots missing")
 
-    thrown, landed = load("3-thrown"), load("4-landed")
-    if thrown is not None:
-        print("just after the drag:")
-        print(outline(changed(home, thrown, top_skip)))
-    if landed is not None:
-        print("after landing:")
-        print(outline(changed(home, landed, top_skip)))
+    for name, title in (("3-thrown", "just after the drag"), ("4-landed", "after landing")):
+        shot = load(name)
+        if shot is not None:
+            m = difference(home, shot) > 40
+            m[:top_skip] = False
+            print(f"{title}:")
+            print(outline(m))
 
 if "drag started" not in log:
     failures.append("the mate did not pick up the scripted drag")
