@@ -16,7 +16,17 @@ flop as it moves. How it was made, and how to change it, is in
 ![Remix, the built-in character, in five poses](docs/remix.png)
 
 **Remix** is a DJ robot drawn entirely in code, with arms, legs and a face of its own.
-Switch between the two under **Character** in the menu. You can also drop in a folder of
+
+![Domo in five poses](docs/domo.png)
+
+**Domo** is an image pack with no picture behind it: a script draws every frame, so his
+arms, legs, eyes and mouth all move. He toddles when he wanders, sits down with his legs
+out in front of him, snaps his teeth, and has two dances of his own, Chomp and Monster
+Stomp. How he is drawn, and how to change him, is in
+[characters/domo/_source](characters/domo/_source/README.md). Domo is NHK's mascot; this
+is a fan drawing, and NHK had no part in it.
+
+Switch between them under **Character** in the menu. You can also drop in a folder of
 your own images and it becomes a character that walks and dances too: see
 [characters/README.md](characters/README.md).
 
