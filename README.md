@@ -12,11 +12,13 @@ see [characters/README.md](characters/README.md).
 
 ![Mochi in five poses](docs/mochi.png)
 
-**Mochi** ships as an image pack, animated from a single photo. It blinks and twitches
-its ears while it stands, puts on a happy face and flaps its ears for every dance move,
-and has two dances of its own, Bunny Hop and Ear Wave. Pick it under **Character** in
-the menu, or start with `--character mochi`. How it was made, and how to change it, is
-in [characters/mochi/_source](characters/mochi/_source/README.md).
+**Mochi** ships as an image pack, animated from a single photo. Standing, it blinks,
+flicks an ear and tilts its head; it waddles from foot to foot when it wanders, puts on
+a happy face and flaps its ears for every dance move, and has two dances of its own,
+Bunny Hop and Ear Wave. Its ears swing on springs, so they trail and flop as it moves.
+Pick it under **Character** in the menu, or start with `--character mochi`. How it was
+made, and how to change it, is in
+[characters/mochi/_source](characters/mochi/_source/README.md).
 
 ## Run it
 
