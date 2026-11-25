@@ -151,6 +151,10 @@ public static class ClickThrough
     [DllImport(ObjC, EntryPoint = "objc_msgSend")]
     static extern void Send(IntPtr receiver, IntPtr selector, [MarshalAs(UnmanagedType.I1)] bool value);
 
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    [return: MarshalAs(UnmanagedType.I1)]
+    static extern bool SendForBool(IntPtr receiver, IntPtr selector);
+
     [DllImport("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")]
     static extern int CGWarpMouseCursorPosition(NSPoint position);
 
@@ -191,7 +195,7 @@ public static class ClickThrough
         if (nsWindow == IntPtr.Zero) return null;
         try
         {
-            bool take = held || area.Solid is not { } solid || PointerIsOver(window, nsWindow, solid);
+            bool take = held || area.Solid is not { } solid || solid.Contains(PointerInside(window, nsWindow));
             if (take == area.Ignoring)
             {
                 Send(nsWindow, sel_registerName("setIgnoresMouseEvents:"), !take);
@@ -207,13 +211,34 @@ public static class ClickThrough
         }
     }
 
-    static bool PointerIsOver(Window window, IntPtr nsWindow, PixelRect solid)
+    /// <summary>Where the pointer is, in the window's pixels, whether or not the window is being sent mouse events.</summary>
+    static PixelPoint PointerInside(Window window, IntPtr nsWindow)
     {
-        // Where the pointer is, whether or not the window is being sent mouse events.
         NSPoint inside = SendForPoint(nsWindow, sel_registerName("mouseLocationOutsideOfEventStream"));
         double scale = window.RenderScaling;
-        double x = inside.X * scale, y = (window.Bounds.Height - inside.Y) * scale;
-        return x >= solid.X && x < solid.Right && y >= solid.Y && y < solid.Bottom;
+        return new PixelPoint((int)Math.Floor(inside.X * scale), (int)Math.Floor((window.Bounds.Height - inside.Y) * scale));
+    }
+
+    /// <summary>
+    /// macOS only: where the system says the pointer is and whether the window is ignoring the
+    /// mouse, in words, for the smoke test's report. Null anywhere else.
+    /// </summary>
+    public static string? DescribePointer(Window window)
+    {
+        if (!OperatingSystem.IsMacOS()) return null;
+        IntPtr nsWindow = MacWindow(window);
+        if (nsWindow == IntPtr.Zero) return null;
+        try
+        {
+            MacAreas.TryGetValue(window, out var area);
+            bool ignoring = SendForBool(nsWindow, sel_registerName("ignoresMouseEvents"));
+            return $"the pointer is at {PointerInside(window, nsWindow)} in the window, whose solid area is {area?.Solid}, " +
+                   $"and the window {(ignoring ? "is ignoring" : "takes")} the mouse";
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return null;
+        }
     }
 
     static bool? IsWindowAtMac(Window window, PixelPoint screenPoint)

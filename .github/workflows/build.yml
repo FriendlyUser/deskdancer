@@ -114,7 +114,9 @@ jobs:
           watchdog=$!
           code=0
           wait "$pid" || code=$?
+          # Stop the watchdog, quietly: bash would otherwise report it as "Terminated".
           kill "$watchdog" 2>/dev/null || true
+          wait "$watchdog" 2>/dev/null || true
           [ -f smoke/smoke-result.txt ] || echo "::warning::No smoke-result.txt was written; the app exited before the test started"
           echo "Exit code: $code"
           exit "$code"

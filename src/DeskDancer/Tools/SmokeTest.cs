@@ -16,6 +16,17 @@ namespace DeskDancer.Tools;
 /// </summary>
 public static class SmokeTest
 {
+    /// <summary>
+    /// One thing the test does, once the run is <paramref name="At"/> of the way through. A
+    /// step that needs the app to have got somewhere first says what it is still waiting for,
+    /// or null when that is nothing. It is held until then, and fails the run with those
+    /// words if it is kept waiting too long.
+    /// </summary>
+    sealed record Step(double At, string Name, Action Run, Func<string?>? WaitingFor = null);
+
+    /// <summary>Seconds a step may be kept waiting, and seconds the first frame may take to appear.</summary>
+    const double Patience = 5, StartUpLimit = 30;
+
     public static void Start(App app, CliOptions options)
     {
         string outDir = options.Out ?? Path.Combine(Path.GetTempPath(), "deskdancer-smoke");
@@ -95,10 +106,43 @@ public static class SmokeTest
                 throw new InvalidOperationException($"asked for character '{id}' but got '{mate.Character.Id}'");
         }
 
-        // Each step fires once, at a fraction of the total run time.
-        var steps = new List<(double At, string Name, Action Run)>
+        // Landing can end in a bounce, which touches the floor on its way back up.
+        string? NotOnTheFloor(MateWindow mate)
         {
-            (0.06, "started", () =>
+            var b = mate.Brain;
+            return b.State != MateState.Fall && Math.Abs(b.FootY - b.Floor) <= 2 ? null : $"footY={b.FootY:0.#} floor={b.Floor:0.#} state={b.State}";
+        }
+
+        string? AreaNotApplied() => ClickThrough.Supported && First().SolidArea == null ? "the click-through area was not applied" : null;
+
+        // Two spots on the screen inside the first mate's window: the middle of the rectangle
+        // that holds the character, and a corner of the window that holds nothing.
+        PixelPoint OnCharacter()
+        {
+            var solid = First().SolidArea!.Value;
+            return new PixelPoint(First().Position.X + solid.X + solid.Width / 2, First().Position.Y + solid.Y + solid.Height / 2);
+        }
+        PixelPoint OnEmptyCorner() => new(First().Position.X + 3, First().Position.Y + 3);
+
+        // How long the program has been running. Not every system will say.
+        double? SinceLaunch()
+        {
+            try
+            {
+                return (DateTime.Now - Process.GetCurrentProcess().StartTime).TotalSeconds;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
+            {
+                return null;
+            }
+        }
+
+        // The run is timed from the first frame drawn, and each step fires once, at a fraction
+        // of its length. Nothing here relies on how long the app takes to do something: a
+        // step that follows on from something the app does waits for it.
+        var steps = new List<Step>
+        {
+            new(0.06, "started", () =>
             {
                 if (app.Mates.Count != 1) throw new InvalidOperationException($"expected 1 mate, found {app.Mates.Count}");
                 Note($"settings folder: {Settings.ConfigDir}");
@@ -113,23 +157,9 @@ public static class SmokeTest
                 var screen = First().Screens.Primary ?? First().Screens.All.FirstOrDefault();
                 Note($"screens: {First().Screens.All.Count}, work area: {screen?.WorkingArea}, scaling {First().RenderScaling}");
             }),
-            (0.16, "landed", () =>
-            {
-                var b = First().Brain;
-                if (Math.Abs(b.FootY - b.Floor) > 2) throw new InvalidOperationException($"mate did not land: footY={b.FootY} floor={b.Floor} state={b.State}");
-                Snap(First(), "1-landed");
-            }),
-            // On macOS what a click lands on depends on where the pointer is, so the pointer is
-            // put on the mate first. Elsewhere this step does nothing.
-            (0.162, "pointer onto the mate", () =>
-            {
-                if (OperatingSystem.IsMacOS() && ClickThrough.Supported && First().SolidArea is { } solid)
-                {
-                    var middle = new PixelPoint(First().Position.X + solid.X + solid.Width / 2, First().Position.Y + solid.Y + solid.Height / 2);
-                    if (!ClickThrough.MovePointerTo(First(), middle)) throw new InvalidOperationException("could not move the pointer");
-                }
-            }),
-            (0.17, "click-through", () =>
+            new(0.16, "landed", () => Snap(First(), "1-landed"),
+                WaitingFor: () => NotOnTheFloor(First()) is { } where ? "mate did not land: " + where : null),
+            new(0.17, "click-through", () =>
             {
                 var mate = First();
                 if (!ClickThrough.Supported)
@@ -137,25 +167,12 @@ public static class SmokeTest
                     Note("click-through is not supported here; skipped");
                     return;
                 }
-                if (mate.SolidArea is not { } solid) throw new InvalidOperationException("the click-through area was not applied");
+                var solid = mate.SolidArea!.Value;
                 Note($"clickable area {solid} inside a {mate.Bounds.Width:0}x{mate.Bounds.Height:0} window");
 
-                // Where the system can tell us, prove it: the character is hit, the empty corner is not.
-                var origin = mate.Position;
-                var onCharacter = new PixelPoint(origin.X + solid.X + solid.Width / 2, origin.Y + solid.Y + solid.Height / 2);
-                var onEmptyCorner = new PixelPoint(origin.X + 3, origin.Y + 3);
-                if (OperatingSystem.IsMacOS())
-                {
-                    // The pointer is on the character now. Check that a click there lands on the
-                    // mate, then put the pointer on the empty corner for the next step.
-                    bool? hit = ClickThrough.IsWindowAt(mate, onCharacter);
-                    bool? outside = ClickThrough.IsWindowAt(mate, new PixelPoint(origin.X - 40, origin.Y - 40));
-                    Note($"hit test with the pointer on the character: on character={hit}, outside the window={outside}");
-                    if (hit != true) throw new InvalidOperationException("the character itself is not clickable");
-                    if (outside != false) throw new InvalidOperationException("the hit test reports the mate where its window is not");
-                    if (!ClickThrough.MovePointerTo(mate, onEmptyCorner)) throw new InvalidOperationException("could not move the pointer");
-                }
-                else if (ClickThrough.IsWindowAt(mate, onCharacter) is { } hit && ClickThrough.IsWindowAt(mate, onEmptyCorner) is { } miss)
+                // Where the system can tell us, prove it: the character is hit, the empty corner
+                // is not. (On macOS that depends on where the pointer is; see further down.)
+                if (!OperatingSystem.IsMacOS() && ClickThrough.IsWindowAt(mate, OnCharacter()) is { } hit && ClickThrough.IsWindowAt(mate, OnEmptyCorner()) is { } miss)
                 {
                     Note($"hit test: on character={hit}, on empty corner={miss}");
                     if (!hit) throw new InvalidOperationException("the character itself is not clickable");
@@ -165,7 +182,7 @@ public static class SmokeTest
                 if (backdrop == null) return;
                 // Read the real screen. Just inside the clickable rectangle's top corner there is
                 // window but no character, so the backdrop must show through it.
-                var emptySpot = new PixelPoint(origin.X + solid.X + 6, origin.Y + solid.Y + 6);
+                var emptySpot = new PixelPoint(mate.Position.X + solid.X + 6, mate.Position.Y + solid.Y + 6);
                 var b = mate.Brain;
                 int painted = 0, samples = 0;
                 for (double up = 0.1; up < 0.95; up += 0.1, samples++)
@@ -178,17 +195,9 @@ public static class SmokeTest
                 if (seen is not { } colour) throw new InvalidOperationException("could not read the screen");
                 if (!ScreenProbe.Near(colour, backdropColour)) throw new InvalidOperationException("the window is not transparent: something is painted where it should be see-through");
                 if (painted < 3) throw new InvalidOperationException("the character is not visible on screen");
-            }),
-            (0.176, "pointer onto the empty corner", () =>
-            {
-                if (!OperatingSystem.IsMacOS() || !ClickThrough.Supported) return;
-                var corner = new PixelPoint(First().Position.X + 3, First().Position.Y + 3);
-                bool? miss = ClickThrough.IsWindowAt(First(), corner);
-                Note($"hit test with the pointer on the empty corner: on empty corner={miss}");
-                if (miss != false) throw new InvalidOperationException("clicks on the empty corner are not passing through");
-            }),
-            (0.18, "backflip", () => First().Brain.StartDance([Moves.Backflip, Moves.Twirl])),
-            (0.27, "mid-dance", () =>
+            }, WaitingFor: AreaNotApplied),
+            new(0.18, "backflip", () => First().Brain.StartDance([Moves.Backflip, Moves.Twirl])),
+            new(0.27, "mid-dance", () =>
             {
                 if (!First().Brain.IsDancing) throw new InvalidOperationException("mate is not dancing");
                 Snap(First(), "2-dancing");
@@ -203,7 +212,7 @@ public static class SmokeTest
                 bool clear = left is { } l && ScreenProbe.Near(l, backdropColour) || right is { } r && ScreenProbe.Near(r, backdropColour);
                 if (!clear) throw new InvalidOperationException("the window is not transparent while dancing");
             }),
-            (0.33, "second mate + party", () =>
+            new(0.33, "second mate + party", () =>
             {
                 // Between them the two mates cover both kinds of character: the one drawn in
                 // code and an image pack.
@@ -213,45 +222,42 @@ public static class SmokeTest
                 MustBe(second, id);
                 app.SetParty(true);
             }),
-            (0.50, "party", () =>
+            new(0.50, "party", () =>
             {
-                if (app.Mates.Any(m => !m.Brain.IsDancing)) throw new InvalidOperationException("not every mate joined the party");
                 Snap(app.Mates[0], "3-party-a");
                 Snap(app.Mates[1], "3-party-b");
-            }),
-            (0.55, "party off, resize, menu", () =>
+            }, WaitingFor: () => app.Mates.All(m => m.Brain.IsDancing) ? null
+                : "not every mate joined the party: they are " + string.Join(", ", app.Mates.Select(m => m.Brain.State))),
+            new(0.55, "party off, resize, menu", () =>
             {
                 app.SetParty(false);
                 app.SetTempo(140);
                 app.Mates[1].SetScale(1.5);
                 First().OpenMenu();
             }),
-            (0.63, "menu open", () =>
+            new(0.63, "menu open", () =>
             {
-                if (First().ContextMenu?.IsOpen != true) throw new InvalidOperationException("context menu did not open");
                 int entries = First().ContextMenu!.Items.Count;
                 Note($"menu has {entries} entries");
                 if (entries < 10) throw new InvalidOperationException("context menu was not populated");
                 First().ContextMenu!.Close();
-            }),
-            (0.66, "drag and throw", () =>
+            }, WaitingFor: () => First().ContextMenu?.IsOpen == true ? null : "context menu did not open"),
+            new(0.66, "drag and throw", () =>
             {
                 var b = First().Brain;
                 b.BeginDrag();
                 b.DragTo(b.FootX + 60, b.FootY - 220);
             }),
-            (0.70, "release", () =>
+            new(0.70, "release", () =>
             {
                 var b = First().Brain;
                 if (b.State != MateState.Drag) throw new InvalidOperationException($"expected Drag, was {b.State}");
                 Snap(First(), "4-carried");
                 b.EndDrag();
             }),
-            (0.86, "sit, swap character", () =>
+            new(0.86, "sit, swap character", () =>
             {
-                var b = First().Brain;
-                if (Math.Abs(b.FootY - b.Floor) > 2) throw new InvalidOperationException("mate did not fall back to the floor");
-                b.Sit();
+                First().Brain.Sit();
 
                 // Turn the second mate into a character neither mate has been yet, where there
                 // is one, so that every kind that is installed gets loaded and drawn.
@@ -263,8 +269,8 @@ public static class SmokeTest
                 app.ReloadCharacters();
                 Note($"second mate is now '{second.Character.Id}' ({second.Character.DisplayName})");
                 MustBe(second, id);
-            }),
-            (0.94, "remove mate", () =>
+            }, WaitingFor: () => NotOnTheFloor(First()) is { } where ? "mate did not fall back to the floor: " + where : null),
+            new(0.94, "remove mate", () =>
             {
                 Snap(First(), "5-sitting");
                 Snap(app.Mates[1], "5-swapped");
@@ -273,25 +279,75 @@ public static class SmokeTest
             }),
         };
 
+        // On macOS the window takes the mouse only while the pointer is on the character, so
+        // the pointer is really moved: onto the mate, off onto the empty corner, and back.
+        // After each move the system is asked what a click there would land on. The trip back
+        // matters most: a window that is ignoring the mouse is told nothing about it, and
+        // must notice for itself that the pointer has returned.
+        if (OperatingSystem.IsMacOS() && ClickThrough.Supported)
+        {
+            IEnumerable<Step> Pointer(double at, string where, Func<PixelPoint> spot, bool lands, string problem) =>
+            [
+                new(at, $"pointer onto {where}", () =>
+                {
+                    if (!ClickThrough.MovePointerTo(First(), spot())) throw new InvalidOperationException("could not move the pointer");
+                }, WaitingFor: AreaNotApplied),
+                new(at + 0.001, $"click on {where}",
+                    () => Note($"a click there {(lands ? "lands on the mate" : "passes through")}: {ClickThrough.DescribePointer(First())}"),
+                    WaitingFor: () => ClickThrough.IsWindowAt(First(), spot()) == lands ? null : $"{problem}: {ClickThrough.DescribePointer(First())}"),
+            ];
+            steps.AddRange(Pointer(0.171, "the mate", OnCharacter, true, "the character is not clickable with the pointer on it"));
+            steps.AddRange(Pointer(0.174, "the empty corner", OnEmptyCorner, false, "clicks on the empty corner are not passing through"));
+            steps.AddRange(Pointer(0.177, "the mate again", OnCharacter, true, "the mate did not take clicks again when the pointer came back"));
+            steps = [.. steps.OrderBy(step => step.At)];
+        }
+
         int next = 0;
+        // Seconds on the watch: when the first frame was drawn, and since when the next step
+        // has been kept waiting. Negative until then.
+        double began = -1, held = -1;
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         timer.Tick += (_, _) =>
         {
             if (finished) return;
-            double at = watch.Elapsed.TotalSeconds / total;
+            double now = watch.Elapsed.TotalSeconds;
             try
             {
+                if (began < 0)
+                {
+                    if (First().FrameCount == 0)
+                    {
+                        if (now > StartUpLimit) throw new InvalidOperationException($"no frame was drawn in the first {StartUpLimit:0} seconds");
+                        return;
+                    }
+                    began = now;
+                    Note("first frame drawn" + (SinceLaunch() is { } seconds ? $", {seconds:0.0}s after the program was started" : ""));
+                }
+                double at = (now - began) / total;
                 while (next < steps.Count && at >= steps[next].At)
                 {
-                    Note($"step: {steps[next].Name}");
-                    steps[next++].Run();
+                    var step = steps[next];
+                    if (held < 0)
+                    {
+                        Note($"step: {step.Name}");
+                        held = now;
+                    }
+                    if (step.WaitingFor?.Invoke() is { } problem)
+                    {
+                        if (now - held > Patience) throw new InvalidOperationException($"{problem} (waited {Patience:0}s)");
+                        return;     // look again on the next tick
+                    }
+                    if (now > held) Note($"waited {now - held:0.00}s for that");
+                    held = -1;
+                    step.Run();
+                    next++;
                 }
                 if (at >= 1)
                 {
                     timer.Stop();
                     int frames = First().FrameCount;
                     if (frames < total * 5) Finish(false, $"only {frames} frames were drawn in {total:0}s");
-                    else Finish(true, $"{steps.Count} steps, {frames} frames ({frames / watch.Elapsed.TotalSeconds:0} fps)");
+                    else Finish(true, $"{steps.Count} steps, {frames} frames ({frames / (now - began):0} fps)");
                 }
             }
             catch (Exception ex)
@@ -305,7 +361,6 @@ public static class SmokeTest
             e.Handled = true;
             Finish(false, "unhandled UI exception: " + e.Exception);
         };
-        watch.Restart();
         timer.Start();
     }
 }
