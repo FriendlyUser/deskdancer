@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      mac_smoke_runs:
+        description: Times to run the smoke test on each Mac, to chase a failure that only happens now and then
+        default: "1"
 
 env:
   DOTNET_NOLOGO: true
@@ -93,6 +97,8 @@ jobs:
 
       - name: Smoke test (macOS)
         if: runner.os == 'macOS'
+        env:
+          RUNS: ${{ inputs.mac_smoke_runs || '1' }}
         run: |
           app="dist/${{ matrix.rid }}/DeskDancer.app"
           plutil -lint "$app/Contents/Info.plist"
@@ -107,16 +113,23 @@ jobs:
           # check that the mate is visible and the rest of its window see-through. They are
           # kept with its other results. The runner allows screenshots; a Mac of your own
           # asks first.
-          "$app/Contents/MacOS/DeskDancer" --smoke-test --screenshots --seconds 20 --out "$PWD/smoke" &
-          pid=$!
-          # If the app hangs, stop it so the job fails here and not on a timeout hours later.
-          # Under Rosetta it can take 20 seconds just to appear.
-          ( sleep 180; kill -9 "$pid" ) >/dev/null 2>&1 &
-          watchdog=$!
-          disown 2>/dev/null || true    # or bash reports stopping it, below, as "Terminated"
-          code=0
-          wait "$pid" || code=$?
-          kill "$watchdog" 2>/dev/null || true
+          # A workflow started by hand can ask for the test to be run several times over. It
+          # stops at the first run that fails.
+          case "$RUNS" in ''|*[!0-9]*) RUNS=1 ;; esac
+          for run in $(seq 1 "$RUNS"); do
+            [ "$RUNS" = 1 ] || echo "--- Run $run of $RUNS"
+            "$app/Contents/MacOS/DeskDancer" --smoke-test --screenshots --seconds 20 --out "$PWD/smoke" &
+            pid=$!
+            # If the app hangs, stop it so the job fails here and not on a timeout hours later.
+            # Under Rosetta it can take 20 seconds just to appear.
+            ( sleep 180; kill -9 "$pid" ) >/dev/null 2>&1 &
+            watchdog=$!
+            disown 2>/dev/null || true    # or bash reports stopping it, below, as "Terminated"
+            code=0
+            wait "$pid" || code=$?
+            kill "$watchdog" 2>/dev/null || true
+            [ "$code" = 0 ] || break
+          done
           [ -f smoke/smoke-result.txt ] || echo "::warning::No smoke-result.txt was written; the app exited before the test started"
           echo "Exit code: $code"
           # Above 128 a signal stopped the app: it crashed. macOS writes a report a few seconds
