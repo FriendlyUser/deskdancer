@@ -119,7 +119,9 @@ else:
         around = box(diff.shape, stage, top_skip) & ~on_body
         body_share = changed[on_body].mean() if on_body.any() else 0
         print(f"over the body: {body_share:.0%} of pixels changed")
-        if body_share < 0.15:
+        # The hit box is sized for a mate standing up; sitting or napping it fills less of it
+        # (about 12% for Mochi), and a mate that is not drawn at all leaves close to nothing.
+        if body_share < 0.05:
             failures.append(f"the mate is not visible: only {body_share:.0%} of its body area changed")
         if around.any():
             d = diff[around]
@@ -156,6 +158,9 @@ else:
             print(f"{title}:")
             print(outline(m))
 
+before_drag = overlay_windows(read("3-before-drag-windows.txt"))
+if before_drag:
+    print("overlay windows just before the drag (x, y, w, h):", before_drag)
 if "drag started" not in log:
     failures.append("the mate did not pick up the scripted drag")
 if "dancing: True" not in log:

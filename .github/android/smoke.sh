@@ -64,9 +64,17 @@ echo "last hit box: $hit"
 if [[ $hit =~ hit=\((-?[0-9]+),(-?[0-9]+)\ ([0-9]+)x([0-9]+)\) ]]; then
   x=$(( BASH_REMATCH[1] + BASH_REMATCH[3] / 2 ))
   y=$(( BASH_REMATCH[2] + BASH_REMATCH[4] / 2 ))
+  echo "swiping from ($x,$y)"
   adb shell input swipe $x $y $(( x - 150 )) $(( y - 500 )) 700
   sleep 0.3
   shot 3-thrown
+  # If the touch never reached the mate, keep what Android knew about where it went.
+  if ! adb logcat -d -s DeskDancer:I | grep -q "touch down"; then
+    echo "no touch reached the mate; input and window state follow"
+    adb shell dumpsys input > "$out/3-input.txt"
+    adb shell dumpsys window windows > "$out/3-after-drag-windows.txt"
+    grep -n -i -E "deskdancer|untrusted|obscur|drop|TouchStates|touchedWindows|Last touch|FocusedWindow" "$out/3-input.txt" | head -40
+  fi
   sleep 4
   shot 4-landed
 else
