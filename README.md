@@ -85,7 +85,9 @@ your own images and it becomes a character that walks and dances too: see
 
 ## Run it
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) to build. The result
+Ready-made downloads for Windows, Linux, macOS and Android are on the
+[Releases](https://github.com/FriendlyUser/deskdancer/releases) page. To build it yourself,
+you need the [.NET 10 SDK](https://dotnet.microsoft.com/download). The result
 is a single self-contained program that needs nothing installed to run.
 
 Windows (PowerShell):
@@ -258,6 +260,28 @@ with a scripted swipe, then compares screenshots with one of the bare home scree
 mate has to be visible, the stage around it has to be see-through, the dancing frames have
 to differ, and the drag has to reach the mate. The screenshots are saved as artifacts, and
 a rough outline of what appeared on the screen is printed in the job's log.
+
+### Making a release
+
+Set `<Version>` in `src/DeskDancer/DeskDancer.csproj` to the new number, then on GitHub open
+**Actions > release > Run workflow**, pick `main` and give the same number, like `1.0.0`. The
+workflow builds and tests every platform exactly as the two workflows above do, then
+publishes release `v1.0.0` on that commit with a download for each platform.
+
+**Signing the Android app.** Android only installs a new version of an app over the old one
+when both are signed with the same key. Without a key of the repository's own, each build
+is signed with a key made up for it, so a newer APK has to replace the old one by
+uninstalling it first. To sign every release with one key, make it once and keep it safe:
+
+```bash
+keytool -genkeypair -v -keystore deskdancer.keystore -alias deskdancer -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Then add four repository secrets under **Settings > Secrets and variables > Actions**:
+`ANDROID_KEYSTORE_BASE64` (the output of `base64 -w0 deskdancer.keystore`),
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`deskdancer` above) and
+`ANDROID_KEY_PASSWORD`. Losing the key means the next release cannot install over the
+last, so keep a copy somewhere other than GitHub.
 
 One thing to know when building: Avalonia's build step sends anonymous usage data to
 its vendor. The publish scripts and the workflow switch that off with

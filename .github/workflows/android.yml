@@ -10,6 +10,13 @@ on:
   pull_request:
     paths: ["src/**", "characters/**", ".github/workflows/android.yml", ".github/android/**"]
   workflow_dispatch:
+  # The release workflow runs this one, with the version to stamp on the APK.
+  workflow_call:
+    inputs:
+      version:
+        description: Version for the APK, like 1.0.0. Left empty, the APK is a test build.
+        type: string
+        default: ""
 
 env:
   DOTNET_NOLOGO: true
@@ -40,10 +47,33 @@ jobs:
           -p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME"
           -p:AcceptAndroidSDKLicenses=True
 
+      # Signed with the repository's own key when it has one, so that a new release installs
+      # over the last; see "Signing the Android app" in the README. Without it the APK is
+      # signed with a key made up for this build, and a newer one has to replace it by hand.
       - name: Build the APK
-        run: >
-          dotnet publish src/DeskDancer.Android -c Release -o dist/android
-          -p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME"
+        env:
+          VERSION: ${{ inputs.version }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          props=(-p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME")
+          if [ -n "$VERSION" ]; then
+            IFS=. read -r major minor patch <<< "$VERSION"
+            props+=(-p:ApplicationDisplayVersion="$VERSION" -p:ApplicationVersion=$(( major * 10000 + minor * 100 + patch )))
+          fi
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/deskdancer.keystore"
+            props+=(-p:AndroidKeyStore=true -p:AndroidSigningKeyStore="$RUNNER_TEMP/deskdancer.keystore"
+                    -p:AndroidSigningKeyAlias="$ANDROID_KEY_ALIAS"
+                    -p:AndroidSigningStorePass=env:ANDROID_KEYSTORE_PASSWORD
+                    -p:AndroidSigningKeyPass=env:ANDROID_KEY_PASSWORD)
+            echo "Signing with the repository's key"
+          else
+            echo "No signing key in the repository's secrets: signing with a key made for this build"
+          fi
+          dotnet publish src/DeskDancer.Android -c Release -o dist/android "${props[@]}"
 
       - name: Name the APK
         run: |
