@@ -2,7 +2,7 @@
 
 A little mate that lives on your desktop and dances. It stands on your taskbar, wanders
 about, sits down, naps, and breaks into dance moves on its own or whenever you ask.
-Written in C# with [Avalonia](https://avaloniaui.net/); runs on Windows and Linux.
+Written in C# with [Avalonia](https://avaloniaui.net/); runs on Windows, Linux and macOS.
 
 ![Mochi, the character you start with, in five poses](docs/mochi.png)
 
@@ -39,13 +39,24 @@ Linux:
 dist/linux-x64/DeskDancer
 ```
 
-Either script takes a runtime name if you want to build for the other system, for
-example `./publish.sh win-x64`. Keep the `characters` folder next to the program: Mochi
-lives in it, and without it the mate is Remix.
+macOS:
+
+```bash
+./publish.sh
+open dist/osx-arm64/DeskDancer.app
+```
+
+On a Mac the script builds for the machine it is run on (`osx-arm64` on Apple silicon,
+`osx-x64` on Intel) and wraps the result up as an app.
+
+Either script takes a runtime name if you want to build for another system, for example
+`./publish.sh win-x64`. Keep the `characters` folder next to the program: Mochi lives in
+it, and without it the mate is Remix. In the Mac app it is inside the app itself.
 
 Every push is also built by GitHub Actions. If you would rather not install .NET, open
-the latest run under the repository's **Actions** tab and download `DeskDancer-win-x64`
-or `DeskDancer-linux-x64` from its artifacts.
+the latest run under the repository's **Actions** tab and download one of its artifacts:
+`DeskDancer-win-x64`, `DeskDancer-linux-x64`, `DeskDancer-osx-arm64` (Macs with Apple
+silicon) or `DeskDancer-osx-x64` (Intel Macs).
 
 To run straight from source instead: `dotnet run --project src/DeskDancer`.
 
@@ -86,15 +97,32 @@ image characters are bounced, leaned, spun and flipped as a whole.
 KDE), and a compositing window manager for the transparent background. Without a
 compositor the mate appears on a black rectangle.
 
+**macOS.** Macs with Apple silicon or Intel, on macOS 12 or later. The download unzips
+to `DeskDancer.app`. It is not signed with an Apple developer ID, so the first time
+macOS will say it cannot check the app. Open **System Settings > Privacy & Security**,
+scroll down and choose **Open Anyway** (on macOS 14 and earlier, right-clicking the app
+and choosing **Open** works too), or clear the download flag from a terminal:
+
+```bash
+xattr -dr com.apple.quarantine DeskDancer.app
+```
+
+An app you build yourself has no such flag and just opens. DeskDancer shows in the Dock
+while it runs; quit from there or from the mate's menu. The mate stands on the Dock, or
+on the bottom of the screen if the Dock is hidden or at the side.
+
 **Clicking through.** The mate lives in a small transparent window. So that the empty
 part of it does not block what is underneath, only the area around the character
 takes mouse input. On Windows this is done while the mate is standing, sitting or
 walking; during a dance the whole window (roughly 1.7 x 2 character heights) takes
-clicks. Turn the feature off in the menu if it misbehaves with your setup.
+clicks. Turn the feature off in the menu if it misbehaves with your setup. macOS does
+this by itself, pixel by pixel: a click on a see-through part of any window goes to what
+is underneath, so there is nothing to switch on or off there.
 
-Settings are remembered in `%APPDATA%\DeskDancer` on Windows and `~/.config/DeskDancer`
-on Linux, along with a log file if something goes wrong. That includes which character
-each mate is, so a mate you already have stays as it was when the program is updated.
+Settings are remembered in `%APPDATA%\DeskDancer` on Windows, `~/.config/DeskDancer` on
+Linux and `~/Library/Application Support/DeskDancer` on macOS, along with a log file if
+something goes wrong. That includes which character each mate is, so a mate you already
+have stays as it was when the program is updated.
 
 ## Command line
 
@@ -121,14 +149,17 @@ src/DeskDancer/
   Platform/     Click-through for Windows and X11
   Tools/        Smoke test, contact sheets and the example pack exporter
 characters/     Character packs that ship with the app
+packaging/      What macOS needs in order to treat the build as an app
 ```
 
-The GitHub Actions workflow builds both systems and runs the smoke test on each. The
-smoke test starts the real app and drives it: dancing, a two-mate party, the menu,
-dragging and throwing, with Mochi, Remix and the example pack each taking a turn. On
-Windows it also reads pixels back off the screen to confirm that the window is
-see-through and the character is visible, checks that clicks pass through the empty part
-of the window, and saves pictures of the desktop as artifacts.
+The GitHub Actions workflow builds for Windows, Linux and both kinds of Mac, and runs
+the smoke test on each. The smoke test starts the real app and drives it: dancing, a
+two-mate party, the menu, dragging and throwing, with Mochi, Remix and the example pack
+each taking a turn. On Windows it also reads pixels back off the screen to confirm that
+the window is see-through and the character is visible, checks that clicks pass through
+the empty part of the window, and saves pictures of the desktop as artifacts. On macOS
+it asks the system what a click on the mate, and on the empty corner of its window,
+would land on.
 
 One thing to know when building: Avalonia's build step sends anonymous usage data to
 its vendor. The publish scripts and the workflow switch that off with

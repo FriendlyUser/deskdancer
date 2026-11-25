@@ -4,7 +4,8 @@ A character is a folder of images. Put the folder in either of these places:
 
 - the `characters` folder next to the program, or
 - your personal one: `%APPDATA%\DeskDancer\characters` on Windows,
-  `~/.config/DeskDancer/characters` on Linux. The menu item
+  `~/.config/DeskDancer/characters` on Linux,
+  `~/Library/Application Support/DeskDancer/characters` on macOS. The menu item
   **Character > Open characters folder** creates it and opens it for you.
 
 Then right-click the mate and choose **Character > Reload characters**.

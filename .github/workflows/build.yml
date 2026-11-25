@@ -21,6 +21,12 @@ jobs:
             rid: win-x64
           - os: ubuntu-latest
             rid: linux-x64
+          # Both Mac builds are made on an Apple silicon runner. The Intel one runs there
+          # through Rosetta.
+          - os: macos-latest
+            rid: osx-arm64
+          - os: macos-latest
+            rid: osx-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -30,11 +36,17 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Publish
+        if: runner.os != 'macOS'
         shell: bash
         run: >
           dotnet publish src/DeskDancer -c Release -r ${{ matrix.rid }} --self-contained true
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
           -p:DebugType=none -o dist/${{ matrix.rid }}
+
+      # On a Mac the publish script also wraps the program up as DeskDancer.app and signs it.
+      - name: Publish (macOS)
+        if: runner.os == 'macOS'
+        run: ./publish.sh ${{ matrix.rid }}
 
       # The smoke test starts the real app, drives every feature for a few seconds and
       # exits non-zero if a step fails, a window stops drawing or anything throws.
@@ -79,6 +91,34 @@ jobs:
           Write-Host "Exit code: $($app.ExitCode)"
           exit $app.ExitCode
 
+      - name: Smoke test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          app="dist/${{ matrix.rid }}/DeskDancer.app"
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          # This runner is an Apple silicon Mac, which only runs the Intel build through Rosetta.
+          if [ "${{ matrix.rid }}" = osx-x64 ] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+            echo "::warning::Rosetta is not installed on this runner, so the Intel build was made but not run"
+            exit 0
+          fi
+          mkdir -p smoke
+          "$app/Contents/MacOS/DeskDancer" --smoke-test --seconds 20 --out "$PWD/smoke" &
+          pid=$!
+          # Pictures of the real desktop: standing still, then mid-party with two mates. They
+          # are nice to have; failing to take one must not fail the build.
+          ( sleep 4; screencapture -x smoke/desktop-1-standing.png
+            sleep 6; screencapture -x smoke/desktop-2-party.png ) >/dev/null 2>&1 &
+          # If the app hangs, stop it so the job fails here and not on a timeout hours later.
+          ( sleep 90; kill -9 "$pid" ) >/dev/null 2>&1 &
+          watchdog=$!
+          code=0
+          wait "$pid" || code=$?
+          kill "$watchdog" 2>/dev/null || true
+          [ -f smoke/smoke-result.txt ] || echo "::warning::No smoke-result.txt was written; the app exited before the test started"
+          echo "Exit code: $code"
+          exit "$code"
+
       - name: Upload smoke test output
         if: always()
         uses: actions/upload-artifact@v6
@@ -87,8 +127,14 @@ jobs:
           path: smoke
           if-no-files-found: warn
 
+      # An app is a folder whose signature and file permissions matter, and an artifact
+      # upload keeps neither. ditto makes a zip that does.
+      - name: Zip the app (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent "dist/${{ matrix.rid }}/DeskDancer.app" "dist/DeskDancer-${{ matrix.rid }}.zip"
+
       - name: Upload build
         uses: actions/upload-artifact@v6
         with:
           name: DeskDancer-${{ matrix.rid }}
-          path: dist/${{ matrix.rid }}
+          path: ${{ runner.os == 'macOS' && format('dist/DeskDancer-{0}.zip', matrix.rid) || format('dist/{0}', matrix.rid) }}

@@ -12,7 +12,7 @@ namespace DeskDancer.Tools;
 /// <summary>
 /// Drives the real app through its features for a few seconds and exits with 0 only if
 /// every step ran, the windows kept drawing frames and nothing threw. This is what CI
-/// runs on Windows and Linux.
+/// runs on Windows, Linux and macOS.
 /// </summary>
 public static class SmokeTest
 {
@@ -101,7 +101,8 @@ public static class SmokeTest
             (0.06, "started", () =>
             {
                 if (app.Mates.Count != 1) throw new InvalidOperationException($"expected 1 mate, found {app.Mates.Count}");
-                Note($"characters: {string.Join(", ", app.Library.Available.Select(c => c.Id))}");
+                Note($"settings folder: {Settings.ConfigDir}");
+                Note($"characters: {string.Join(", ", app.Library.Available.Select(c => c.Id))} (shipped ones from {Characters.CharacterLibrary.AppFolder})");
                 foreach (string id in packs)
                     if (app.Library.ErrorFor(id) is { } error)
                         throw new InvalidOperationException($"character '{id}' failed to load: {error}");
@@ -123,7 +124,20 @@ public static class SmokeTest
                 var mate = First();
                 if (!ClickThrough.Supported)
                 {
-                    Note("click-through is not supported here; skipped");
+                    // No clickable area is set here. Where the system can still say what a click
+                    // would land on (macOS, which leaves see-through parts of a window out by
+                    // itself), report it, and make sure the mate can be clicked at all.
+                    var body = new PixelPoint((int)mate.Brain.FootX, (int)(mate.Brain.FootY - 0.4 * mate.Brain.H));
+                    var corner = new PixelPoint(mate.Position.X + 3, mate.Position.Y + 3);
+                    if (ClickThrough.IsWindowAt(mate, body) is { } onBody && ClickThrough.IsWindowAt(mate, corner) is { } onCorner)
+                    {
+                        Note($"hit test with no clickable area set: on character={onBody}, on empty corner={onCorner}");
+                        if (!onBody) throw new InvalidOperationException("the character itself is not clickable");
+                    }
+                    else
+                    {
+                        Note("click-through is not supported here; skipped");
+                    }
                     return;
                 }
                 if (mate.SolidArea is not { } solid) throw new InvalidOperationException("the click-through area was not applied");

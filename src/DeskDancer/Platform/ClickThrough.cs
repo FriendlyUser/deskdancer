@@ -12,6 +12,8 @@ namespace DeskDancer.Platform;
 /// Windows: a window region. This also clips drawing, so callers only shrink it while
 /// nothing is being drawn outside the rectangle.
 /// Linux (X11): an input shape, which affects mouse input only.
+/// macOS: nothing is set. The system itself leaves a window out when a click lands on a
+/// part of it that is fully see-through, so only the character and its shadow are hit.
 /// Anywhere else this does nothing and the whole window stays clickable.
 /// </summary>
 public static class ClickThrough
@@ -92,11 +94,13 @@ public static class ClickThrough
     }
 
     /// <summary>
-    /// Windows only: whether the top-level window under a screen point is <paramref name="window"/>.
-    /// Null on other systems. Used by the smoke test to prove click-through really works.
+    /// Whether a click at a screen point would land on <paramref name="window"/>. Windows and
+    /// macOS; null where the system cannot be asked. Used by the smoke test to prove
+    /// click-through really works.
     /// </summary>
     public static bool? IsWindowAt(Window window, PixelPoint screenPoint)
     {
+        if (OperatingSystem.IsMacOS()) return IsWindowAtMac(window, screenPoint);
         if (!OperatingSystem.IsWindows()) return null;
         var handle = window.TryGetPlatformHandle();
         if (handle == null) return null;
@@ -104,6 +108,66 @@ public static class ClickThrough
         IntPtr hit = WindowFromPoint(new NativePoint { X = screenPoint.X, Y = screenPoint.Y });
         if (hit != IntPtr.Zero) hit = GetAncestor(hit, root);
         return hit == handle.Handle;
+    }
+
+    // ---- macOS ----
+
+    const string ObjC = "/usr/lib/libobjc.A.dylib";
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct NSPoint
+    {
+        public double X, Y;
+    }
+
+    [DllImport(ObjC)]
+    static extern IntPtr objc_getClass(string name);
+
+    [DllImport(ObjC)]
+    static extern IntPtr sel_registerName(string name);
+
+    // objc_msgSend has no fixed signature: each use is declared with the arguments and result
+    // of the method it calls.
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    static extern nint SendForInteger(IntPtr receiver, IntPtr selector);
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    static extern NSPoint SendForPoint(IntPtr receiver, IntPtr selector, NSPoint point);
+
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")]
+    static extern nint SendForInteger(IntPtr receiver, IntPtr selector, NSPoint point, nint number);
+
+    static bool? IsWindowAtMac(Window window, PixelPoint screenPoint)
+    {
+        IntPtr nsWindow = window.TryGetPlatformHandle() switch
+        {
+            Avalonia.Platform.IMacOSTopLevelPlatformHandle mac => mac.NSWindow,
+            { HandleDescriptor: "NSWindow" } other => other.Handle,
+            _ => IntPtr.Zero,
+        };
+        if (nsWindow == IntPtr.Zero) return null;
+        try
+        {
+            // AppKit measures a window's inside in points, up from its bottom-left corner. Give
+            // it the spot that way and let it work out where that is on the screen: it knows
+            // where every monitor sits and how each is scaled.
+            double scale = window.RenderScaling;
+            var inside = new NSPoint
+            {
+                X = (screenPoint.X - window.Position.X) / scale,
+                Y = window.Bounds.Height - (screenPoint.Y - window.Position.Y) / scale,
+            };
+            NSPoint onScreen = SendForPoint(nsWindow, sel_registerName("convertPointToScreen:"), inside);
+            // The window a mouse click there would go to. Windows that are see-through at that
+            // spot, or that ignore the mouse, are not counted.
+            nint hit = SendForInteger(objc_getClass("NSWindow"),
+                sel_registerName("windowNumberAtPoint:belowWindowWithWindowNumber:"), onScreen, 0);
+            return hit == SendForInteger(nsWindow, sel_registerName("windowNumber"));
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return null;
+        }
     }
 
     // ---- X11 ----
