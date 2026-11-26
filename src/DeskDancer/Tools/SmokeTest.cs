@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -119,6 +120,9 @@ public static class SmokeTest
                 throw new InvalidOperationException($"the screenshot shows {plain} where the backdrop ({backdropColour}) should be, so it is not showing this program's windows. Is screen recording allowed for whatever started it?");
             backdropSeen = plain;
         }
+
+        // Ticks of the run's timer spent waiting for the Settings window to draw what it was last told.
+        int looksAtSettings = 0;
 
         MateWindow First() => app.Mates[0];
         Screen? MainScreen() => First().Screens.Primary ?? First().Screens.All.FirstOrDefault();
@@ -467,9 +471,132 @@ public static class SmokeTest
                 bool hasActions = First().Brain.AvailableActions().Count > 0;
                 if (items.FirstOrDefault(i => i.Header as string == "Actions") is not { } actions || actions.IsVisible != hasActions)
                     throw new InvalidOperationException($"the Actions menu should be {(hasActions ? "shown" : "hidden")} for {First().Character.DisplayName}");
+                if (!items.Any(i => i.Header as string == "Settings..."))
+                    throw new InvalidOperationException("the menu has no Settings... entry");
                 First().ContextMenu!.Close();
                 app.Settings.DisabledMoves.Clear();
             }, WaitingFor: () => First().ContextMenu?.IsOpen == true ? null : "context menu did not open"),
+            // The Settings window, opened as the menu's "Settings..." opens it, for the first mate.
+            new(0.635, "settings window", () => app.OpenSettings(First())),
+            new(0.645, "settings", () =>
+            {
+                var window = app.SettingsWindow!;
+                var settings = app.Settings;
+                void Fail(string why) => throw new InvalidOperationException("Settings window: " + why);
+                bool Setting(string name) => (bool)typeof(Settings).GetProperty(name)!.GetValue(settings)!;
+
+                // It shows the settings as they are. (This test switched wandering off at the start.)
+                foreach (var (name, box) in window.Switches)
+                    if (box.IsChecked != Setting(name)) Fail($"the {name} switch shows {box.IsChecked} but the setting is {Setting(name)}");
+                var lists = window.GetLogicalDescendants().OfType<ComboBox>().ToList();
+                if (lists.Count != 3) Fail($"expected lists for the character, the size and the tempo, found {lists.Count}");
+                var (character, size, tempo) = (lists[0], lists[1], lists[2]);
+                string ShownCharacter() => character.SelectedIndex >= 0 ? app.Library.Available[character.SelectedIndex].Id : "nothing";
+                if (!Same(ShownCharacter(), First().Settings.Character)) Fail($"it shows the mate as {ShownCharacter()}, not '{First().Settings.Character}'");
+                if (tempo.SelectedIndex != Array.IndexOf(Settings.Tempos, 140)) Fail("it does not show the tempo, which is 140");
+
+                // Flipping a switch changes the setting, there and then.
+                foreach (var (name, box) in window.Switches)
+                {
+                    bool before = Setting(name);
+                    box.IsChecked = !before;
+                    if (Setting(name) == before) Fail($"flipping the {name} switch did not change the setting");
+                    // "Always on top" is one the windows have to be told about.
+                    if (name == nameof(Settings.AlwaysOnTop) && app.Mates.Any(m => m.Topmost == before))
+                        Fail("switching \"Always on top\" did not reach the mates' windows");
+                    box.IsChecked = before;
+                    if (Setting(name) != before) Fail($"flipping the {name} switch back did not change the setting back");
+                }
+                if (app.Mates.Any(m => m.Topmost != settings.AlwaysOnTop)) Fail("the mates' windows were not put back on top");
+
+                // So do the lists: the mate's size, and the tempo, which the clock has to be told about.
+                double scale = First().Settings.Scale;
+                size.SelectedIndex = Array.IndexOf(MateSettings.Sizes, 1.25);
+                if (Math.Abs(First().Settings.Scale - 1.25) > 0.001) Fail("choosing a size did not resize the mate");
+                size.SelectedIndex = Array.IndexOf(MateSettings.Sizes, scale);
+                tempo.SelectedIndex = Array.IndexOf(Settings.Tempos, 100);
+                if (Math.Abs(settings.Bpm - 100) > 0.001 || Math.Abs(app.Clock.Bpm - 100) > 0.001) Fail("choosing a tempo did not change it");
+
+                // Where the user's characters are kept. A folder of the test's own is chosen,
+                // with a copy of the smallest pack in it under another name: that character
+                // must turn up, alongside the ones that come with the program.
+                if (window.ShownFolder != app.Library.SaveFolder) Fail($"it shows the characters folder as {window.ShownFolder}, not {app.Library.SaveFolder}");
+                string mine = Path.Combine(outDir, "my characters");
+                var smallest = app.Library.Available.Where(c => c.Folder != null)
+                    .MinBy(c => Directory.EnumerateFiles(c.Folder!, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length));
+                if (smallest?.Folder != null)
+                {
+                    void CopyPack(string from, string to)
+                    {
+                        Directory.CreateDirectory(to);
+                        foreach (string file in Directory.EnumerateFiles(from)) File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
+                        foreach (string dir in Directory.EnumerateDirectories(from))
+                            if (Path.GetFileName(dir) is var name && !name.StartsWith('_') && !name.StartsWith('.')) CopyPack(dir, Path.Combine(to, name));
+                    }
+                    CopyPack(smallest.Folder, Path.Combine(mine, "smoke-pal"));
+                    int before = app.Library.Available.Count;
+                    if (app.SetCharactersFolder(mine) is { } problem) Fail("could not choose a folder: " + problem);
+                    window.Refresh();
+                    if (window.ShownFolder != Path.GetFullPath(mine)) Fail($"after choosing {mine} it shows {window.ShownFolder}");
+                    if (app.Library.Available.Count != before + 1 || !app.Library.Available.Any(c => Same(c.Id, "smoke-pal")))
+                        Fail("the character in the chosen folder was not found: " + string.Join(", ", app.Library.Available.Select(c => c.Id)));
+                    app.Library.Load("smoke-pal");
+                    if (app.Library.ErrorFor("smoke-pal") is { } error) Fail("the character in the chosen folder did not load: " + error);
+                    Note($"characters kept in \"{mine}\": found smoke-pal (a copy of {smallest.Id}) next to the {before} there were");
+
+                    // And back to the usual folder: that character goes, the rest stay.
+                    if (app.SetCharactersFolder(null) is { } trouble) Fail("could not go back to the usual folder: " + trouble);
+                    window.Refresh();
+                    if (window.ShownFolder != Characters.CharacterLibrary.UserFolder || settings.CharactersFolder != null)
+                        Fail("it did not go back to the usual folder");
+                    if (app.Library.Available.Count != before) Fail("going back to the usual folder did not put the list of characters back");
+                }
+
+                // Saving. Nothing here may touch the user's own settings file, so what is saved
+                // goes to a file of the test's own; and with saving as you go switched off, a
+                // change is only noted (that much is safe to try: it writes nothing).
+                string file = Path.Combine(outDir, "settings-test.json");
+                var kept = new Settings { Wander = false, AutoSave = false, Bpm = 140, CharactersFolder = mine, Mates = [new MateSettings { Character = "kori", Scale = 2 }] };
+                kept.SetMoveEnabled("backflip", false);
+                if (!kept.SaveTo(file)) Fail("could not write " + file);
+                var back = Settings.LoadFrom(file);
+                if (back.Wander || back.AutoSave || Math.Abs(back.Bpm - 140) > 0.001 || back.CharactersFolder != mine || back.MoveEnabled("backflip")
+                    || back.Mates is not [{ Character: "kori", Scale: 2 }])
+                    Fail("settings did not come back from the file as they were saved");
+                if (kept.Unsaved || !kept.Save() || !kept.Unsaved) Fail("with saving as you go switched off, a change should only be noted as not saved yet");
+                if (!Settings.LoadFrom(Path.Combine(outDir, "no-such-file.json")).AutoSave) Fail("a new copy should save as it goes");
+
+                // Reset to defaults puts the tempo and every switch back, and keeps the mates.
+                settings.SetMoveEnabled(Moves.Backflip.Id, false);
+                window.ResetToDefaults();
+                if (Math.Abs(settings.Bpm - 120) > 0.001 || Math.Abs(app.Clock.Bpm - 120) > 0.001 || !settings.Wander || !settings.AutoDance
+                    || !settings.AutoSave || settings.DisabledMoves.Count != 0)
+                    Fail("Reset to defaults did not put everything back");
+                if (app.Mates.Count != 2 || Math.Abs(First().Settings.Scale - scale) > 0.001) Fail("Reset to defaults changed the mates");
+                // The rest of this test wants the mates to stay where they are put.
+                settings.Wander = false;
+                settings.AutoDance = false;
+                window.Refresh();
+                // After all that looking for characters again, the page still shows the mate's.
+                if (!Same(ShownCharacter(), First().Settings.Character)) Fail($"it ends up showing the mate as {ShownCharacter()}, not '{First().Settings.Character}'");
+
+                Note($"the Settings window ({window.Bounds.Width:0}x{window.Bounds.Height:0}) has {window.Switches.Count} switches, the mate, the tempo and the characters folder; every one of them works");
+            }, WaitingFor: () => app.SettingsWindow is { IsVisible: true, Bounds.Width: > 0 } ? null : "the Settings window did not open"),
+            // A moment later, once the window has laid itself out again: what it is showing.
+            new(0.652, "settings shown", () =>
+            {
+                var window = app.SettingsWindow!;
+                var lists = window.GetLogicalDescendants().OfType<ComboBox>().ToList();
+                string Showing(ComboBox list) => list.SelectionBoxItem as string ?? "nothing";
+                string mate = app.Library.Available.First(c => Same(c.Id, First().Settings.Character)).Name;
+                if (Showing(lists[0]) != mate) throw new InvalidOperationException($"the Settings window shows the mate's character as {Showing(lists[0])}, not {mate}");
+                if (Showing(lists[2]) != "120 BPM") throw new InvalidOperationException($"the Settings window shows the tempo as {Showing(lists[2])}, not 120 BPM");
+                window.Snapshot(Path.Combine(outDir, "3-settings.png"));
+                Note($"it shows the mate as {Showing(lists[0])} at {Showing(lists[1])}, the tempo as {Showing(lists[2])}, and the characters folder as {window.ShownFolder}");
+                window.Close();
+            }, WaitingFor: () => ++looksAtSettings > 4 ? null : "the Settings window is laying itself out"),
+            new(0.657, "settings closed", () => { },
+                WaitingFor: () => app.SettingsWindow == null ? null : "the Settings window did not close"),
             new(0.66, "drag and throw", () =>
             {
                 var b = First().Brain;

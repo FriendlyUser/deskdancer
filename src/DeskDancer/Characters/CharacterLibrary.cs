@@ -21,6 +21,15 @@ public sealed class CharacterLibrary
     public string? ExtraFolder { get; set; }
 
     /// <summary>
+    /// A folder the user chose for their own characters (see <see cref="Settings.CharactersFolder"/>),
+    /// scanned before <see cref="UserFolder"/>. Null for none.
+    /// </summary>
+    public string? ChosenFolder { get; set; }
+
+    /// <summary>Where the user's own characters are kept: the folder they chose, or the usual one.</summary>
+    public string SaveFolder => string.IsNullOrWhiteSpace(ChosenFolder) ? UserFolder : ChosenFolder;
+
+    /// <summary>
     /// Where the packs that come with the program are, if not <see cref="AppFolder"/>: on
     /// Android, the copies unpacked from the APK. Like those, they give way to a pack of the
     /// same name in the user's own folder.
@@ -83,7 +92,7 @@ public sealed class CharacterLibrary
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { CharacterIds.BuiltIn };
 
         // Later folders win nothing: the first pack with a given folder name is the one used.
-        foreach (var root in new[] { ExtraFolder, UserFolder, ShippedFolder ?? AppFolder })
+        foreach (var root in new[] { ExtraFolder, ChosenFolder, UserFolder, ShippedFolder ?? AppFolder })
         {
             if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) continue;
             try
@@ -209,10 +218,16 @@ public sealed class CharacterLibrary
     }
 
     /// <summary>Creates the per-user characters folder with a short how-to in it, and returns its path.</summary>
-    public static string EnsureUserFolder()
+    public static string EnsureUserFolder() => EnsureFolder(UserFolder);
+
+    /// <summary>Creates the folder the user's own characters are kept in (<see cref="SaveFolder"/>), with a short how-to in it, and returns its path.</summary>
+    public string EnsureSaveFolder() => EnsureFolder(SaveFolder);
+
+    /// <summary>Creates a characters folder with a short how-to in it, and returns its path.</summary>
+    public static string EnsureFolder(string folder)
     {
-        Directory.CreateDirectory(UserFolder);
-        string readme = Path.Combine(UserFolder, "README.txt");
+        Directory.CreateDirectory(folder);
+        string readme = Path.Combine(folder, "README.txt");
         if (!File.Exists(readme))
         {
             File.WriteAllText(readme, """
@@ -236,6 +251,6 @@ public sealed class CharacterLibrary
 
                 """.Replace("\n", Environment.NewLine));
         }
-        return UserFolder;
+        return folder;
     }
 }

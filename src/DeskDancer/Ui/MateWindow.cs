@@ -436,7 +436,7 @@ public sealed class MateWindow : Window
         menu.Items.Add(routineMenu);
         menu.Items.Add(MovesToUse(FillDances));
         menu.Items.Add(Check("Dance party (everyone, non-stop)", _app.Conductor.PartyOn, _app.SetParty));
-        menu.Items.Add(Sub("Tempo", new[] { 80, 100, 120, 140, 160 }.Select(bpm =>
+        menu.Items.Add(Sub("Tempo", DeskDancer.Settings.Tempos.Select(bpm =>
             (Control)Check($"{bpm} BPM", Math.Abs(settings.Bpm - bpm) < 0.5, _ => _app.SetTempo(bpm)))));
         menu.Items.Add(new Separator());
 
@@ -457,11 +457,11 @@ public sealed class MateWindow : Window
             .Select(c => (Control)Check(Label(c), c.Id.Equals(_character.Id, StringComparison.OrdinalIgnoreCase), _ => SetCharacter(c.Id)))
             .ToList();
         characterItems.Add(new Separator());
-        characterItems.Add(Item("Open characters folder", _app.OpenCharactersFolder));
+        characterItems.Add(Item("Open characters folder", () => _app.OpenCharactersFolder()));
         characterItems.Add(Item("Reload characters", _app.ReloadCharacters));
         menu.Items.Add(Sub("Character", characterItems));
 
-        menu.Items.Add(Sub("Size", new[] { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0 }.Select(scale =>
+        menu.Items.Add(Sub("Size", MateSettings.Sizes.Select(scale =>
             (Control)Check($"{scale * 100:0}%", Math.Abs(Settings.Scale - scale) < 0.01, _ => SetScale(scale)))));
         menu.Items.Add(Sub("Add another mate", characters.Select(c => (Control)Item(c.Name, () => _app.AddMate(c.Id)))));
         if (_app.Mates.Count > 1) menu.Items.Add(Item("Remove this mate", () => _app.RemoveMate(this)));
@@ -469,6 +469,7 @@ public sealed class MateWindow : Window
         if (ClickThrough.Supported)
             menu.Items.Add(Check("Click through empty space", settings.ClickThrough, v => Toggle(x => settings.ClickThrough = x, v)));
         menu.Items.Add(new Separator());
+        menu.Items.Add(Item("Settings...", () => _app.OpenSettings(this)));
         menu.Items.Add(Item("Quit", () => _app.Quit()));
     }
 

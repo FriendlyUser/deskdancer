@@ -25,6 +25,8 @@ public sealed class App : Application
     public BeatClock Clock { get; } = new();
     public Conductor Conductor { get; private set; } = null!;
     public List<MateWindow> Mates { get; } = [];
+    /// <summary>The Settings window while it is open.</summary>
+    public SettingsWindow? SettingsWindow { get; private set; }
 
     public override void Initialize()
     {
@@ -33,9 +35,6 @@ public sealed class App : Application
         // The party dances only the moves that are switched on; Settings is read each time, as
         // it is replaced once the saved settings are loaded.
         Conductor = new Conductor(Clock) { Pool = () => Settings.BuiltInMoves() };
-        Library.ExtraFolder = Options.CharactersFolder;
-        Library.Scan();
-
         if (!Options.IsTool)
         {
             // Test runs start from defaults and never write to the user's settings file.
@@ -46,6 +45,14 @@ public sealed class App : Application
                 Settings.Mates = [new MateSettings { Character = Options.Character }];
                 Settings.Persist = false;
             }
+            // The settings say where the user keeps their own characters, so they are read first.
+            Library.ChosenFolder = Settings.CharactersFolder;
+        }
+        Library.ExtraFolder = Options.CharactersFolder;
+        Library.Scan();
+
+        if (!Options.IsTool)
+        {
             Clock.Bpm = Settings.Bpm;
 
             // With mates on screen an image pack holds only the clips it is showing; see
@@ -126,16 +133,79 @@ public sealed class App : Application
     public void SetTempo(double bpm)
     {
         Settings.Bpm = bpm;
-        Clock.Bpm = bpm;
         Settings.Save();
+        ApplySettings();
     }
 
     public void SetAlwaysOnTop(bool on)
     {
         Settings.AlwaysOnTop = on;
-        foreach (var mate in Mates) mate.Topmost = on;
         Settings.Save();
+        ApplySettings();
     }
+
+    /// <summary>
+    /// Passes on the settings that something other than <see cref="Settings"/> has to know
+    /// about: the tempo to the clock, and "always on top" to the windows. The rest are read
+    /// from it as they are needed. Called after any setting has changed.
+    /// </summary>
+    public void ApplySettings()
+    {
+        if (Math.Abs(Clock.Bpm - Math.Clamp(Settings.Bpm, 40, 240)) > 0.001) Clock.Bpm = Settings.Bpm;
+        foreach (var mate in Mates) mate.Topmost = Settings.AlwaysOnTop;
+    }
+
+    /// <summary>
+    /// Opens the Settings window, or brings it to the front. <paramref name="mate"/> is the
+    /// mate whose menu asked for it: the window can change that mate's character and size.
+    /// </summary>
+    public SettingsWindow OpenSettings(MateWindow? mate = null)
+    {
+        if (SettingsWindow is { } open)
+        {
+            if (mate != null) open.ShowFor(mate);
+            open.Activate();
+            return open;
+        }
+        var window = new SettingsWindow(this, mate ?? Mates.FirstOrDefault());
+        window.Closed += (_, _) => SettingsWindow = null;
+        SettingsWindow = window;
+        window.Show();
+        return window;
+    }
+
+    /// <summary>
+    /// Keeps the user's own characters in <paramref name="folder"/> from now on, or in the
+    /// usual folder for null, and looks for characters again. The folder is made if it is
+    /// not there. Returns what went wrong, or null if nothing did (and then nothing changes).
+    /// </summary>
+    public string? SetCharactersFolder(string? folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder)) folder = null;
+        if (folder != null)
+        {
+            try
+            {
+                folder = Path.GetFullPath(folder.Trim());
+                Directory.CreateDirectory(folder);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                return $"Characters cannot be kept in {folder}: {ex.Message}";
+            }
+            // Choosing the usual folder is the same as choosing none.
+            if (Path.GetFullPath(CharacterLibrary.UserFolder).Equals(folder, PathComparison)) folder = null;
+        }
+        Settings.CharactersFolder = folder;
+        Library.ChosenFolder = folder;
+        Settings.Save();
+        ReloadCharacters();
+        return null;
+    }
+
+    /// <summary>How folder names are compared here: Windows and macOS do not tell capitals apart, Linux does.</summary>
+    static StringComparison PathComparison =>
+        OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
     public void ReloadCharacters()
     {
@@ -145,16 +215,32 @@ public sealed class App : Application
         foreach (var mate in Mates) mate.ReloadCharacter();
     }
 
-    public void OpenCharactersFolder()
+    /// <summary>Shows the folder the user's own characters are kept in, making it first if need be.</summary>
+    public string? OpenCharactersFolder()
     {
         try
         {
-            string folder = CharacterLibrary.EnsureUserFolder();
+            return OpenFolder(Library.EnsureSaveFolder());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("Could not make the characters folder", ex);
+            return "Could not make the characters folder: " + ex.Message;
+        }
+    }
+
+    /// <summary>Shows a folder in the system's file manager. Returns what went wrong, or null.</summary>
+    public string? OpenFolder(string folder)
+    {
+        try
+        {
             Process.Start(new ProcessStartInfo { FileName = folder, UseShellExecute = true });
+            return null;
         }
         catch (Exception ex)
         {
-            Log.Error("Could not open the characters folder", ex);
+            Log.Error($"Could not open the folder {folder}", ex);
+            return $"Could not open the folder {folder}: {ex.Message}";
         }
     }
 
