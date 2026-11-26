@@ -410,7 +410,7 @@ public static class SmokeTest
                         Start(goes);
                         Run(goes.Seconds + 0.6);
                         double low = Math.Min(side * travel.Min, side * travel.Max), high = Math.Max(side * travel.Min, side * travel.Max);
-                        string went = $"went from {(leftmost - from) / b.H:0.00} to {(rightmost - from) / b.H:0.00} heights and ended {(b.FootX - from) / b.H:0.00} along";
+                        string went = $"ran {goes.Seconds:0.0} seconds, went from {(leftmost - from) / b.H:0.00} to {(rightmost - from) / b.H:0.00} heights and ended {(b.FootX - from) / b.H:0.00} along";
                         if (b.State == MateState.Act) throw new InvalidOperationException($"{goes.Name} was still going after {goes.Seconds + 0.6:0.0} seconds");
                         if (Math.Abs((b.FootX - from) / b.H - side * travel.End) > 0.03 || Math.Abs((leftmost - from) / b.H - low) > 0.03
                             || Math.Abs((rightmost - from) / b.H - high) > 0.03)

@@ -400,6 +400,11 @@ public static partial class SpritePackLoader
 
     static readonly string[] ImageExtensions = [".png", ".gif", ".webp", ".jpg", ".jpeg", ".bmp"];
     const int MaxFramesPerClip = 400;
+    /// <summary>
+    /// A clip that is read as it is shown can be far longer than one that is unpacked: its
+    /// frames are never all in memory, so there is nothing to save by cutting it short.
+    /// </summary>
+    const int MaxStreamedFrames = 6000;
     const int MaxTravelKeys = 4000;
 
     /// <summary>
@@ -749,11 +754,8 @@ public static partial class SpritePackLoader
     /// </summary>
     static SpriteClip? StreamClip(string dir, ClipSource src, PackOptions options, double idleShrink)
     {
-        bool once = !(src.Loop ?? !IsAction(src.Key));
-        if (!once || src.Still || src.File == null || src.Columns * src.Rows > 1 || src.AnchorX == null || src.AnchorY == null
-            || options.Normalize)
-            return null;
-        string file = Path.Combine(dir, src.File);
+        if (!MayStream(src, options)) return null;
+        string file = Path.Combine(dir, src.File!);
         if (!File.Exists(file)) return null;
 
         var watch = Stopwatch.StartNew();
@@ -762,36 +764,23 @@ public static partial class SpritePackLoader
         try
         {
             codec = SKCodec.Create(data);
-            if (codec == null || codec.FrameCount < 2) return null;
+            if (codec == null) return null;
             var info = InfoFor(codec.Info.Width, codec.Info.Height);
-            int n = Math.Min(codec.FrameCount, MaxFramesPerClip);
-            // Not small enough to be simpler unpacked, and not so vast in the frame that even
-            // the few frames kept at once would be too much: that one is unpacked, which
-            // shrinks it.
-            if (info.Width <= 0 || info.Height <= 0 || info.BytesSize64 * n < StreamFrom || info.BytesSize64 > LargestStreamedFrame)
-                return null;
-
+            if (StreamPlan(codec, info) is not { } builtOn) return null;
             var frameInfo = codec.FrameInfo;
-            var builtOn = new int[n];
-            var durations = new List<double>(n);
-            for (int i = 0; i < n; i++)
-            {
-                int needs = frameInfo[i].RequiredFrame;
-                builtOn[i] = needs >= 0 && needs < i ? needs : -1;
-                durations.Add(FrameSeconds(frameInfo[i]));
-            }
-            if (FrameStream.MostAtOnce(builtOn) > FrameStream.MostKept) return null;
+            var durations = new List<double>(builtOn.Length);
+            for (int i = 0; i < builtOn.Length; i++) durations.Add(FrameSeconds(frameInfo[i]));
 
             Action<SKBitmap>? finish = options.RemoveBackground == false ? null : frame => MaybeRemoveBackground(frame, options);
-            var stream = new FrameStream(data, codec, info, builtOn, finish, NewFrame, src.File);
+            var stream = new FrameStream(data, codec, info, builtOn, finish, NewFrame, src.File!);
             data = null;
             codec = null;
             return new SpriteClip(stream)
             {
                 Ends = EndTimes(durations),
                 Loop = false,
-                AnchorX = src.AnchorX.Value,
-                AnchorY = src.AnchorY.Value,
+                AnchorX = src.AnchorX!.Value,
+                AnchorY = src.AnchorY!.Value,
                 ContentWidth = info.Width,
                 ContentHeight = info.Height,
                 // Clips share the idle clip's pixel scale, and this one is not shrunk.
@@ -804,6 +793,37 @@ public static partial class SpritePackLoader
             codec?.Dispose();
             data?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Whether a clip is of the kind that is read as it is shown, going by what the pack
+    /// says of it: played once through, one file and not a sheet of frames, with where its
+    /// feet are given, and not to be scaled to match the idle clip.
+    /// </summary>
+    static bool MayStream(ClipSource src, PackOptions options) =>
+        !(src.Loop ?? !IsAction(src.Key)) && !src.Still && src.File != null && src.Columns * src.Rows <= 1
+        && src.AnchorX != null && src.AnchorY != null && !options.Normalize;
+
+    /// <summary>
+    /// For an animated file that can be read as it is shown: for each of its frames, the
+    /// earlier frame it is stored as changes to, or -1 for one that stands by itself. Null
+    /// for a file that is to be unpacked whole instead: one small enough to be simpler that
+    /// way, one so vast in the frame that even the few frames kept at once would be too much
+    /// (unpacking shrinks it), or one whose frames are built on too many others at once.
+    /// </summary>
+    static int[]? StreamPlan(SKCodec codec, SKImageInfo info)
+    {
+        int n = Math.Min(codec.FrameCount, MaxStreamedFrames);
+        if (n < 2 || info.Width <= 0 || info.Height <= 0 || info.BytesSize64 * n < StreamFrom || info.BytesSize64 > LargestStreamedFrame)
+            return null;
+        var frameInfo = codec.FrameInfo;
+        var builtOn = new int[n];
+        for (int i = 0; i < n; i++)
+        {
+            int needs = frameInfo[i].RequiredFrame;
+            builtOn[i] = needs >= 0 && needs < i ? needs : -1;
+        }
+        return FrameStream.MostAtOnce(builtOn) > FrameStream.MostKept ? null : builtOn;
     }
 
     /// <summary>
@@ -845,14 +865,14 @@ public static partial class SpritePackLoader
             foreach (var file in Directory.EnumerateFiles(folder).Where(IsImage).OrderBy(f => f, NaturalOrder.Instance))
             {
                 if (durations.Count >= limit) break;
-                ReadFile(file, 1, 1, 0, fps, options, durations, frames, limit);
+                ReadFile(file, 1, 1, 0, fps, options, durations, frames, limit, false);
             }
         }
         else
         {
             string file = Path.Combine(dir, src.File!);
             if (!File.Exists(file)) throw new InvalidDataException($"File not found: {src.File}");
-            ReadFile(file, src.Columns, src.Rows, src.Count, fps, options, durations, frames, limit);
+            ReadFile(file, src.Columns, src.Rows, src.Count, fps, options, durations, frames, limit, MayStream(src, options));
         }
         if (durations.Count == 0) throw new InvalidDataException($"Clip '{src.Key}' has no frames.");
         if (src.Still) durations[0] = 1;
@@ -900,7 +920,7 @@ public static partial class SpritePackLoader
     }
 
     static unsafe void ReadFile(string path, int columns, int rows, int count, double fps, PackOptions options,
-        List<double> durations, List<SKBitmap>? frames, int limit)
+        List<double> durations, List<SKBitmap>? frames, int limit, bool mayStream)
     {
         // The file is read into memory and the decoder is made from that, never straight from
         // the file. Made from a file, the decoder is handed a stream, and for WebP Skia frees
@@ -920,6 +940,9 @@ public static partial class SpritePackLoader
         {
             var frameInfo = codec.FrameInfo;
             int n = Math.Min(Math.Min(animated, MaxFramesPerClip), limit);
+            // Only how long it runs is wanted, and it is a clip that will be read as it is
+            // shown: all of it counts, however long it is.
+            if (frames == null && mayStream && limit > n && StreamPlan(codec, info) is { } plan) n = plan.Length;
             for (int i = 0; i < n; i++) durations.Add(FrameSeconds(frameInfo[i]));
             if (frames == null) return;
 

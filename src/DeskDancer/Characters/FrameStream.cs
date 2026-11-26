@@ -8,9 +8,9 @@ namespace DeskDancer.Characters;
 /// <summary>
 /// One animated file, read a frame at a time as it is shown and not all at once. A clip
 /// that is played once through, such as an action, is shown from its first frame to its
-/// last and then put away, so there is no call to have all of it unpacked: thirteen seconds
-/// drawn 25 times a second would be 200 MB, and read like this they are a few frames'
-/// worth, with nothing to wait for before the first.
+/// last and then put away, so there is no call to have all of it unpacked: seventeen
+/// seconds of a big picture drawn 25 times a second would be half a gigabyte, and read like
+/// this they are a few frames' worth, with nothing to wait for before the first.
 ///
 /// A frame of an animated file is often stored as the changes to an earlier one. So for
 /// each place in the animation that is being shown, the frames a later one is still to be
