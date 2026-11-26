@@ -74,6 +74,10 @@ public static class SmokeTest
         // Keep the mate where it lands so the checks below are repeatable.
         app.Settings.Wander = false;
         app.Settings.AutoDance = false;
+        // Nor do the mates here take any notice of one another: what they do when they
+        // do is tested by itself, in "mates together".
+        app.Settings.Collide = false;
+        app.Settings.Mingle = false;
 
         // Where the screen can be read back (Windows, and macOS once screenshots have been
         // allowed), put a plain backdrop in a colour the characters never use behind
@@ -285,6 +289,9 @@ public static class SmokeTest
                 var second = app.AddMate(id);
                 Note($"second mate uses '{second.Character.Id}' ({second.Character.DisplayName})");
                 MustBe(second, id);
+                // Each mate can find the other, which is what bumping and meeting go by.
+                if (app.Crowd.Mates.Count != app.Mates.Count || app.Mates.Any(m => !ReferenceEquals(m.Brain.Crowd, app.Crowd)))
+                    throw new InvalidOperationException("the mates were not all put in the crowd");
                 app.SetParty(true);
             }),
             new(0.42, "drop clips", () =>
@@ -436,6 +443,149 @@ public static class SmokeTest
                 var showing = goes.Id != null ? goes : action;
                 app.Mates[1].SetCharacter(id);
                 if (!app.Mates[1].Brain.DoAction(showing.Id)) throw new InvalidOperationException($"{showing.Name} did not start on the screen");
+            }),
+            // More than one mate: they bump into each other, and they meet and dance. Run
+            // on brains of their own and a clock of their own, like the action above.
+            new(0.538, "mates together", () =>
+            {
+                var character = First().Character;
+                double now = 0;
+                var clock = new BeatClock { TimeSource = () => now };
+                var conductor = new Conductor(clock);
+                var crowd = new Crowd(clock, conductor);
+                var settings = new Settings { Persist = false, Wander = false, AutoDance = false, AutoActions = false, Mingle = false };
+                const double floor = 900, h = 150;
+                var all = new List<MateBrain>();
+                int seed = 11;
+                MateBrain At(double x, double y = floor)
+                {
+                    var brain = new MateBrain(clock, conductor, settings, character, new Random(seed++)) { H = h, Left = 0, Right = 2400, Top = 0, Floor = floor };
+                    brain.Place(x, y);
+                    crowd.Add(brain);
+                    all.Add(brain);
+                    return brain;
+                }
+                void Clear()
+                {
+                    foreach (var brain in all) crowd.Remove(brain);
+                    all.Clear();
+                }
+                void Run(double seconds, Action? each = null)
+                {
+                    for (double t = 0; t < seconds; t += 1.0 / 60)
+                    {
+                        now += 1.0 / 60;
+                        each?.Invoke();
+                        foreach (var brain in all.ToList()) brain.Update(1.0 / 60);
+                    }
+                }
+                static void Fail(string why) => throw new InvalidOperationException("mates together: " + why);
+
+                // Two on the same spot step apart, until they stand side by side.
+                var a = At(800);
+                var b = At(800);
+                Run(2.5);
+                double apart = Math.Abs(a.FootX - b.FootX), room = a.HalfWidth + b.HalfWidth;
+                if (apart < room - 2) Fail($"two mates on one spot are {apart:0} apart after stepping apart, and take up {room:0}");
+                Clear();
+
+                // One thrown at another bounces off it, and knocks it flying.
+                var thrown = At(400, floor - 220);
+                var target = At(820);
+                Run(0.2);
+                thrown.Drop(9 * h, 0);
+                bool bounced = false, knocked = false;
+                Run(1.2, () =>
+                {
+                    bounced |= thrown.VelocityX < -1;
+                    knocked |= target.State == MateState.Fall;
+                });
+                if (!bounced) Fail("a mate thrown at another did not bounce off it");
+                if (!knocked) Fail("a mate hit by a thrown one was not knocked flying");
+                Run(4);
+                if (thrown.State == MateState.Fall || target.State == MateState.Fall || Math.Abs(target.FootY - floor) > 2)
+                    Fail($"after the knock they should be back on the floor: {thrown.State}, {target.State} at {target.FootY:0}");
+                if (target.FootX < 860) Fail($"the mate that was hit ended at {target.FootX:0}, no further along than it started");
+                Note($"a thrown mate bounced off another and knocked it from 820 to {target.FootX:0}");
+                Clear();
+
+                // One that is carried pushes another along the floor, and one swung at another bats it away.
+                var held = At(500);
+                var pushed = At(760);
+                Run(0.2);
+                held.BeginDrag();
+                double carry = 500;
+                Run(2.0, () => held.DragTo(carry += 200.0 / 120, floor));
+                if (pushed.State == MateState.Fall) Fail("a mate pushed gently was knocked flying");
+                if (pushed.FootX < held.FootX + held.HalfWidth + pushed.HalfWidth - 3)
+                    Fail($"a carried mate at {held.FootX:0} did not push the one in its way, which is at {pushed.FootX:0}");
+                held.EndDrag();
+                Clear();
+                var bat = At(300);
+                var ball = At(700);
+                Run(0.2);
+                bat.BeginDrag();
+                double swing = 300;
+                bool batted = false;
+                Run(0.5, () =>
+                {
+                    bat.DragTo(swing = Math.Min(swing + 3000.0 / 60, 760), floor);
+                    batted |= ball.State == MateState.Fall;
+                });
+                if (!batted) Fail("a mate swung hard at another did not bat it away");
+                bat.EndDrag();
+                Clear();
+
+                // With nothing bumping, they pass through one another.
+                settings.Collide = false;
+                var ghost = At(800);
+                var ghost2 = At(800);
+                Run(1.5);
+                if (Math.Abs(ghost.FootX - ghost2.FootX) > 1) Fail("mates stepped apart with bumping switched off");
+                Clear();
+                settings.Collide = true;
+
+                // Two that are side by side say hello and dance the same thing; a third, far off, is left out.
+                settings.Mingle = true;
+                var one = At(900);
+                var two = At(900 + 2 * one.HalfWidth + 0.25 * h);
+                var far = At(2100);
+                string? together = null;
+                Run(4, () =>
+                {
+                    if (one.IsDancing && two.IsDancing && one.CurrentMoveName == two.CurrentMoveName) together ??= one.CurrentMoveName;
+                });
+                if (together == null) Fail($"two mates side by side did not start dancing together: {one.State} and {two.State}");
+                if (far.IsDancing) Fail("a mate far away joined a get-together");
+                if (!ReferenceEquals(one.Gathering, two.Gathering) || one.Gathering == null) Fail("the two are not at the same get-together");
+                bool inStep = true;
+                Run(3, () => inStep &= !(one.IsDancing && two.IsDancing) || one.CurrentMoveName == two.CurrentMoveName);
+                if (!inStep) Fail("the two fell out of step");
+                // It ends, and they have had enough of each other for a while.
+                Run(20);
+                if (one.IsDancing || two.IsDancing || one.Gathering != null) Fail($"the get-together did not end: {one.State} and {two.State}");
+                Run(8);
+                if (one.Gathering != null || two.Gathering != null) Fail("they got together again at once");
+                Note($"two mates side by side said hello and danced together, starting with {together}");
+                Clear();
+
+                // Two that can see each other walk over, and then do the same.
+                settings.Wander = true;
+                var left = At(700);
+                var right = At(700 + 3 * h);
+                bool met = false;
+                Run(9, () => met |= left.IsDancing && right.IsDancing && ReferenceEquals(left.Gathering, right.Gathering));
+                if (!met) Fail($"two mates three heights apart did not walk over and dance: {left.State} at {left.FootX:0}, {right.State} at {right.FootX:0}");
+                // With that switched off, they leave each other be.
+                Clear();
+                settings.Mingle = false;
+                var loner = At(900);
+                var loner2 = At(900 + 2 * loner.HalfWidth + 0.25 * h);
+                settings.Wander = false;
+                Run(4);
+                if (loner.Gathering != null || loner.IsDancing) Fail("mates got together with that switched off");
+                Note("two mates three heights apart walked over to each other and danced; switched off, they do not");
+                Clear();
             }),
             new(0.545, "action on screen", () =>
             {
@@ -647,8 +797,10 @@ public static class SmokeTest
             {
                 Snap(First(), "5-sitting");
                 Snap(app.Mates[1], "5-swapped");
-                app.RemoveMate(app.Mates[1]);
+                var gone = app.Mates[1];
+                app.RemoveMate(gone);
                 if (app.Mates.Count != 1) throw new InvalidOperationException("second mate was not removed");
+                if (app.Crowd.Mates.Count != 1 || gone.Brain.Crowd != null) throw new InvalidOperationException("the mate that was removed is still in the crowd");
             }),
             // Loading a pack decodes its idle clip and no more; the rest are gone through
             // behind the scenes. Every pack is loaded here, in case the reload above left

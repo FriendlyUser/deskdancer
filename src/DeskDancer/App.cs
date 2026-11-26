@@ -25,6 +25,8 @@ public sealed class App : Application
     public CharacterLibrary Library { get; } = new();
     public BeatClock Clock { get; } = new();
     public Conductor Conductor { get; private set; } = null!;
+    /// <summary>Every mate on the desktop, for each to find the others by.</summary>
+    public Crowd Crowd { get; private set; } = null!;
     public List<MateWindow> Mates { get; } = [];
     /// <summary>The Settings window while it is open.</summary>
     public SettingsWindow? SettingsWindow { get; private set; }
@@ -43,6 +45,7 @@ public sealed class App : Application
         // The party dances only the moves that are switched on; Settings is read each time, as
         // it is replaced once the saved settings are loaded.
         Conductor = new Conductor(Clock) { Pool = () => Settings.BuiltInMoves() };
+        Crowd = new Crowd(Clock, Conductor);
         if (!Options.IsTool)
         {
             // Test runs start from defaults and never write to the user's settings file.
@@ -115,6 +118,7 @@ public sealed class App : Application
     {
         var window = new MateWindow(this, settings);
         Mates.Add(window);
+        Crowd.Add(window.Brain);
         window.PlaceOnScreen(fraction);
         window.Show();
         return window;
@@ -132,6 +136,7 @@ public sealed class App : Application
     {
         if (Mates.Count <= 1) return;
         Mates.Remove(window);
+        Crowd.Remove(window.Brain);
         Settings.Mates.Remove(window.Settings);
         Settings.Save();
         window.Close();

@@ -37,6 +37,17 @@ public sealed class Settings
     public bool AutoDance { get; set; } = true;
     /// <summary>Now and then do one of the character's own actions, such as having a drink, unasked.</summary>
     public bool AutoActions { get; set; } = true;
+    /// <summary>
+    /// With more than one mate: they bump into one another. One that is thrown bounces off
+    /// the others and knocks them flying, one that is carried pushes them along, and two
+    /// in the same place step apart.
+    /// </summary>
+    public bool Collide { get; set; } = true;
+    /// <summary>
+    /// With more than one mate: they seek each other out, and when two meet they say hello
+    /// and dance together for a while.
+    /// </summary>
+    public bool Mingle { get; set; } = true;
     public bool Gravity { get; set; } = true;
     public bool Effects { get; set; } = true;
     public bool AlwaysOnTop { get; set; } = true;

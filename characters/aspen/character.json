@@ -1,0 +1,82 @@
+{
+  "name": "Aspen",
+  "height": 152,
+  "facing": "right",
+  "removeBackground": false,
+  "clips": {
+    "idle": {
+      "file": "idle.webp",
+      "anchor": [
+        156.0,
+        280.0
+      ]
+    },
+    "walk": {
+      "file": "walk.webp",
+      "anchor": [
+        132.0,
+        283.0
+      ]
+    },
+    "sit": {
+      "file": "sit.webp",
+      "anchor": [
+        130.0,
+        340.0
+      ]
+    },
+    "sleep": {
+      "file": "sleep.webp",
+      "anchor": [
+        129.0,
+        236.0
+      ]
+    },
+    "dance": {
+      "file": "dance.webp",
+      "anchor": [
+        143.0,
+        355.0
+      ],
+      "name": "Rustle"
+    },
+    "dance_whirl": {
+      "file": "dance_whirl.webp",
+      "anchor": [
+        208.0,
+        452.0
+      ],
+      "name": "Whirl"
+    },
+    "dance_autumn": {
+      "file": "dance_autumn.webp",
+      "anchor": [
+        234.0,
+        485.0
+      ],
+      "name": "Autumn"
+    },
+    "dance_raindrops": {
+      "file": "dance_raindrops.webp",
+      "anchor": [
+        188.0,
+        501.0
+      ],
+      "name": "Raindrops"
+    },
+    "drag": {
+      "file": "drag.webp",
+      "anchor": [
+        141.0,
+        291.0
+      ]
+    },
+    "fall": {
+      "file": "fall.webp",
+      "anchor": [
+        129.0,
+        297.0
+      ]
+    }
+  }
+}

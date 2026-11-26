@@ -131,6 +131,11 @@ they come into view, or change shape altogether, as Kori does when it melts.
 still: its flame is made of waves that fit a whole number of times into each clip, so every
 clip loops without a jump however much it flickers, and it glows.
 
+`aspen` is drawn by a script too, and is the one to copy for something soft: its body is
+built along a line that bows and curls, so it bends without creasing, with springs to make
+it trail and flop. It also shows how to turn a flat character round to its back, and how to
+change its colours from one clip to the next.
+
 `piplup` is drawn by a script after a picture, and is the one to copy if you have one
 drawing of a character and want it to turn round: its head and body are balls, with the
 face and markings placed on them as on a globe, and its measurements were taken from the

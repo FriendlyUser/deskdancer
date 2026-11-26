@@ -95,6 +95,9 @@ public sealed class SettingsWindow : Window
         doing.Children.Add(Switch("Wander around", nameof(Settings.Wander), () => settings.Wander, on => settings.Wander = on));
         doing.Children.Add(Switch("Dance on its own", nameof(Settings.AutoDance), () => settings.AutoDance, on => settings.AutoDance = on));
         doing.Children.Add(Switch("Do actions on its own", nameof(Settings.AutoActions), () => settings.AutoActions, on => settings.AutoActions = on));
+        // These two are for when there is more than one mate.
+        doing.Children.Add(Switch("Bump into each other", nameof(Settings.Collide), () => settings.Collide, on => settings.Collide = on));
+        doing.Children.Add(Switch("Meet up and dance together", nameof(Settings.Mingle), () => settings.Mingle, on => settings.Mingle = on));
         doing.Children.Add(Switch("Fall to the floor when dropped", nameof(Settings.Gravity), () => settings.Gravity, on => settings.Gravity = on));
         doing.Children.Add(Switch("Notes and sparkles", nameof(Settings.Effects), () => settings.Effects, on => settings.Effects = on));
         foreach (int bpm in Settings.Tempos) _tempo.Items.Add($"{bpm} BPM");
