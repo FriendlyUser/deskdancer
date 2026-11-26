@@ -66,7 +66,7 @@ cloud of gas is soft all the way through.
 
 **The tree and the apple.** The apple tree is a toy one, cut from the same fleece he is in
 its own colours: a brown trunk, darker down one side, and clumps of leaves in three
-greens. The apples are smooth and shiny, the one thing about him that is not fleece or
+greens. The apple is smooth and shiny, the one thing about him that is not fleece or
 felt. Twinkles glow a little round their edges, and puffs of dust are soft.
 
 ## The clips
@@ -81,9 +81,9 @@ The app keeps the idle clip unpacked in memory the whole time, and each other cl
 the actions while it is being shown and for a minute afterwards. `make_frames.py` prints
 the total for those when it finishes (about 97 MB, of which idle is 28). The actions are
 read a frame at a time as they are shown, and take next to nothing. On disk the pack is
-about 13 MB, half of it Apple Tree: fleece is all fine detail, which does not pack down
+about 13 MB, more than half of it Apple Tree: fleece is all fine detail, which does not pack down
 without loss, so these clips are saved the way a photo is, where Domo's flat colour is
-saved exactly. Apple Tree, 375 frames of a big picture, is saved a little more roughly
+saved exactly. Apple Tree, 406 frames of a big picture, is saved a little more roughly
 than the rest (`SAVE` in Domo's script), which does not show in fleece.
 
 ## Changing things

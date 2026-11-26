@@ -34,9 +34,9 @@ arms, legs, eyes and mouth all move. He toddles when he wanders, sits down with 
 out in front of him, snaps his teeth, and has two dances of his own, Chomp and Monster
 Stomp. He also has three actions, things he does now and then that are not dances: Bubble
 Tea, where he brings out a cup, shakes it and drinks it through a straw down to the last
-pearl; Fart; and Apple Tree, where an apple tree comes up out of thin air beside him and
-drops an apple at his feet, and he runs for it, one way across the screen and back the
-other, with the apple rolling after him until it lands in his mouth.
+pearl; Fart; and Apple Tree, where an apple tree comes up out of thin air beside him,
+grows one apple and drops it at his feet, and he runs for it, one way across the screen
+and back the other, with the apple rolling after him until it lands in his mouth.
 How he is drawn, and how to change him, is in
 [characters/domo/_source](characters/domo/_source/README.md). Domo is NHK's mascot; this
 is a fan drawing, and NHK had no part in it.
@@ -177,7 +177,7 @@ image characters are bounced, leaned, spun and flipped as a whole.
 ### Actions
 
 Some characters can do things that are not dances: Domo and Plush Domo can have a bubble
-tea (about 8½ seconds), fart (about 7) and be chased by an apple (about 15). An action is
+tea (about 8½ seconds), fart (about 7) and be chased by an apple (about 17). An action is
 played once through at its own speed, with no music notes and no dance floor under the
 mate, and then the mate goes back to standing about. Pick one from **Actions** in the
 right-click menu; a mate also does one of its actions now and then on its own, unless **Do
@@ -338,8 +338,9 @@ together. Each of its other animations is read the first time the mate needs it,
 dropped again after a minute out of use. A mate that mostly stands about holds little
 more than its idle frames. A long action is not unpacked at all: it is shown once from
 start to finish, so its frames are read from the file one at a time as they are shown,
-and Domo's fifteen seconds of Apple Tree cost a few megabytes where unpacked they would
-be 480.
+and Domo's seventeen seconds of Apple Tree cost a few megabytes where unpacked they would
+be 500. Being read like that, it can also be as long as it likes; a clip that is unpacked
+is cut off at 400 frames.
 
 The GitHub Actions workflow builds for Windows, Linux and both kinds of Mac, and runs
 the smoke test on each. The smoke test starts the real app and drives it: dancing, a

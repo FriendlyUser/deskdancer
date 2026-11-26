@@ -71,8 +71,8 @@ the other way.
 
 A long action costs next to no memory. One that is a single animated GIF or WebP, with its
 `anchor` given in `character.json`, is not unpacked like other animations: its frames are
-read from the file one at a time as they are shown. So it can be long, and drawn as
-smoothly as you like. What it shows still has to fit in the mate's window, which reaches
+read from the file one at a time as they are shown. So it can be long, well past the 400
+frames other animations are limited to, and drawn as smoothly as you like. What it shows still has to fit in the mate's window, which reaches
 one of the character's heights to each side of its feet and 1.8 heights above them.
 
 An animation can be supplied in three ways:

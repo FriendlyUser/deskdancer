@@ -61,13 +61,13 @@ is. Its trunk leans a little, spreads at the foot into two roots, is darker down
 and lighter down the other, and has lines and a knot in its bark; it forks into three
 boughs. Its leaves are sixteen clumps in three greens: shaded ones at the back and
 underneath, the body of the tree, and the ones the light catches, with single leaves
-sticking out round the edge, six small apples among them and tufts of grass at its foot.
-It grows: a shoot with two leaves, then the trunk, then the boughs, and then the leaves a
-clump at a time, each coming out a little too far and settling. It can bend over, and
-shrink to nothing. An apple is drawn separately, in front of everything, so it can hang
-from the tree, drop, bounce (it squashes against the floor), roll and be thrown. It is
-green when it is small and red with a yellow side when it is ripe, which is what shows it
-turning as it rolls. Twinkles and puffs of dust can be put anywhere.
+sticking out round the edge, and tufts of grass at its foot. It grows: a shoot with two
+leaves, then the trunk, then the boughs, and then the leaves a clump at a time, each
+coming out a little too far and settling. It can bend over, and shrink to nothing. The
+tree has no fruit of its own. Its one apple is drawn separately, in front of everything,
+so it can hang from the tree, grow there, drop, bounce (it squashes against the floor),
+roll and be thrown. It is green when it is small and red with a yellow side when it is ripe, which is
+what shows it turning as it rolls. Twinkles and puffs of dust can be put anywhere.
 
 **Painters.** The script keeps what a pose is apart from how it is painted. It works out
 where every shape goes and hands them, from the back to the front, to a painter. The one
@@ -88,7 +88,7 @@ A change to a clip here changes both, once each pack has been rebuilt.
 | `dance_chomp.webp`, `dance_stomp.webp` | Their own entries under **Dance move**, **Chomp** and **Monster Stomp**. Clip dances get no motion from the app, so the hops and stomps are drawn in. Each loops in one second, which is two beats at the usual 120 BPM. |
 | `action_bubble_tea.webp` | **Bubble Tea** under **Actions**. He brings out a cup and gives it a shake, takes three long pulls at the straw, lowers it with a happy sigh and sways, then goes back for four more until the tea is all but gone. He peers in at the one pearl left at the bottom, shakes the cup, gives up with a glum sigh and puts it away. 8.6 seconds. |
 | `action_fart.webp` | **Fart** under **Actions**. He glances one way and the other, strains, and nothing comes. He looks round behind him, puzzled, tries again harder and lets one go with a hop, looks relieved, wafts the cloud away for a good while, and then looks off into the distance as if nothing had happened. 7.3 seconds. |
-| `action_apple_tree.webp` | **Apple Tree** under **Actions**. Twinkles gather out of thin air, a shoot pops out of the ground beside him, and all at once it is an apple tree with its leaves bursting out over his head. He ducks and gawps at it. An apple swells on it and ripens; he reaches for it; it swings, hangs still and drops in front of him. He jumps out of his skin, the tree vanishes, and he bolts with the apple rolling after him. He looks back and it is far behind, relaxes, looks back again and it is at his heels, and jumps: it bowls on underneath him and stops. He watches it. It starts back towards him, so he bolts the way he came, and it bounds after him in bigger and bigger hops until it hits something, sails over and lands in his open mouth. He skids to a stop with it between his teeth, blinks and swallows it. 15.4 seconds, 25 frames a second. |
+| `action_apple_tree.webp` | **Apple Tree** under **Actions**. Twinkles gather out of thin air, a shoot pops out of the ground beside him, and all at once it is an apple tree with its leaves bursting out over his head. He ducks and gawps at it. One apple buds on it, small and green, swells and turns red while he watches; he reaches for it; it swings, hangs still and drops in front of him. He jumps out of his skin and stands there with his teeth chattering, the tree vanishes, which is too much, and he bolts with the apple rolling after him. He looks back and it is far behind, relaxes, looks back again and it is at his heels, and jumps: it bowls on underneath him and stops. He watches it. It starts back towards him, so he bolts the way he came, and it bounds after him in bigger and bigger hops until it hits something, sails over and lands in his open mouth. He skids to a stop with it between his teeth, blinks and swallows it. 16.8 seconds, 25 frames a second. |
 | `drag.webp` | Being carried. |
 | `fall.webp` | Dropping through the air. |
 
@@ -119,8 +119,9 @@ is 28. Two things keep it down: each clip is cropped to what it uses, and a fram
 for as long as nothing has visibly moved, so standing still costs one frame, not hundreds.
 The actions are not counted, because the app does not unpack them. It reads a long clip
 that is played once through a frame at a time as it is shown, which is what lets Apple
-Tree be 375 big frames; unpacked, they would be 480 MB. On disk the pack is about 5 MB,
-3.3 of them Apple Tree: flat colour packs down well without any loss.
+Tree be 406 big frames; unpacked, they would be 500 MB, and the app cuts a clip it unpacks
+off at 400 frames. On disk the pack is about 5 MB, 3.5 of them Apple Tree: flat colour
+packs down well without any loss.
 
 ## Changing things
 

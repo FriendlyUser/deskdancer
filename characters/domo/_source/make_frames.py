@@ -259,9 +259,7 @@ CLUMPS = [(-78, 46, 52, 0, 0.00), (74, 50, 54, 0, 0.03), (0, 62, 50, 0, 0.06), (
 # Leaves that stick out round the edge: where from the middle of the leaves, and which way they point.
 TWIGS = [(-34, -118, -112), (38, -112, -62), (-104, -100, -142), (-148, -4, 176), (-128, 70, 146), (-34, 110, 104),
          (108, -98, -38), (104, 44, 22), (40, 104, 70), (-150, -40, -166)]
-FRUIT = [(-70, 12), (-22, 44), (42, 26), (84, -12), (14, -40), (-48, -52)]     # the apples that stay on the tree, likewise
-FRUIT_R = 9.5
-HANG = (-26.0, 105.0)                     # where the apple that drops hangs from, from the middle of the leaves
+HANG = (-26.0, 105.0)                     # where its one apple hangs from, from the middle of the leaves
 STALK_LONG = 7.0                          # from there to the top of the apple
 # Tufts of grass at its foot: how far along the ground, and which way each blade points.
 GRASS = [(-58, -118), (-50, -96), (-64, -140), (48, -70), (56, -92), (42, -52)]
@@ -564,7 +562,7 @@ def tree_parts(rise, leaves, sway, tall, size):
     1: the trunk first and then the boughs. `leaves` is how many seconds ago its leaves
     began to come out, which they do a clump at a time; `sway` bends it over, in degrees;
     `tall` stretches it upwards (more than 1) or squashes it down; `size` is how big all of
-    it is. Also where the apple that drops hangs from."""
+    it is. Also where its apple hangs from; the apple itself is drawn by apple_parts."""
     m = shift(TREE_AT, 0) @ stretch(size * (1 + 0.5 * (1 - tall)), size * tall)
 
     def place(points):
@@ -610,7 +608,7 @@ def tree_parts(rise, leaves, sway, tall, size):
     tip = curve_at(BOUGHS[1][0], [out])[0] if out > 0.02 else middle[-1]
     sprout = [place(move(shift(*tip) @ turn(angle), leaf_shape(26 * shoot, 8.5 * shoot))) for angle in (-128, -40)] if shoot > 0.05 else []
 
-    back, body, light, scallops, fruit = [], [], [], [], []
+    back, body, light, scallops = [], [], [], []
     centre = np.array(CROWN)
     if leaves > 0:
         for dx, dy, r, layer, wait in CLUMPS:
@@ -624,16 +622,10 @@ def tree_parts(rise, leaves, sway, tall, size):
         out_ = spring(leaves - 0.24, 3.0, 9.0)
         if out_ > 0.1:
             body += [place(move(shift(centre[0] + dx, centre[1] + dy) @ turn(angle), leaf_shape(19 * out_, 7 * out_))) for dx, dy, angle in TWIGS]
-        for k, (dx, dy) in enumerate(FRUIT):
-            ripe = spring(leaves - 0.46 - 0.04 * k, 3.0, 9.0)
-            if ripe > 0.1:
-                r = FRUIT_R * ripe
-                fruit.append((place(oval(centre[0] + dx, centre[1] + dy, r, r * 0.95, n=24)),
-                              place(oval(centre[0] + dx - 0.4 * r, centre[1] + dy - 0.36 * r, 0.2 * r, 0.3 * r, 26, n=12))))
     hang = centre + np.array(HANG) * min(spring(leaves, 2.8, 10.0), 1.0) if leaves > 0 else np.array(tip, float)
     # `space` is how the tree's own space lies on the canvas, near enough: for a painter that gives it a texture.
     return dict(space=m @ turn(sway), grass=grass, wood=wood, shade=shade, shine=shine, bark=bark, sprout=sprout,
-                back=back, body=body, light=light, scallops=scallops, fruit=fruit,
+                back=back, body=body, light=light, scallops=scallops,
                 hang=tuple(float(v) for v in place([hang])[0]))
 
 
@@ -723,9 +715,6 @@ class Flat:
             c.fill(clump, LEAF_LIGHT)
         for curl in parts["scallops"]:
             c.stroke(curl, FINE, LEAF_SHADE)
-        for apple, shine in parts["fruit"]:
-            c.part([apple], APPLE, FINE)
-            c.fill(shine, APPLE_SHINE)
 
     def apple(self, parts):
         c = self.c
@@ -1155,13 +1144,15 @@ def arc(t, start, long):
 # When things happen, in seconds.
 SHOOT = 0.84                               # a shoot pops out of the ground
 BURST = 1.80                               # the tree is up, and its leaves burst out
-SNAP = 4.10                                # the apple's stalk gives
-POOF = 4.72                                # the tree goes back where it came from
-RUN_FROM = 5.42                            # he bolts, to the left
-LEAP, LEAP_LONG = 8.00, 0.74               # the apple is at his heels: he jumps, and it rolls on under him
+BUD = 2.50                                 # an apple, its only one, starts to grow on it
+RIPE = 4.15                                # and is full grown and red
+SNAP = 5.05                                # the apple's stalk gives
+RUN_FROM = 6.80                            # he bolts, to the left
+POOF = RUN_FROM - 0.70                     # just after the tree goes back where it came from, which is too much for him
+LEAP, LEAP_LONG = RUN_FROM + 2.58, 0.74    # the apple is at his heels: he jumps, and it rolls on under him
 TURN = LEAP + 1.26                         # the apple, which had stopped, starts back towards him
 RUN_BACK = TURN + 0.28                     # so he bolts the other way
-BUMP = 13.16                               # the apple hits something and is thrown up in the air
+BUMP = RUN_BACK + 3.62                     # the apple hits something and is thrown up in the air
 CATCH = BUMP + 0.60                        # and comes down in his mouth
 GULP = CATCH + 0.90                        # which, after a moment, he shuts
 
@@ -1204,14 +1195,19 @@ def apple_tree_travel(t):
     return at_time(_HE, min(t, CATCH + 0.5))
 
 
+def swinging(t):
+    """How hard the apple is swinging on its stalk, from 0 to 1: more and more, and then
+    it stops dead, a moment before it drops."""
+    return ease(t, SNAP - 0.80, SNAP - 0.40) * (1 - ease(t, SNAP - 0.32, SNAP - 0.14))
+
+
 def the_tree(t):
     """The tree at a time, as tree_parts wants it; None while there is none."""
     if t < SHOOT or t >= POOF + 0.22:
         return None
     rise = 0.05 * ease(t, SHOOT, SHOOT + 0.08) + 0.95 * ease(t, 1.12, BURST)       # a shoot, and then all of it at once
-    swinging = ease(t, 3.30, 3.70) * (1 - ease(t, 3.78, 3.96))
     # It whips about as it shoots up, shivers while the apple swings and springs back when the apple lets go.
-    sway = (3.6 * ring(t - 1.50, 2.1, 2.8) + 0.8 * swinging * math.sin(2 * math.pi * (t - 3.30) / 0.32)
+    sway = (3.6 * ring(t - 1.50, 2.1, 2.8) + 0.8 * swinging(t) * math.sin(2 * math.pi * (t - SNAP + 0.80) / 0.32)
             - 2.0 * ring(t - SNAP, 3.0, 5.0))
     tall = 1 + 0.02 * ring(t - 1.74, 3.0, 6.0)
     size = ease(t, SHOOT, SHOOT + 0.07) * (1 - ease(t, POOF + 0.06, POOF + 0.22))
@@ -1223,9 +1219,8 @@ def the_tree(t):
 def apple_swing(t):
     """Degrees the apple hangs off straight down: a lazy sway, then swinging wider and
     wider, then dead still for a moment before it drops."""
-    swinging = ease(t, 3.30, 3.70) * (1 - ease(t, 3.78, 3.96))
-    return (2.5 * math.sin(2 * math.pi * t / 1.1) * (1 - ease(t, 3.6, 3.96))
-            + 25 * swinging * math.sin(2 * math.pi * (t - 3.30) / 0.32))
+    return (2.5 * math.sin(2 * math.pi * t / 1.1) * (1 - ease(t, SNAP - 0.50, SNAP - 0.14))
+            + 25 * swinging(t) * math.sin(2 * math.pi * (t - SNAP + 0.80) / 0.32))
 
 
 # Where the apple drops from, and when it hits the floor: once from the tree and twice more
@@ -1238,7 +1233,7 @@ for _ in range(2):
 LAND = LANDS[0][0]
 APPLE_RESTS = (_DROP[0] + 4.0, 16.0)       # where the apple comes to rest, between him and the tree, and how far it has turned
 # The hops it takes as it bowls along after him: when, how high and how long.
-HOPS = [(6.30, 9, 0.18), (RUN_BACK + 0.86, 8, 0.18), (RUN_BACK + 1.46, 12, 0.20), (RUN_BACK + 2.04, 16, 0.22),
+HOPS = [(RUN_FROM + 0.88, 9, 0.18), (RUN_BACK + 0.86, 8, 0.18), (RUN_BACK + 1.46, 12, 0.20), (RUN_BACK + 2.04, 16, 0.22),
         (RUN_BACK + 2.60, 20, 0.24), (RUN_BACK + 3.14, 24, 0.26)]
 
 
@@ -1250,17 +1245,19 @@ def apple_beside(t):
 def the_apple(t):
     """The apple at a time, as apple_parts wants it; None before there is one, and from
     when it lands in his mouth, where apple_tree puts it itself."""
-    if t < 2.55 or t >= CATCH:
+    if t < BUD or t >= CATCH:
         return None
     floor = -APPLE_R
     if t < SNAP:                                              # on the tree, hanging from its stalk
         hx, hy = tree_parts(*the_tree(t))["hang"]
-        size = spring(t - 2.55, 2.4, 9.0)
+        # It buds, small and green, swells until it is full grown, and turns red as it gets there.
+        size = (0.16 * spring(t - BUD, 3.0, 9.0) + 0.84 * ease(t, BUD + 0.12, RIPE - 0.25)
+                + 0.05 * ring(t - RIPE + 0.25, 3.0, 7.0))
         swing = apple_swing(t)
-        long = STALK_LONG + 5.0 * ease(t, 3.96, SNAP) + APPLE_R * size      # the stalk stretches before it gives
+        long = STALK_LONG + 5.0 * ease(t, SNAP - 0.14, SNAP) + APPLE_R * size      # the stalk stretches before it gives
         a = math.radians(swing)
         return (round(hx - long * math.sin(a), 1), round(hy + long * math.cos(a), 1), round(swing, 1),
-                round(size, 3), 0.0, round(ease(t, 2.85, 3.25), 2))
+                round(size, 3), 0.0, round(ease(t, RIPE - 0.75, RIPE), 2))
     if t < RUN_FROM:                                          # dropping, bouncing twice and lying there
         if t < LAND:
             y = _DROP[1] + 0.5 * FALLING * (t - SNAP) ** 2
@@ -1322,7 +1319,7 @@ def tree_fx(t):
     for at, x, y, size in ((BURST + 0.04, 26, -436, 14), (BURST + 0.10, 264, -398, 12), (BURST + 0.16, 140, -506, 11),
                            (BURST + 0.22, 50, -300, 10), (BURST + 0.28, 252, -300, 10)):       # the leaves burst out
         fx += twinkle(t, at, x, y, size)
-    fx += twinkle(t, 3.20, _DROP[0] - 16, _DROP[1] - 22, 12, 0.36)                  # ripe
+    fx += twinkle(t, RIPE - 0.02, _DROP[0] - 16, _DROP[1] - 22, 12, 0.36)           # ripe
     fx += puff(t, LAND, APPLE_RESTS[0] + 2, -6, 7, 17, 0.34)                        # it hits the floor
     for at, x, y, small, big in ((POOF + 0.10, 86, -396, 34, 58), (POOF + 0.11, 200, -410, 30, 54), (POOF + 0.12, 146, -322, 36, 62),
                                  (POOF + 0.14, 180, -196, 24, 42), (POOF + 0.16, 178, -64, 20, 34)):     # and the tree is gone again
@@ -1344,10 +1341,11 @@ def tree_fx(t):
 def apple_tree(t):
     """An apple tree comes up out of thin air beside him: twinkles gather, a shoot pops out
     of the ground, and all at once it is a tree, taller than he is, with its leaves bursting
-    out over his head. He ducks, and gawps up at it. An apple swells on it and ripens,
-    which he likes the look of, and reaches for; it swings on its stalk, hangs still, and
-    drops in front of him to bounce at his feet. He jumps out of his skin, the tree goes back
-    where it came from, and he bolts the other way with his arms in the air.
+    out over his head. He ducks, and gawps up at it. One apple buds on it, and he watches
+    it swell and turn red, which he likes the look of, and reaches for it; it swings on its
+    stalk, hangs still, and drops in front of him to bounce at his feet. He jumps out of his
+    skin and stands there with his teeth chattering. Then the tree goes back where it came
+    from, which is too much, and he bolts the other way with his arms in the air.
 
     The apple rolls after him. He looks back and it is a long way behind; looks back again
     and it is at his heels. He jumps for his life, and it bowls on underneath him and comes
@@ -1371,11 +1369,12 @@ def apple_tree(t):
     # ---- what he is doing, each from 0 to 1
     glance = bump(t, 0.42, 0.16, 0.24, 0.12)                  # at the twinkles by his foot
     jolt = bump(t, SHOOT, 0.05, 0.10, 0.20)                   # the shoot pops out
-    gawp = ease(t, 1.14, 1.50) * (1 - ease(t, 2.75, 3.00))    # watching the tree go up, and up
+    gawp = ease(t, 1.14, 1.50) * (1 - ease(t, BUD + 0.10, BUD + 0.40))   # watching the tree go up, and up
     flinch = bump(t, BURST, 0.07, 0.05, 0.30)                 # the leaves burst out over his head
-    fruit = ease(t, 2.75, 3.00) * (1 - ease(t, SNAP, SNAP + 0.05))       # looking at the apple on the tree
-    want = ease(t, 2.95, 3.25) * (1 - ease(t, 3.80, 3.94))    # it is ripe, and he likes the look of it
-    hush = ease(t, 3.82, 3.96) * (1 - ease(t, SNAP, SNAP + 0.06))        # it has stopped swinging
+    fruit = ease(t, BUD + 0.10, BUD + 0.40) * (1 - ease(t, SNAP, SNAP + 0.05))       # watching the apple grow
+    want = ease(t, RIPE - 0.05, RIPE + 0.25) * (1 - ease(t, SNAP - 0.30, SNAP - 0.16))   # it is ripe, and he likes the look of it
+    hush = ease(t, SNAP - 0.28, SNAP - 0.14) * (1 - ease(t, SNAP, SNAP + 0.06))      # it has stopped swinging
+    gone = bump(t, POOF + 0.04, 0.06, 0.16, 0.14)             # the tree has just vanished
     fell = ease(t, SNAP, LAND)                                # his eyes go down with it
     air = min(max((t - LAND - 0.07) / 0.40, 0.0), 1.0)        # he jumps out of his skin
     down = LAND + 0.47                                        # and comes down
@@ -1386,7 +1385,7 @@ def apple_tree(t):
     flee = ease(t, RUN_FROM - 0.04, RUN_FROM + 0.10) * (1 - ease(t, LEAP - 0.06, LEAP + 0.04))
     flee2 = ease(t, RUN_BACK - 0.04, RUN_BACK + 0.10) * (1 - ease(t, CATCH, CATCH + 0.06))
     fleeing = flee + flee2
-    back = (bump(t, 6.38, 0.10, 0.40, 0.12) + bump(t, LEAP - 0.36, 0.08, 0.24, 0.08)   # looking back at it
+    back = (bump(t, RUN_FROM + 0.96, 0.10, 0.40, 0.12) + bump(t, LEAP - 0.36, 0.08, 0.24, 0.08)   # looking back at it
             + bump(t, RUN_BACK + 1.10, 0.10, 0.40, 0.12) + bump(t, RUN_BACK + 2.20, 0.10, 0.34, 0.10)
             + bump(t, RUN_BACK + 3.04, 0.10, 0.28, 0.10) + (ease(t, CATCH - 0.38, CATCH - 0.26) if CATCH - 0.38 <= t < CATCH else 0.0))
     back = min(back, 1.0)
@@ -1406,14 +1405,14 @@ def apple_tree(t):
         eyes = blink(t, 0.14) or OPEN
     elif t < 1.14:
         eyes = WIDE
-    elif t < 2.95:
-        eyes = blink(t, 2.44) or OPEN
-    elif t < 3.82:
+    elif t < RIPE + 0.05:
+        eyes = blink(t, 2.36) or blink(t, 3.56) or OPEN
+    elif t < SNAP - 0.28:
         eyes = HAPPY
     elif t < LAND:
         eyes = OPEN
     elif t < LEAP + LEAP_LONG + 0.08:
-        eyes = OPEN if 6.96 <= t < LEAP - 0.36 else WIDE      # for a moment he thinks he has lost it
+        eyes = OPEN if RUN_FROM + 1.54 <= t < LEAP - 0.36 else WIDE     # for a moment he thinks he has lost it
     elif t < TURN + 0.05:
         eyes = blink(t, LEAP + 0.96) or (0.3, 0.3)
     elif t < GULP:
@@ -1426,10 +1425,10 @@ def apple_tree(t):
     # ---- where he is looking: right and down
     look = (9 * glance, 5 * glance)
     look = (mixed(look[0], 9, gawp), mixed(look[1], -9, gawp))
-    look = (mixed(look[0], 10, fruit), mixed(look[1], -3, fruit))
+    look = (mixed(look[0], 10, fruit), mixed(look[1], -2, fruit))
     if SNAP <= t < RUN_FROM:
         watching = 1 - ease(t, RUN_FROM - 0.15, RUN_FROM)
-        look = (10 * watching, (-3 + 12 * fell) * watching)
+        look = (10 * watching, mixed(-2 + 11 * fell, -8, gone) * watching)       # at the apple, and up at where the tree was
     ahead = ease(t, RUN_FROM - 0.12, RUN_FROM + 0.08) * (1 - ease(t, LEAP - 0.05, LEAP + 0.05))
     look = (mixed(look[0], -9, ahead), look[1])
     look = (mixed(look[0], min(max(apple_beside(t) / 10, -10), 10), leap), mixed(look[1], 9, leap))     # down at it as it goes under him
@@ -1448,7 +1447,7 @@ def apple_tree(t):
     mouth = mixed(mouth, 0.80, fell * (1 - ease(t, LAND, LAND + 0.06)) if t >= SNAP else 0.0)
     mouth = mixed(mouth, 1.34, scare)
     mouth = mixed(mouth, 0.44 + (0.16 if int(t / 0.04) % 2 else -0.12), tremble)   # teeth chattering
-    lost_it = bump(t, 6.96, 0.12, LEAP - 0.36 - 7.08, 0.06)
+    lost_it = bump(t, RUN_FROM + 1.54, 0.12, LEAP - 0.36 - (RUN_FROM + 1.66), 0.06)
     mouth = mixed(mouth, 1.30 + 0.05 * math.sin(2 * step) + 0.05 * back - 0.26 * lost_it, fleeing)
     mouth = mixed(mouth, 1.36, leap)
     mouth = mixed(mouth, 0.92 + 0.16 * breath, phew)                                # puffing
@@ -1458,7 +1457,7 @@ def apple_tree(t):
 
     # ---- his body
     landed, landed3 = max(0.0, t - down), max(0.0, t - LEAP - LEAP_LONG)
-    squash = (-0.03 * jolt + 0.07 * flinch + 0.018 * want * math.sin(2 * math.pi * (t - 3.1) / 0.36)
+    squash = (-0.03 * jolt + 0.07 * flinch + 0.018 * want * math.sin(2 * math.pi * (t - RIPE) / 0.36) - 0.03 * gone
               - 0.05 * up + (0.10 * math.exp(-landed * 9) * math.cos(landed * 16) if t >= down else 0.0) * (1 - flee)
               + 0.09 * antic + 0.08 * antic2
               - 0.06 * (bump(t, RUN_FROM, 0.07, 0.04, 0.18) + bump(t, RUN_BACK, 0.07, 0.04, 0.18))
@@ -1467,18 +1466,18 @@ def apple_tree(t):
               + 0.035 * breath * phew - 0.03 * take
               + (0.06 * math.exp(-(t - CATCH) * 12) if t >= CATCH else 0.0)
               + (0.08 * math.exp(-(t - GULP) * 9) * math.cos((t - GULP) * 14) if t >= GULP else 0.0) + 0.03 * gulp)
-    dy = (-9 * arc(t, SHOOT, 0.2) - 34 * 4 * air * (1 - air) - 9 * abs(side) * pace
+    dy = (-9 * arc(t, SHOOT, 0.2) - 34 * 4 * air * (1 - air) - 8 * arc(t, POOF + 0.05, 0.16) - 9 * abs(side) * pace
           - 92 * 4 * air3 * (1 - air3) - 9 * arc(t, TURN + 0.05, 0.16))
     shied = ease(t, LAND + 0.07, down) * (1 - ease(t, RUN_FROM - 0.20, RUN_FROM))  # he comes down a little further off
     shake = (1.3 if int(t / 0.05) % 2 else -1.3) * tremble
     dx = -4 * jolt - 5 * flinch - 4 * shied + shake + 6 * antic - 6 * antic2 + 2.2 * side * pace
-    lean = (-2.0 * jolt - 3.5 * flinch - 2.0 * max(gawp, fruit) * (1 - want) + 1.6 * want - 3.0 * tremble
+    lean = (-2.0 * jolt - 3.5 * flinch - 2.0 * gawp + 1.2 * fruit * (1 - want) + 1.6 * want - 3.0 * tremble
             + 4.5 * antic - 4.5 * antic2 + way * 5.5 * run ** 0.5 + 2.4 * side * pace
             - 2.5 * eyeing * (1 - take) - 4.0 * braking)
 
     # ---- his arms: how far each is lifted, and curled
     arms, bend = (24 + 18 * jolt + 10 * gawp, 24 + 18 * jolt + 10 * gawp), (-14.0, -14.0)
-    bob = 7 * math.sin(2 * math.pi * (t - 3.1) / 0.36)
+    bob = 7 * math.sin(2 * math.pi * (t - RIPE) / 0.36)
 
     def to(lift, curl, by):
         nonlocal arms, bend
@@ -1529,7 +1528,7 @@ CLIPS = {
     # Actions: played once through, off the beat, so they begin and end standing at rest.
     "action_bubble_tea": ("action_bubble_tea.webp", "Bubble Tea", bubble_tea, 8.6, 12.5, True),
     "action_fart": ("action_fart.webp", "Fart", fart, 7.32, 50 / 3, True),
-    "action_apple_tree": ("action_apple_tree.webp", "Apple Tree", apple_tree, 15.4, 25, True),
+    "action_apple_tree": ("action_apple_tree.webp", "Apple Tree", apple_tree, 16.8, 25, True),
     "drag": ("drag.webp", None, carried, 0.40, 25, False),
     "fall": ("fall.webp", None, falling, 0.24, 25, False),
 }

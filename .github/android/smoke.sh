@@ -109,11 +109,11 @@ sleep 8
 
 log "an action that goes somewhere: Domo's Apple Tree"
 adb shell am start -W -n $pkg/.MainActivity --es command act --es action action_apple_tree
-# The tree is up after two seconds, and gone again before five.
+# The tree is up after two seconds, and stays until six.
 sleep 3.5
 shot 4-tree
-# Then he runs off one way and back the other, for fifteen seconds in all, and stands about.
-sleep 17
+# Then he runs off one way and back the other, for seventeen seconds in all, and stands about.
+sleep 18.5
 
 log "still running?"
 adb shell pidof $pkg && echo "running" || echo "NOT RUNNING"

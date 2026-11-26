@@ -303,8 +303,8 @@ class Plush:
 
     def tree(self, parts):
         """A toy tree: a trunk, boughs and clumps of leaves cut from the same fleece he is,
-        in their own colours, with shiny little apples sewn on. The clumps at the back are
-        a darker green, and the ones the light catches a lighter one."""
+        in their own colours. The clumps at the back are a darker green, and the ones the
+        light catches a lighter one."""
         space = parts["space"]
         if parts["grass"]:
             self.stuffed(parts["grass"], LEAF, room=5, soft=0.8, shadow=0.15)
@@ -328,10 +328,6 @@ class Plush:
             self.lay(patch, LEAF_LIGHT * (light * (0.9 + 0.1 * depth(cover, 5.0)))[..., None], blur(cover, 3.2) * 0.85)
         for curl in parts["scallops"]:
             self.crease(curl)
-        for apple, shine in parts["fruit"]:
-            self.stuffed([apple], APPLE, room=5, soft=0.8, shadow=0.26)
-            patch, cover = self.cover([shine], 3)
-            self.lay(patch, np.broadcast_to(GLOSS, cover.shape + (3,)), blur(cover, 0.8) * 0.8)
 
     def apple(self, parts):
         """Smooth and shiny, where everything else is fleece."""
