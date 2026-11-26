@@ -26,10 +26,17 @@ public static class SmokeTest
     /// or null when that is nothing. It is held until then, and fails the run with those
     /// words if it is kept waiting too long.
     /// </summary>
-    sealed record Step(double At, string Name, Action Run, Func<string?>? WaitingFor = null);
+    sealed record Step(double At, string Name, Action Run, Func<string?>? WaitingFor = null, double WaitUpTo = Patience);
 
-    /// <summary>Seconds a step may be kept waiting, and seconds the first frame may take to appear.</summary>
+    /// <summary>Seconds a step may be kept waiting unless it says otherwise, and seconds the first frame may take to appear.</summary>
     const double Patience = 10, StartUpLimit = 30;
+
+    /// <summary>
+    /// Seconds the check of every clip may take. It decodes every frame of every character
+    /// there is, so it grows with each character that is added, and on the slowest of the
+    /// machines the builds run on it no longer fits in <see cref="Patience"/>.
+    /// </summary>
+    const double EveryClipLimit = 40;
 
     /// <summary>The most one hold-up counts for on the run's clock, in seconds.</summary>
     const double LongestTick = 0.5;
@@ -818,7 +825,7 @@ public static class SmokeTest
                         throw new InvalidOperationException($"character '{id}' has a clip that cannot be read: {error}");
                 Note($"every clip of {string.Join(", ", packs)} can be decoded");
             }, WaitingFor: () => app.Library.LoadedPacks.FirstOrDefault(p => !p.Checked) is { } pack
-                ? $"the clips of '{pack.Id}' are still being checked" : null),
+                ? $"the clips of '{pack.Id}' are still being checked" : null, WaitUpTo: EveryClipLimit),
         };
 
         // On macOS the window takes the mouse only while the pointer is on the character, so
@@ -890,7 +897,7 @@ public static class SmokeTest
                     }
                     if (step.WaitingFor?.Invoke() is { } problem)
                     {
-                        if (watch.Elapsed.TotalSeconds - held > Patience) throw new InvalidOperationException($"{problem} (waited {Patience:0}s)");
+                        if (watch.Elapsed.TotalSeconds - held > step.WaitUpTo) throw new InvalidOperationException($"{problem} (waited {step.WaitUpTo:0}s)");
                         waited = true;
                         return;     // look again on the next tick
                     }
