@@ -19,6 +19,9 @@ public sealed class MateBrain
     const double WalkSpeed = 0.55;     // character heights per second
     const double GravityAccel = 15;    // character heights per second squared
     const double EdgeMargin = 0.42;    // how close the feet may get to a screen edge, in heights
+    const double BodyTall = 0.88;      // how much of its height a mate takes up when another runs into it
+    const double KnockSpeed = 3.2;     // hit faster than this, in heights per second, a mate is knocked flying
+    const double NoticeFrom = 4.5;     // how far off a mate sees another and goes over, in heights
 
     readonly BeatClock _clock;
     readonly Conductor _conductor;
@@ -47,6 +50,12 @@ public sealed class MateBrain
     double _walkTarget, _walkPhase;
     double _dragX, _dragY, _swing, _swingV, _vx, _vy;
     readonly List<(double T, double X, double Y)> _samples = [];
+
+    // The other mates: bumping into them, and meeting them.
+    double _shove, _dragSpeed, _bumpRest, _mingleRest, _greetIn;
+    Gathering? _gathering;
+    MateBrain? _visiting;
+    int _visitSide;
 
     double _landT = 10, _impact, _pokeT = 10, _blinkIn = 2, _blinkT, _zzzIn;
     bool _hover;
@@ -91,6 +100,14 @@ public sealed class MateBrain
     public ParticleSystem Particles { get; } = new();
     public bool IsDancing => State == MateState.Dance;
     public string? CurrentMoveName => State == MateState.Dance ? _session?.Current.Name : null;
+    /// <summary>The other mates on the desktop, if this one is among them. Set by <see cref="Engine.Crowd"/>.</summary>
+    public Crowd? Crowd { get; internal set; }
+    /// <summary>The get-together this mate is at: saying hello, or dancing.</summary>
+    public Gathering? Gathering => _gathering;
+    /// <summary>Half the width it takes up when another mate runs into it, in pixels.</summary>
+    public double HalfWidth => 0.37 * H * Math.Clamp(_character.AspectRatio, 0.45, 1.15);
+    /// <summary>How fast it is moving sideways through the air or in the hand, in pixels a second.</summary>
+    public double VelocityX => State == MateState.Fall ? _vx : State == MateState.Drag ? _dragSpeed : 0;
     public bool IsActing => State == MateState.Act;
     /// <summary>The menu name of the action the mate is doing, if it is doing one.</summary>
     public string? CurrentActionName => State == MateState.Act ? _action.Name : null;
@@ -230,6 +247,7 @@ public sealed class MateBrain
     public void StopDance()
     {
         if (State != MateState.Dance) return;
+        LeaveGathering(rest: true);
         StopOwnSession();
         SetState(MateState.Idle, RandomIdle(), 0.3);
     }
@@ -258,7 +276,7 @@ public sealed class MateBrain
         StopOwnSession();
         _dragX = FootX;
         _dragY = FootY;
-        _swing = _swingV = 0;
+        _swing = _swingV = _dragSpeed = 0;
         _samples.Clear();
         // What is carried is dropped sooner or later.
         _character.Prepare("fall");
@@ -331,9 +349,32 @@ public sealed class MateBrain
         _awake += dt;
         Beat = _clock.Beat;
 
+        if (_bumpRest > 0) _bumpRest -= dt;
+        if (_mingleRest > 0) _mingleRest -= dt;
+        if (Crowd is { Mates.Count: > 1 } crowd)
+        {
+            if (_settings.Collide) Collide(crowd, dt);
+            Mingle(crowd);
+        }
+        else if (_gathering != null)
+        {
+            LeaveGathering(rest: false);
+        }
+
         bool onFloor = State is MateState.Idle or MateState.Walk or MateState.Sit or MateState.Sleep or MateState.Dance or MateState.Act;
         if (onFloor)
         {
+            // Shoved along the floor, it slides a little way and stops.
+            if (Math.Abs(_shove) > 0.02 * H)
+            {
+                _baseX += _shove * dt;
+                _shove *= Math.Exp(-7 * dt);
+            }
+            else
+            {
+                _shove = 0;
+            }
+
             // The floor can move: gravity toggled, taskbar resized, or dropped on another monitor.
             if (_baseY > Floor) _baseY = Floor;
             else if (_settings.Gravity && _baseY < Floor - 1) Drop();
@@ -350,7 +391,8 @@ public sealed class MateBrain
         {
             case MateState.Idle:
                 target = IdleFrame();
-                if (_stateTime >= _stateDuration) ChooseNext();
+                if (_gathering is { } gathering) Greet(gathering, ref target, dt);
+                else if (_stateTime >= _stateDuration) ChooseNext();
                 break;
             case MateState.Walk:
                 target = WalkFrame(dt);
@@ -471,6 +513,9 @@ public sealed class MateBrain
         StartBlend(blend);
         // Leaving the dance floor always drops the session, so a party can pull the mate back in later.
         if (state != MateState.Dance) _session = null;
+        // Standing and dancing are what is done at a get-together; anything else is leaving it.
+        if (state is not (MateState.Idle or MateState.Dance)) LeaveGathering(rest: true);
+        if (state != MateState.Walk) _visiting = null;
         State = state;
         _stateTime = 0;
         _stateDuration = duration;
@@ -488,12 +533,16 @@ public sealed class MateBrain
 
     void StopOwnSession()
     {
-        if (_session != null && !ReferenceEquals(_session, _conductor.Session)) _session.Stop();
+        // A routine it shares with others, the party's or a get-together's, goes on without it.
+        if (_session != null && !ReferenceEquals(_session, _conductor.Session) && !ReferenceEquals(_session, _gathering?.Session))
+            _session.Stop();
         _session = null;
     }
 
     void BeginSession(DanceSession session)
     {
+        // Any dance but the get-together's own is a reason to leave it.
+        if (!ReferenceEquals(session, _gathering?.Session)) LeaveGathering(rest: true);
         _session = session;
         _seenSerial = -1;
         _awake = 0;
@@ -503,6 +552,8 @@ public sealed class MateBrain
     void ChooseNext()
     {
         double r = _rng.NextDouble();
+        // Sometimes the walk it would have gone on is over to another mate.
+        if (_settings.Wander && r < 0.16 && TryVisit()) return;
         if (_settings.Wander && r < 0.45 && TryStartWalk()) return;
         if (_settings.AutoDance && r < 0.63)
         {
@@ -551,6 +602,12 @@ public sealed class MateBrain
 
     MoveFrame WalkFrame(double dt)
     {
+        // Walking over to another mate, it heads for wherever that one is now.
+        if (_visiting is { } friend)
+        {
+            if (friend.OpenTo(this)) _walkTarget = ClampX(friend.FootX + _visitSide * MeetingGap(friend));
+            else _visiting = null;
+        }
         double dx = _walkTarget - _baseX;
         int d = dx >= 0 ? 1 : -1;
         double step = WalkSpeed * H * dt;
@@ -691,6 +748,7 @@ public sealed class MateBrain
         s.Update(Beat);
         if (s.Finished)
         {
+            if (ReferenceEquals(s, _gathering?.Session)) LeaveGathering(rest: true);
             _session = null;
             SetState(MateState.Idle, RandomIdle(), 0.3);
             return _last;
@@ -720,7 +778,7 @@ public sealed class MateBrain
     int PickDirection(DanceSession s)
     {
         double roomRight = Right - EdgeMargin * H - FootX, roomLeft = FootX - Left - EdgeMargin * H;
-        bool shared = ReferenceEquals(s, _conductor.Session);
+        bool shared = ReferenceEquals(s, _conductor.Session) || ReferenceEquals(s, _gathering?.Session);
         int preferred = shared ? s.Dir : roomRight >= roomLeft ? 1 : -1;
         if (!s.Current.Travels) return preferred;
 
@@ -734,6 +792,7 @@ public sealed class MateBrain
     MoveFrame DragFrame(double dt)
     {
         double vx = dt > 0 ? (_dragX - _baseX) / dt : 0;
+        _dragSpeed = Lerp(_dragSpeed, vx, 1 - Math.Exp(-dt * 18));
         _baseX = _dragX;
         _baseY = _dragY;
         _samples.Add((_time, _dragX, _dragY));
@@ -808,6 +867,267 @@ public sealed class MateBrain
             }
         }
         return f;
+    }
+
+    // ---- The other mates ----
+
+    /// <summary>True for a mate that is staying where it is: not walking by, and not being taken somewhere by a dance or an action.</summary>
+    bool Standing => State is MateState.Idle or MateState.Sit or MateState.Sleep
+                     || (State == MateState.Dance && _session?.Current.Travels != true);
+
+    /// <summary>
+    /// Keeps this mate out of the others. In the air it bounces off whatever it hits, and
+    /// what it hits is knocked flying, or shoved if it was hit gently. On the floor it is
+    /// pushed along by a mate that is being carried, or batted away by one swung at it, and
+    /// two mates standing in the same place step apart. A mate that is walking, or that a
+    /// dance or an action is taking somewhere, goes past the others as if behind them.
+    /// </summary>
+    void Collide(Crowd crowd, double dt)
+    {
+        if (State == MateState.Drag) return;                  // in the hand, it is the others that give way
+        foreach (var other in crowd.Mates)
+        {
+            if (ReferenceEquals(other, this)) continue;
+            // Each is a box standing on its feet. They have collided if the boxes overlap.
+            double dx = FootX - other.FootX, overX = HalfWidth + other.HalfWidth - Math.Abs(dx);
+            if (overX <= 0) continue;
+            double bottom = FootY - Body.Y * H, theirs = other.FootY - other.Body.Y * other.H;
+            double overY = Math.Min(bottom, theirs) - Math.Max(bottom - BodyTall * H, theirs - BodyTall * other.H);
+            if (overY <= 0) continue;
+            int away = dx > 0 ? 1 : dx < 0 ? -1 : crowd.IndexOf(this) < crowd.IndexOf(other) ? -1 : 1;
+
+            if (State == MateState.Fall) Bounce(other, away, overX, overY, bottom, theirs);
+            else if (other.State == MateState.Drag) GiveWay(other, away, overX);
+            else if (Standing && other.Standing) _baseX += away * Math.Min(overX / 2, 2.2 * H * dt);
+        }
+    }
+
+    /// <summary>In the air, and into another mate: off it, and it feels the blow.</summary>
+    void Bounce(MateBrain other, int away, double overX, double overY, double bottom, double theirs)
+    {
+        // Coming down on top of it: up off its head, and to one side.
+        if (_vy > 0 && overY < overX && bottom < theirs - 0.45 * other.H)
+        {
+            _baseY -= overY;
+            if (_bumpRest > 0) return;
+            _bumpRest = 0.12;
+            double hard = Math.Abs(_vy) / H;
+            _vy = -Math.Max(Math.Abs(_vy) * 0.5, 4.5 * H);
+            _vx += away * (1.0 + _rng.NextDouble()) * H;
+            other.Squashed(Math.Clamp(hard / 9, 0.4, 1));
+            Bonk(FootX, theirs - BodyTall * other.H);
+            return;
+        }
+
+        _baseX += away * overX;
+        double closing = -away * (_vx - other.VelocityX);    // how fast the two are coming together
+        if (closing <= 0 || _bumpRest > 0) return;
+        _bumpRest = 0.12;
+        _vx = other.VelocityX + away * closing * 0.5;
+        Bonk(FootX - away * HalfWidth, Math.Min(bottom, theirs) - 0.5 * Math.Min(H, other.H));
+        other.Hit(-away * closing);
+    }
+
+    /// <summary>On the floor, with a mate that is being carried pushed into this one.</summary>
+    void GiveWay(MateBrain other, int away, double overX)
+    {
+        double swing = other.VelocityX * away;                // how fast it is being swung this way
+        if (swing > KnockSpeed * H && _settings.Gravity && _bumpRest <= 0)
+        {
+            Bonk(FootX - away * HalfWidth, FootY - 0.5 * H);
+            Knock(away * swing * 0.6, -(2.2 + Math.Min(swing / H * 0.25, 4)) * H);
+            return;
+        }
+        _baseX += away * overX;
+        if (_bumpRest <= 0 && swing > 0.4 * H)
+        {
+            _bumpRest = 0.5;
+            Squashed(0.35);
+        }
+    }
+
+    /// <summary>
+    /// Another mate has run into this one, at so many pixels a second (less than nothing is
+    /// from the right). Hit hard, it is knocked flying; hit gently, it is shoved along.
+    /// </summary>
+    void Hit(double speed)
+    {
+        _bumpRest = 0.12;
+        if (State == MateState.Drag) return;
+        if (State == MateState.Fall)
+        {
+            _vx += speed * 0.5;
+            return;
+        }
+        if (Math.Abs(speed) > KnockSpeed * H && _settings.Gravity)
+        {
+            Knock(speed * 0.55, -Math.Min(1.5 + Math.Abs(speed) / H * 0.3, 7) * H);
+        }
+        else
+        {
+            _shove += speed * 0.45;
+            Squashed(0.5);
+        }
+    }
+
+    /// <summary>Sends the mate flying, as when another is thrown at it. It drops whatever it was doing.</summary>
+    public void Knock(double vx, double vy)
+    {
+        StopOwnSession();
+        _awake = 0;
+        _swing = _swingV = _shove = 0;
+        _bumpRest = 0.15;
+        // Clear of the floor, or it would land before it had left.
+        _baseY = Math.Min(_baseY, Floor) - 2;
+        Drop(vx, Math.Min(vy, -0.5 * H));
+    }
+
+    /// <summary>Squashes and springs back, as it does on landing: something has come down on it or bumped it.</summary>
+    void Squashed(double strength)
+    {
+        _impact = strength;
+        _landT = 0;
+    }
+
+    /// <summary>A few stars where two mates have knocked together.</summary>
+    void Bonk(double x, double y)
+    {
+        if (!_settings.Effects) return;
+        for (int i = 0; i < 5; i++)
+        {
+            double a = _rng.NextDouble() * Tau, v = (0.5 + _rng.NextDouble() * 0.7) * H, life = 0.35 + _rng.NextDouble() * 0.25;
+            Particles.Add(new Particle
+            {
+                Kind = ParticleKind.Star, X = x, Y = y,
+                Vx = Math.Cos(a) * v, Vy = Math.Sin(a) * v - 0.3 * H,
+                Life = life, MaxLife = life,
+                Size = 0.04 + _rng.NextDouble() * 0.035,
+                VRot = (_rng.NextDouble() - 0.5) * 8,
+                Color = 0xFFFFE27A,
+            });
+        }
+    }
+
+    /// <summary>How far apart two mates stand when they get together, feet to feet, in pixels.</summary>
+    double MeetingGap(MateBrain other) => HalfWidth + other.HalfWidth + 0.2 * Math.Max(H, other.H);
+
+    /// <summary>Whether another mate could get together with this one now.</summary>
+    bool OpenTo(MateBrain asker)
+    {
+        // On the same floor: another monitor's can be higher or lower.
+        if (Math.Abs(FootY - asker.FootY) > 0.4 * Math.Min(H, asker.H)) return false;
+        if (_gathering is { } going) return !going.Over(Beat) && State is MateState.Idle or MateState.Dance;
+        return _mingleRest <= 0 && State is MateState.Idle or MateState.Walk or MateState.Sit;
+    }
+
+    /// <summary>
+    /// Has this mate take notice of the others. One that is right beside it, it gets
+    /// together with: they say hello and dance (see <see cref="Engine.Gathering"/>). One
+    /// that is a little way off, it walks over to. After a get-together it has had enough
+    /// company for a while.
+    /// </summary>
+    void Mingle(Crowd crowd)
+    {
+        if (!_settings.Mingle || _conductor.PartyOn)
+        {
+            // Not wanted; or the party is on, and everyone is dancing already.
+            LeaveGathering(rest: false);
+            return;
+        }
+        if (_gathering != null || _mingleRest > 0 || State is not (MateState.Idle or MateState.Walk)) return;
+
+        MateBrain? nearest = null;
+        double best = double.MaxValue;
+        foreach (var other in crowd.Mates)
+        {
+            if (ReferenceEquals(other, this) || !other.OpenTo(this)) continue;
+            double far = Math.Abs(other.FootX - FootX) - MeetingGap(other);     // further apart than they would stand, by this much
+            if (far < best) (best, nearest) = (far, other);
+        }
+        if (nearest == null) return;
+
+        if (best <= 0.25 * H)
+        {
+            if (State == MateState.Walk) SetState(MateState.Idle, RandomIdle(), 0.25);
+            crowd.Gather(this, nearest);
+        }
+        else if (State == MateState.Idle && _settings.Wander && _stateTime > 0.8 && best <= NoticeFrom * H)
+        {
+            Visit(nearest);
+        }
+    }
+
+    /// <summary>Sets off to see one of the other mates, wherever on the floor it is. False if there is none to see.</summary>
+    bool TryVisit()
+    {
+        if (!_settings.Mingle || _mingleRest > 0 || _conductor.PartyOn || Crowd is not { Mates.Count: > 1 } crowd) return false;
+        var open = crowd.Mates.Where(m => !ReferenceEquals(m, this) && m.OpenTo(this)).ToList();
+        if (open.Count == 0) return false;
+        Visit(open[_rng.Next(open.Count)]);
+        return State == MateState.Walk;
+    }
+
+    /// <summary>Walks over to stand beside another mate, on the side of it this one is on already.</summary>
+    void Visit(MateBrain other)
+    {
+        int side = FootX >= other.FootX ? 1 : -1;
+        double target = ClampX(other.FootX + side * MeetingGap(other));
+        if (Math.Abs(target - _baseX) < 0.1 * H) return;      // as near as it can get
+        _walkTarget = target;
+        _walkPhase = 0;
+        SetState(MateState.Walk, 0, 0.2);
+        _visiting = other;
+        _visitSide = side;
+    }
+
+    /// <summary>Called by a <see cref="Engine.Gathering"/> as this mate joins it; <paramref name="place"/> is how many were there first.</summary>
+    internal void JoinGathering(Gathering gathering, int place)
+    {
+        if (!ReferenceEquals(_gathering, gathering)) LeaveGathering(rest: false);
+        if (State is MateState.Walk or MateState.Sit) SetState(MateState.Idle, RandomIdle(), 0.3);
+        _gathering = gathering;
+        _visiting = null;
+        _awake = 0;
+        // They say hello one after another, not all at once.
+        _greetIn = 0.1 + 0.3 * Math.Min(place, 3);
+    }
+
+    /// <summary>Leaves the get-together, if it is at one. With <paramref name="rest"/>, it wants no more company for a while.</summary>
+    internal void LeaveGathering(bool rest)
+    {
+        if (_gathering == null) return;
+        _gathering.Remove(this);
+        _gathering = null;
+        if (rest) _mingleRest = 35 + _rng.NextDouble() * 25;
+    }
+
+    /// <summary>
+    /// At a get-together, before the dancing: turns to the others, says hello with a happy
+    /// hop, and starts dancing on the beat the get-together starts on.
+    /// </summary>
+    void Greet(Gathering gathering, ref MoveFrame f, double dt)
+    {
+        var friend = gathering.Members.FirstOrDefault(m => !ReferenceEquals(m, this));
+        if (friend == null || gathering.Over(Beat))
+        {
+            // Left on its own there, or it is all over.
+            LeaveGathering(rest: friend != null);
+            return;
+        }
+
+        f.Body.Facing = friend.FootX >= FootX ? 1 : -1;
+        f.Limbs.LookX = 0.8 * f.Body.Facing;
+        f.Limbs.Face = Face.Happy;
+        if (_greetIn >= 0 && (_greetIn -= dt) < 0)
+        {
+            _pokeT = 0;                                       // the hop it does when it is clicked
+            Emit(Fx.Hearts);
+        }
+        if (Beat >= gathering.StartBeat)
+        {
+            if (ReferenceEquals(gathering.Members[0], this)) Emit(Fx.Confetti);
+            BeginSession(gathering.Session);
+        }
     }
 
     // ---- Effects ----

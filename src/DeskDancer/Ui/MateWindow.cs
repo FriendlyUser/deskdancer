@@ -448,6 +448,12 @@ public sealed class MateWindow : Window
         menu.Items.Add(Check("Dance on its own", settings.AutoDance, v => Toggle(x => settings.AutoDance = x, v)));
         if (Brain.AllActions().Count > 0)
             menu.Items.Add(Check("Do actions on its own", settings.AutoActions, v => Toggle(x => settings.AutoActions = x, v)));
+        if (_app.Mates.Count > 1)
+        {
+            // What the mates do about one another, which takes more than one of them.
+            menu.Items.Add(Check("Bump into each other", settings.Collide, v => Toggle(x => settings.Collide = x, v)));
+            menu.Items.Add(Check("Meet up and dance together", settings.Mingle, v => Toggle(x => settings.Mingle = x, v)));
+        }
         menu.Items.Add(Check("Fall to the floor when dropped", settings.Gravity, v => Toggle(x => settings.Gravity = x, v)));
         menu.Items.Add(Check("Notes and sparkles", settings.Effects, v => Toggle(x => settings.Effects = x, v)));
         menu.Items.Add(new Separator());

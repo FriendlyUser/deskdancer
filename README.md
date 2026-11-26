@@ -162,7 +162,8 @@ The right-click menu has everything else:
 - **Sit down / Take a nap**, and switches for wandering, dancing on its own, doing its
   actions on its own, falling when dropped, and the notes-and-sparkles effects.
 - **Character / Size / Add another mate**: switch character, resize from 50% to 300%,
-  or put several mates on screen at once.
+  or put several mates on screen at once. With more than one, they bump into each other
+  and meet up to dance: see [More than one mate](#more-than-one-mate) below.
 - **Always on top**, **Click through empty space**, **Settings...**, **Quit**.
 
 ### Settings
@@ -173,7 +174,7 @@ change, on one page. Every change takes effect straight away.
 | Card | What is on it |
 | --- | --- |
 | **This mate** | The character and the size of the mate whose menu you opened it from. |
-| **What the mates do** | Wander around, dance on its own, do actions on its own, fall when dropped, notes and sparkles, and the tempo. |
+| **What the mates do** | Wander around, dance on its own, do actions on its own, bump into each other, meet up and dance together, fall when dropped, notes and sparkles, and the tempo. |
 | **On the desktop** | Always on top, and click through empty space. |
 | **Your characters** | The folder characters of your own are kept in, with **Open folder**, **Copy path**, **Change...** to keep them somewhere else, **Use the usual folder** to go back, and **Reload characters**. |
 | **Saving** | **Save changes as I make them** (on to begin with; switched off, changes last until you quit unless you press **Save now**), **Reset to defaults** (the tempo, the switches and the moves; your mates and characters are kept), and where the settings file is, with **Open folder**. |
@@ -181,6 +182,37 @@ change, on one page. Every change takes effect straight away.
 A folder chosen with **Change...** is looked in first. The usual folder is still looked in
 after it, and so are the characters that come with DeskDancer, so nothing you already had
 goes missing.
+
+### More than one mate
+
+Put a second mate on the screen with **Add another mate**, and they take notice of each
+other.
+
+**They meet up and dance.** A mate that sees another a little way off walks over to it, and
+now and then one sets off across the screen to find another. When two are side by side they
+turn to each other, say hello with a hop and a heart each, and dance the same five moves in
+step, with confetti to start. Any other mate that comes by joins in. Afterwards they have had
+enough company for the best part of a minute, and go back to what they were doing. You can
+start one yourself by carrying a mate over and putting it down next to another.
+
+**They bump into each other.**
+
+| Do this | And |
+| --- | --- |
+| Throw a mate at another | it bounces off, and the one it hits is knocked flying, or shoved along the floor if it was a gentle throw |
+| Drop a mate on another | it bounces off the other's head, which squashes |
+| Carry a mate into another | the other is pushed along the floor |
+| Swing a carried mate at another | the other is batted away |
+
+Two mates that end up standing on the same spot step apart. A mate that is walking
+somewhere, or that a dance or an action is taking across the screen, goes past the others
+as if behind them, so nobody gets stuck on the wrong side of anybody else.
+
+Both have a switch, in the right-click menu when there is more than one mate and on the
+Settings window: **Bump into each other** and **Meet up and dance together**. **Dance
+party** is still there for everyone dancing non-stop, wherever they are.
+
+On Android there is one mate, so none of this applies there.
 
 ### The moves
 
@@ -368,7 +400,8 @@ party, the routines and the menu offer that one alone. It runs one of Domo's act
 through to the end and checks that it brought no notes or dance floor, that a party waited
 for it, and that it is not offered once switched off; runs Apple Tree twice, with room
 and without, and checks that the mate goes where the action says, the right way round;
-and has a mate do it on the screen. It checks that a pack holds only
+and has a mate do it on the screen. It has mates step apart, throws one at another, pushes
+and bats one with another, and has two meet and dance in step. It checks that a pack holds only
 the animations its mates have shown, that they come back after being taken away, and
 that every animation of every pack can be read. On Windows and macOS it also reads
 pixels back off the screen to confirm that the window is see-through and the character
