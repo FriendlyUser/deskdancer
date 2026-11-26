@@ -35,6 +35,11 @@ public sealed class MateBrain
 
     DanceSession? _session;
     OwnClip _action;
+    // An action waits for its pictures before it starts, and is played as drawn (1) or the
+    // other way round (-1), whichever leaves it room to go where it goes.
+    bool _actionWaiting;
+    double _actionWait;
+    int _actionSide = 1;
     int _seenSerial = -1, _moveDir = 1;
     double _prevMoveT;
     long _lastNoteBeat = long.MinValue;
@@ -153,8 +158,11 @@ public sealed class MateBrain
     /// Does one of the character's actions: plays its clip once from the start, at its own
     /// speed, and then goes back to standing about. It keeps no beat, so there are no notes
     /// and no dance floor, and a dance party leaves the mate be until it is done. Being
-    /// picked up, or told to sit, nap or dance, cuts it short. False if the character has no
-    /// action by that name.
+    /// picked up, or told to sit, nap or dance, cuts it short. An action that goes somewhere
+    /// takes the mate there, and is played the other way round if that is the way with
+    /// room for it. It starts once its pictures have been read, so that none of it is
+    /// missed; until then the mate stands as it was. False if the character has no action by
+    /// that name.
     /// </summary>
     public bool DoAction(string id)
     {
@@ -164,11 +172,30 @@ public sealed class MateBrain
         _character.Prepare(action.Id);
         _action = action;
         _awake = 0;
+        _actionWaiting = true;
+        _actionWait = 0;
+        _actionSide = action.Travel is { } travel ? SideWithRoom(travel) : 1;
         SetState(MateState.Act, action.Seconds, 0.25);
-        // Straight from the first frame, even when it is the same action again.
-        _clip = action.Id;
-        _clipTime = 0;
         return true;
+    }
+
+    /// <summary>How long an action waits for its pictures before it is given up on, in seconds.</summary>
+    const double LongestActionWait = 10;
+
+    /// <summary>
+    /// Which way round to play an action that travels: as it is showing now (1 as drawn, -1
+    /// mirrored) if that keeps it on the screen, and if not, whichever way goes less far off it.
+    /// </summary>
+    int SideWithRoom(ClipTravel travel)
+    {
+        int now = Facing * _character.NaturalFacing < 0 ? -1 : 1;
+        double lo = Left + EdgeMargin * H, hi = Right - EdgeMargin * H;
+        double Over(int side)
+        {
+            double a = FootX + side * travel.Min * H, b = FootX + side * travel.Max * H;
+            return Math.Max(0, lo - Math.Min(a, b)) + Math.Max(0, Math.Max(a, b) - hi);
+        }
+        return Over(-now) < Over(now) - 1 ? -now : now;
     }
 
     /// <summary>Does one of the actions that are switched on, picked at random. False if there are none.</summary>
@@ -343,10 +370,7 @@ public sealed class MateBrain
                 target = DanceFrame(out clip);
                 break;
             case MateState.Act:
-                // The clip has all the motion in it, so the app adds none of its own.
-                target = MoveFrame.Neutral;
-                clip = _action.Id;
-                if (_stateTime >= _stateDuration) SetState(MateState.Idle, RandomIdle(), 0.3);
+                target = ActFrame(dt, out clip);
                 break;
             case MateState.Drag:
                 target = DragFrame(dt);
@@ -608,6 +632,48 @@ public sealed class MateBrain
                 Life = 2.4, MaxLife = 2.4, Size = 0.07, Color = 0xFFB9C4FF,
                 Wobble = _rng.NextDouble() * Tau,
             });
+        }
+        return f;
+    }
+
+    MoveFrame ActFrame(double dt, out string clip)
+    {
+        clip = "idle";
+        if (_actionWaiting)
+        {
+            // Its pictures are still being read: stand as before until they are there. If
+            // they cannot be read, or are taking for ever, there is nothing to act out.
+            _actionWait += dt;
+            var pictures = _character.Readiness(_action.Id);
+            if (pictures != ClipReadiness.Ready)
+            {
+                if (pictures == ClipReadiness.Coming && _actionWait < LongestActionWait) _stateTime = 0;
+                else SetState(MateState.Idle, RandomIdle(), 0);
+                return IdleFrame();
+            }
+            _actionWaiting = false;
+            StartBlend(0.2);
+            // Straight from the first frame, even when it is the same action again.
+            _stateTime = 0;
+            _clip = _action.Id;
+            _clipTime = 0;
+        }
+
+        clip = _action.Id;
+        if (_stateTime >= _stateDuration)
+        {
+            // Where it has got to is where it now stands.
+            SetState(MateState.Idle, RandomIdle(), 0.3);
+            return IdleFrame();
+        }
+
+        // The clip has all the motion in it, so the app adds none of its own, bar taking
+        // the mate where the action goes.
+        var f = MoveFrame.Neutral;
+        if (_action.Travel is { } travel)
+        {
+            f.Body.X = _actionSide * travel.At(_stateTime);
+            f.Body.Facing = _actionSide * _character.NaturalFacing;
         }
         return f;
     }

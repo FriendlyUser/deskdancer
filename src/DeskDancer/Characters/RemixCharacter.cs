@@ -22,6 +22,7 @@ public sealed class RemixCharacter : ICharacter
     public IReadOnlyList<OwnClip> DanceClips => [];
     public IReadOnlyList<OwnClip> ActionClips => [];
     public bool HasClip(string clip) => false;
+    public ClipReadiness Readiness(string clip) => ClipReadiness.Ready;
     public void Prepare(string clip) { }
 
     static ImmutableSolidColorBrush B(uint argb) => new(Color.FromUInt32(argb));
