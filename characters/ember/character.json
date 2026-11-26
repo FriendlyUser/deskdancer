@@ -1,0 +1,82 @@
+{
+  "name": "Ember",
+  "height": 163,
+  "facing": "right",
+  "removeBackground": false,
+  "clips": {
+    "idle": {
+      "file": "idle.webp",
+      "anchor": [
+        131.0,
+        425.0
+      ]
+    },
+    "walk": {
+      "file": "walk.webp",
+      "anchor": [
+        141.0,
+        395.0
+      ]
+    },
+    "sit": {
+      "file": "sit.webp",
+      "anchor": [
+        131.0,
+        361.0
+      ]
+    },
+    "sleep": {
+      "file": "sleep.webp",
+      "anchor": [
+        116.0,
+        353.0
+      ]
+    },
+    "dance": {
+      "file": "dance.webp",
+      "anchor": [
+        131.0,
+        424.0
+      ],
+      "name": "Happy Flames"
+    },
+    "dance_flare_up": {
+      "file": "dance_flare_up.webp",
+      "anchor": [
+        138.0,
+        503.0
+      ],
+      "name": "Flare Up"
+    },
+    "dance_hot_potato": {
+      "file": "dance_hot_potato.webp",
+      "anchor": [
+        148.0,
+        457.0
+      ],
+      "name": "Hot Potato"
+    },
+    "dance_fireworks": {
+      "file": "dance_fireworks.webp",
+      "anchor": [
+        149.0,
+        551.0
+      ],
+      "name": "Fireworks"
+    },
+    "drag": {
+      "file": "drag.webp",
+      "anchor": [
+        134.0,
+        406.0
+      ]
+    },
+    "fall": {
+      "file": "fall.webp",
+      "anchor": [
+        127.0,
+        437.0
+      ]
+    }
+  }
+}

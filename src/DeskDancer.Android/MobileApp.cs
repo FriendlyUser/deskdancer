@@ -39,7 +39,9 @@ public static class Stage
         // quarter for squash and stretch), so it is smoothed once, here, and not every frame.
         double density = context.Resources!.DisplayMetrics!.Density;
         SpritePackLoader.MaxFrameSide = Math.Clamp((int)Math.Round(150 * PhoneScale * density * 1.25), 160, 640);
-        Library.ExtraFolder = CharacterAssets.Unpack(context);
+        // The characters in the APK, which, as on the desktop, give way to one of the user's own
+        // of the same name (see CharacterFolder).
+        Library.ShippedFolder = CharacterAssets.Unpack(context);
         Library.Scan();
         Settings = Settings.Load();
         Clock.Bpm = Settings.Bpm;

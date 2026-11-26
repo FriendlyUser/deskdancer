@@ -136,10 +136,12 @@ PY
 }
 
 log "putting a character in a folder on the phone"
+# Kori's pictures under a folder name of their own: Kori itself comes in the APK, and a
+# character from the folder is what is being tested.
 folder=/sdcard/Documents/DeskDancer
-adb shell mkdir -p "$folder/kori"
-adb push characters/kori/character.json characters/kori/*.webp "$folder/kori/" > /dev/null
-adb shell ls "$folder/kori"
+adb shell mkdir -p "$folder/my-kori"
+adb push characters/kori/character.json characters/kori/*.webp "$folder/my-kori/" > /dev/null
+adb shell ls "$folder/my-kori"
 
 log "choosing the folder in the folder picker"
 adb shell am start -W -n $pkg/.MainActivity --es command choose-folder --es folder Documents/DeskDancer
@@ -158,7 +160,7 @@ shot 6-folder-chosen
 adb logcat -d -s DeskDancer:I | grep -E "characters folder|command" | tail -6
 
 log "the character from the folder, on the screen"
-adb shell am start -W -n $pkg/.MainActivity --es command start --es character kori --ez calm true
+adb shell am start -W -n $pkg/.MainActivity --es command start --es character my-kori --ez calm true
 sleep 10
 shot 7-kori
 adb shell dumpsys window windows > "$out/7-kori-windows.txt"

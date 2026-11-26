@@ -21,6 +21,13 @@ public sealed class CharacterLibrary
     public string? ExtraFolder { get; set; }
 
     /// <summary>
+    /// Where the packs that come with the program are, if not <see cref="AppFolder"/>: on
+    /// Android, the copies unpacked from the APK. Like those, they give way to a pack of the
+    /// same name in the user's own folder.
+    /// </summary>
+    public string? ShippedFolder { get; set; }
+
+    /// <summary>
     /// True while mates are on screen. An image pack loaded from then on comes back with only
     /// its idle clip decoded: the others are read when a mate first needs them, and
     /// <see cref="ReleaseUnusedClips"/> lets them go again. The offline tools leave this off
@@ -76,7 +83,7 @@ public sealed class CharacterLibrary
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { CharacterIds.BuiltIn };
 
         // Later folders win nothing: the first pack with a given folder name is the one used.
-        foreach (var root in new[] { ExtraFolder, UserFolder, AppFolder })
+        foreach (var root in new[] { ExtraFolder, UserFolder, ShippedFolder ?? AppFolder })
         {
             if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) continue;
             try
