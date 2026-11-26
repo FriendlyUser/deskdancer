@@ -96,6 +96,10 @@ with motion blur and a ring of light.
 the one to copy if your character should turn round on the spot with its sides lit as
 they come into view, or change shape altogether, as Kori does when it melts.
 
+`ember` is drawn by a script as well, and is the one to copy for something that never keeps
+still: its flame is made of waves that fit a whole number of times into each clip, so every
+clip loops without a jump however much it flickers, and it glows.
+
 ## character.json (optional)
 
 Add this file to the folder to adjust things. Every setting is optional.

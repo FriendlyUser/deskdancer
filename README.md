@@ -79,6 +79,18 @@ into a puddle and freezing back up with a sparkle; and **Brr!**, shivering until
 out a puff of frost. Pick it under **Character**, or start with `--character kori`. How it
 is drawn, and how to change it, is in [characters/kori/_source](characters/kori/_source/README.md).
 
+![Ember in six poses](docs/ember.png)
+
+**Ember** is a ball of fire with a flame on its head, another original character drawn by a
+script. Its flame flickers all the time, leans back when Ember moves and stays upright when
+it leans, and burns down to a little flicker with a wisp of smoke when it naps. It glows,
+lets embers drift up, waddles about on stubby legs and has three dances of its own:
+**Flare Up**, when its flame roars up into a column in a burst of sparks; **Hot Potato**,
+hopping from foot to foot on a floor too hot to stand on; and **Fireworks**, when it sends
+a spark up out of its flame to burst in the sky. Pick it under **Character**, or start with
+`--character ember`. How it is drawn is in
+[characters/ember/_source](characters/ember/_source/README.md).
+
 Switch between them under **Character** in the menu. You can also drop in a folder of
 your own images and it becomes a character that walks and dances too: see
 [characters/README.md](characters/README.md).
