@@ -38,10 +38,15 @@ jobs:
             echo "::error::The version should look like 1.0.0, not '$VERSION'"
             exit 1
           fi
-          # A draft is what a run that failed part way leaves behind; the next run replaces it.
-          if [ "$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null)" = false ]; then
+          # A draft is what a run that failed part way leaves behind. It goes now, before the
+          # builds look through the releases for the version before this one: they would
+          # find this version in it, and refuse to pack the same version again.
+          draft="$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          if [ "$draft" = false ]; then
             echo "::error::v$VERSION has already been released"
             exit 1
+          elif [ "$draft" = true ]; then
+            gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes
           fi
           # The program says which version it is from its project file, and an installed
           # copy from the release it came in. They should agree.
