@@ -200,8 +200,9 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
         Brain.Left = left;
         Brain.Right = right;
         Brain.Top = top;
-        // Stand a little above the navigation bar so the whole shadow shows.
-        Brain.Floor = bottom - Math.Round(0.04 * Brain.H);
+        // Stand a little above the navigation bar so the whole shadow shows, and as far
+        // above that as the settings file raises the floor.
+        Brain.Floor = bottom - Math.Round(0.04 * Brain.H) - Stage.Settings.FloorRise(_density, bottom - top, Brain.H);
     }
 
     int SystemDimension(string name)

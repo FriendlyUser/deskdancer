@@ -49,6 +49,40 @@ public sealed class Settings
     /// </summary>
     public bool Mingle { get; set; } = true;
     public bool Gravity { get; set; } = true;
+
+    /// <summary>
+    /// The floor: the level the mates stand on, and nothing takes one below it. A mate that
+    /// is carried down past the floor stays on it and is slid along it, and one that is
+    /// thrown, dropped, knocked about, dancing or in the middle of an action never has its
+    /// feet under it. The floor is not drawn, and neither this nor
+    /// <see cref="FloorHeight"/> is shown anywhere in the app: both are set in the settings
+    /// file. Switched off, things are as they were before there was a floor: a mate can be
+    /// carried below where it stands, and comes back up when it is let go.
+    /// </summary>
+    public bool Floor { get; set; } = true;
+
+    /// <summary>
+    /// How far above the bottom of the screen's work area the floor is, in pixels as the
+    /// system counts them, before any display scaling. At 0, the usual, the mates stand on
+    /// the taskbar or the Dock, or on Android on the navigation bar. Anything more and they
+    /// stand that far up the screen, on nothing that can be seen. Below 0 counts as 0, and
+    /// the floor is never so high that a mate standing on it would not fit on the screen.
+    /// Ignored when <see cref="Floor"/> is off.
+    /// </summary>
+    public double FloorHeight { get; set; }
+
+    /// <summary>
+    /// How far the floor is raised on one screen, in that screen's own pixels:
+    /// <see cref="FloorHeight"/> at the screen's scaling, kept between nothing and what
+    /// leaves <paramref name="mateHeight"/> and a little more below the top of a work area
+    /// <paramref name="room"/> pixels high.
+    /// </summary>
+    public double FloorRise(double scaling, double room, double mateHeight)
+    {
+        if (!Floor || !double.IsFinite(FloorHeight) || FloorHeight <= 0) return 0;
+        return Math.Round(Math.Clamp(FloorHeight * scaling, 0, Math.Max(0, room - 1.1 * mateHeight)));
+    }
+
     public bool Effects { get; set; } = true;
     public bool AlwaysOnTop { get; set; } = true;
     /// <summary>Let clicks on the empty area around a mate reach the windows underneath.</summary>

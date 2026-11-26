@@ -137,8 +137,9 @@ public sealed class MateWindow : Window
         Brain.Left = area.X;
         Brain.Right = area.Right;
         Brain.Top = area.Y;
-        // Stand a few pixels above the edge of the work area so the whole shadow is visible.
-        Brain.Floor = area.Bottom - Math.Round(0.04 * Brain.H);
+        // Stand a few pixels above the edge of the work area so the whole shadow is visible,
+        // and as far above that as the settings file raises the floor.
+        Brain.Floor = area.Bottom - Math.Round(0.04 * Brain.H) - _app.Settings.FloorRise(scaling, area.Height, Brain.H);
     }
 
     void ApplyPosition(double? scalingOverride = null)

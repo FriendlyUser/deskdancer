@@ -79,6 +79,7 @@ public sealed class MateBrain
     public double Left { get; set; }
     public double Right { get; set; } = 1920;
     public double Top { get; set; }
+    /// <summary>The level the mate stands on. With <see cref="Settings.Floor"/> on, nothing takes it below this.</summary>
     public double Floor { get; set; } = 1080;
 
     // ---- Output ----
@@ -469,6 +470,13 @@ public sealed class MateBrain
             frame.Limbs.EyeOpen = Math.Min(frame.Limbs.EyeOpen, 0.08);
         }
 
+        // Nothing takes a mate below the floor: not where it is, and not what it is doing there.
+        if (_settings.Floor)
+        {
+            if (_baseY > Floor) _baseY = Floor;
+            if (frame.Body.Y < 0) frame.Body.Y = 0;
+        }
+
         if (frame.Body.Facing != 0) Facing = frame.Body.Facing;
         Body = frame.Body;
         Limbs = frame.Limbs;
@@ -794,8 +802,9 @@ public sealed class MateBrain
         double vx = dt > 0 ? (_dragX - _baseX) / dt : 0;
         _dragSpeed = Lerp(_dragSpeed, vx, 1 - Math.Exp(-dt * 18));
         _baseX = _dragX;
-        _baseY = _dragY;
-        _samples.Add((_time, _dragX, _dragY));
+        // Carried down past the floor, it stays on the floor and is slid along it.
+        _baseY = _settings.Floor ? Math.Min(_dragY, Floor) : _dragY;
+        _samples.Add((_time, _baseX, _baseY));
         while (_samples.Count > 2 && _time - _samples[0].T > 0.12) _samples.RemoveAt(0);
 
         // Held by the scruff, the feet swing out behind the direction of travel.
