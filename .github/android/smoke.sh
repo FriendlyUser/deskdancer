@@ -20,6 +20,25 @@ mkdir -p "$out"
 shot() { adb exec-out screencap -p > "$out/$1.png"; }
 log() { echo "== $*"; }
 
+# Waits until the mate, having started the action $1, is standing about again, for up to
+# $2 seconds. The app logs what the mate is doing every two seconds. An emulator that draws
+# slowly plays an action slowly, since the app never lets one frame count for more than a
+# tenth of a second, so the clock alone does not say when an action is over.
+wait_until_done() {
+  local action=$1 limit=$2 waited=0
+  while [ "$waited" -lt "$limit" ]; do
+    if adb logcat -d -s DeskDancer:I \
+        | awk -v started="action '$action' started" 'index($0, started) { seen = 1 } seen && /state=Idle clip=idle/ { done = 1 } END { exit !done }'; then
+      echo "'$action' is over and the mate is standing about, about ${waited}s after it was looked for"
+      return 0
+    fi
+    sleep 2
+    waited=$((waited + 2))
+  done
+  echo "the mate was not seen standing about within ${limit}s of '$action'"
+  return 1
+}
+
 log "installing"
 adb install -r "$apk" || exit 1
 adb shell appops set $pkg SYSTEM_ALERT_WINDOW allow
@@ -105,7 +124,7 @@ adb shell am start -W -n $pkg/.MainActivity --es command act --es action action_
 sleep 3
 shot 4-acting
 # It runs for a little over seven seconds, and then he stands about again.
-sleep 8
+wait_until_done action_fart 60
 
 log "an action that goes somewhere: Domo's Apple Tree"
 adb shell am start -W -n $pkg/.MainActivity --es command act --es action action_apple_tree
@@ -113,7 +132,7 @@ adb shell am start -W -n $pkg/.MainActivity --es command act --es action action_
 sleep 3.5
 shot 4-tree
 # Then he runs off one way and back the other, for seventeen seconds in all, and stands about.
-sleep 18.5
+wait_until_done action_apple_tree 120
 
 log "still running?"
 adb shell pidof $pkg && echo "running" || echo "NOT RUNNING"
