@@ -107,9 +107,25 @@ your own images and it becomes a character that walks and dances too: see
 ## Run it
 
 Ready-made downloads for Windows, Linux, macOS and Android are on the
-[Releases](https://github.com/FriendlyUser/deskdancer/releases) page. To build it yourself,
-you need the [.NET 10 SDK](https://dotnet.microsoft.com/download). The result
-is a single self-contained program that needs nothing installed to run.
+[Releases](https://github.com/FriendlyUser/deskdancer/releases) page:
+
+| System | Download | Then |
+| --- | --- | --- |
+| Windows 10 and 11 | `DeskDancer-win-x64-Setup.exe` | Run it. It installs DeskDancer for you alone, with no administrator rights, puts it on the Start menu and the desktop, and starts it. |
+| Windows, without installing | `DeskDancer-win-x64-Portable.zip` | Unzip it anywhere and run `DeskDancer.exe`. |
+| Linux | `DeskDancer-linux-x64.AppImage` | Make it executable (`chmod +x`) and run it. |
+| macOS, Apple silicon | `DeskDancer-osx-arm64-Portable.zip` | Unzip it, move `DeskDancer.app` to Applications and open it. |
+| macOS, Intel | `DeskDancer-osx-x64-Portable.zip` | The same. |
+| Android 8 or later | `DeskDancer-<version>-android.apk` | See [Platform notes](#platform-notes). |
+
+Every one of these but the Android one keeps itself up to date from then on: see
+[Updates](#updates). The other files on a release, ending in `.nupkg` and `.json`, are what
+installed copies fetch to do that, and nobody needs to download them by hand.
+[Platform notes](#platform-notes) has what each system asks the first time.
+
+To build it yourself, you need the [.NET 10 SDK](https://dotnet.microsoft.com/download).
+The result is a single self-contained program that needs nothing installed to run. A copy
+you build does not update itself.
 
 Windows (PowerShell):
 
@@ -182,10 +198,48 @@ change, on one page. Every change takes effect straight away.
 | **On the desktop** | Always on top, and click through empty space. |
 | **Your characters** | The folder characters of your own are kept in, with **Open folder**, **Copy path**, **Change...** to keep them somewhere else, **Use the usual folder** to go back, and **Reload characters**. |
 | **Saving** | **Save changes as I make them** (on to begin with; switched off, changes last until you quit unless you press **Save now**), **Reset to defaults** (the tempo, the switches and the moves; your mates and characters are kept), and where the settings file is, with **Open folder**. |
+| **Updates** | Which version this is, **Update automatically** (on to begin with), **Check now**, **Restart to update** once a newer version has been downloaded, and **Downloads page**. See [Updates](#updates). |
 
 A folder chosen with **Change...** is looked in first. The usual folder is still looked in
 after it, and so are the characters that come with DeskDancer, so nothing you already had
 goes missing.
+
+### Updates
+
+DeskDancer keeps itself up to date. A copy from one of the [downloads](#run-it) looks at
+this repository's [releases](https://github.com/FriendlyUser/deskdancer/releases) half a
+minute after it starts, and every six hours after that, since a mate can be left on the
+desktop for weeks. When there is a newer version it downloads it in the background and
+waits for a quiet moment: no mate being carried, falling, dancing or in the middle of an
+action, no menu or Settings window open, and no change to the settings still unsaved. Then
+the mates go away for a second or two, the new version takes the place of the old one, and
+they come back. Your settings and your own characters are kept somewhere else and are not
+touched.
+
+The **Updates** card on the [Settings](#settings) window says which version you have and
+how this is going. Switching **Update automatically** off stops all of it: DeskDancer then
+looks only when you press **Check now**, and a version it finds goes in when you press
+**Restart to update**, or the next time you start DeskDancer. While a version is waiting,
+the mate's menu has **Restart to update to ...** as well.
+
+The updating is done by [Velopack](https://velopack.io). It asks GitHub for the list of
+releases and downloads the package for your system from there, and that is all it does on
+the network: Velopack collects nothing about you. Only a copy that Velopack put in can
+replace itself, which is every download above. One you built yourself, or a download of
+version 1.0.0 from before any of this, says on the Updates card that it cannot, and has a
+button for the downloads page. The Android app does not update itself either.
+
+Two things to know:
+
+- An update replaces the program and everything that came with it, the `characters` folder
+  next to it included. Characters of your own belong in your own characters folder, which
+  the Settings window shows and opens: one you added next to the program is gone after the
+  next update.
+- The program has to be somewhere it can be replaced. A Mac app should be moved out of
+  Downloads, to Applications or anywhere else, before it is first opened, because macOS
+  may show an app it has just downloaded a read-only copy of itself. A Linux AppImage
+  should be kept in a folder of yours; in a folder only an administrator can write to, it
+  asks for the password every time it updates.
 
 ### The moves
 
@@ -256,14 +310,28 @@ use** to open it.
 
 ## Platform notes
 
-**Windows 10 and 11.** Nothing to set up.
+**Windows 10 and 11.** The installer is not signed with a bought certificate, so the
+first time Windows may say that it protected your PC: choose **More info**, then **Run
+anyway**. It installs into `%LocalAppData%\DeskDancer`, for you alone, and DeskDancer can
+be removed like any other program under **Settings > Apps**. The portable zip needs
+nothing set up: unzip it and run `DeskDancer.exe`.
 
 **Linux.** Needs an X11 session, or Wayland with XWayland (the default on GNOME and
 KDE), and a compositing window manager for the transparent background. Without a
-compositor the mate appears on a black rectangle.
+compositor the mate appears on a black rectangle. The download is an AppImage, one file
+that is the whole program:
+
+```bash
+chmod +x DeskDancer-linux-x64.AppImage
+./DeskDancer-linux-x64.AppImage
+```
+
+If it says it needs FUSE, either install `libfuse2` or start it with
+`--appimage-extract-and-run`.
 
 **macOS.** Macs with Apple silicon or Intel, on macOS 12 or later. The download unzips
-to `DeskDancer.app`. It is not signed with an Apple developer ID, so the first time
+to `DeskDancer.app`; move it to Applications, or anywhere else out of Downloads, before
+opening it. It is not signed with an Apple developer ID, so the first time
 macOS will say it cannot check the app. Open **System Settings > Privacy & Security**,
 scroll down and choose **Open Anyway** (on macOS 14 and earlier, right-clicking the app
 and choosing **Open** works too), or clear the download flag from a terminal:
@@ -332,6 +400,10 @@ where that is on your computer and opens the folder.
                         name such as "mochi"
 --characters <folder>   Also look for character folders here
 --fresh                 Ignore saved settings for this run
+--version               Say which version this is, and exit
+--update-feed <where>   Look for new versions in this folder or at this web address
+                        instead of on GitHub, and look straight away: for trying
+                        updates out
 --smoke-test            Run every feature for a few seconds, exit 0 on success
 --render-test <dir>     Render every dance move to PNG contact sheets
 --export-sample <dir>   Write the built-in character out as an example image pack
@@ -348,12 +420,14 @@ src/DeskDancer/
   Characters/   Remix (drawn in code) and the loader for image packs
   Ui/           The transparent window, its menu and the renderer, and the Settings window
   Platform/     Click-through for Windows, X11 and macOS; getting freed memory back on Linux
+  Updates/      Keeping the program up to date from its GitHub releases, with Velopack
   Tools/        Smoke test, contact sheets and the example pack exporter
 src/DeskDancer.Android/
                 The Android app: the same engine, characters and renderer, compiled in
                 from src/DeskDancer and drawn in an overlay window kept up by a service
 characters/     Character packs that ship with the app
-packaging/      What macOS needs in order to treat the build as an app
+packaging/      What macOS needs in order to treat the build as an app, and the program's icon
+.github/        The workflows below, and the scripts they use to pack a build and try an update
 ```
 
 An image pack is not read all at once. Its idle animation is read when the character is
@@ -383,6 +457,16 @@ pictures of the desktop as artifacts. On macOS, where what a click lands on depe
 where the pointer is, it moves the pointer onto the mate, off onto the empty corner of
 its window and back again, and asks the system each time.
 
+Each build is then packed by Velopack's tool (`.github/pack.sh`), and the self-update is
+tried for real (`.github/update-test.sh`). The build is packed as version 0.0.1 and
+installed the way a person would install it: with the installer on Windows, by copying the
+AppImage on Linux, by unzipping the app on a Mac. It is packed again as 0.0.2 into a folder
+that stands in for the releases on GitHub, and the installed copy is started and told to
+look there. Within three minutes it has to have found the newer version, swapped itself for
+it and come back, and then stay up: the new version looks in the same folder and must find
+nothing newer than itself. On a Mac the test also checks that the seal on the app still
+holds after Velopack has added its updater to it.
+
 A second workflow, `android`, builds the APK and runs it on an Android 14 emulator. It
 grants the overlay permission, puts Mochi on the home screen, makes it dance and drags it
 with a scripted swipe, then compares screenshots with one of the bare home screen: the
@@ -402,7 +486,21 @@ appeared on the screen is printed in the job's log.
 Set `<Version>` in `src/DeskDancer/DeskDancer.csproj` to the new number, then on GitHub open
 **Actions > release > Run workflow**, pick `main` and give the same number, like `1.0.0`. The
 workflow builds and tests every platform exactly as the two workflows above do, then
-publishes release `v1.0.0` on that commit with a download for each platform.
+publishes release `v1.0.0` on that commit with the downloads listed under
+[Run it](#run-it).
+
+Publishing a release is also what updates everybody. With the downloads go the package for
+each system and a list of them, `releases.<system>.json`, which every installed copy looks
+for: within six hours, or the next time it is started, each one has replaced itself with
+the new version. So the number has to be higher than the last release's, which the workflow
+checks along with the project file, and a release cannot quietly be taken back: put a bad
+one right by releasing a higher number. The release is put together as a draft, which no
+installed copy can see, and only published once every file is on it.
+
+The packages are made by Velopack's tool, `vpk`, at the version of the Velopack library in
+`DeskDancer.csproj`: the two have to match, and `.github/pack.sh` reads the version from
+there, so changing it in the project file changes both. To pack a build by hand, publish
+it and then run, say, `.github/pack.sh linux-x64 1.2.3 Releases`.
 
 **Signing the Android app.** Android only installs a new version of an app over the old one
 when both are signed with the same key. Without a key of the repository's own, each build

@@ -10,6 +10,11 @@ A character is a folder of images. Put the folder in either of these places:
   **Settings...** shows where it is and lets you keep your characters in another folder
   instead; that one is then looked in first, and this one after it.
 
+Use your personal one if DeskDancer came from one of its downloads. Such a copy updates
+itself, and each update replaces the folder next to the program with the new version's;
+on Linux and macOS that folder cannot be written to at all. The one next to the program is
+for a copy you built yourself.
+
 Then right-click the mate and choose **Character > Reload characters**.
 
 On Android, put the folder in a folder of your own on the phone and choose that folder in
