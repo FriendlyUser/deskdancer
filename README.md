@@ -95,6 +95,22 @@ a spark up out of its flame to burst in the sky. Pick it under **Character**, or
 `--character ember`. How it is drawn is in
 [characters/ember/_source](characters/ember/_source/README.md).
 
+![Aspen in six poses](docs/aspen.png)
+
+**Aspen** is a leaf, a third original character drawn by a script: a green leaf with a
+toothed edge and a pointed tip, on stubby legs, with its stalk sticking out behind like a
+tail. It bends the way a leaf does, so it stirs in the breeze, bows right over when a gust
+catches it, and its tip flops when it lands. It is a sheet folded along its midrib and
+turned in three dimensions, so when it spins you see it edge on and then its pale, veined
+back. It has three dances of its own: **Whirl**, when the wind takes it up, spinning, and
+it drifts back down swinging from side to side as leaves do; **Autumn**, when it turns
+gold, orange and red from its edge inwards, shows off in a shower of falling leaves and
+shakes itself green again; and **Raindrops**, when drops land on its tip one after another
+until a big one bows it over and it flicks it off. Sitting, it watches a ladybird climb up
+it, and when it naps a drop of dew gathers on its drooping tip. Pick it under
+**Character**, or start with `--character aspen`. How it is drawn is in
+[characters/aspen/_source](characters/aspen/_source/README.md).
+
 Switch between them under **Character** in the menu. You can also drop in a folder of
 your own images and it becomes a character that walks and dances too: see
 [characters/README.md](characters/README.md).
