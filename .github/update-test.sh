@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Tries the self-update for real: installs one version of DeskDancer, puts a newer one in a
 # folder standing in for the releases on GitHub, starts the installed one and waits for it to
-# find the newer version, swap itself for it and come back.
+# find the newer version, swap itself for it and come back: as another process than the one
+# that was started, from the files of the newer version.
 #
 #   .github/update-test.sh <runtime> [folder to work in]
 #
@@ -31,7 +32,8 @@ echo "::group::Pack $old"
 echo "::endgroup::"
 
 # Install the old version as a person would, and say how to start it, how to read which
-# version is installed, whether it is running, how to stop it, and where Velopack's log is.
+# version is installed, which processes are running it, how to stop it, whether what is
+# installed is in one piece, and where Velopack's log is.
 case "$rid" in
   linux-*)
     app="$work/DeskDancer.AppImage"
@@ -41,18 +43,21 @@ case "$rid" in
     export APPIMAGE_EXTRACT_AND_RUN=1
     start() { "$app" --update-feed "$feed" > "$work/app.log" 2>&1 & }
     installed() { "$app" --version 2> /dev/null | tail -1; }
-    running() { pgrep -f "DeskDancer.*--update-feed" > /dev/null; }
+    pids() { pgrep -f "DeskDancer.*--update-feed" || true; }
     stop() { pkill -f "DeskDancer.*--update-feed" || true; }
+    intact() { [ -x "$app" ]; }
     log=/tmp/velopack_DeskDancer.log
     ;;
   osx-*)
     ditto -x -k "$feed/DeskDancer-$rid-Portable.zip" "$work"
     app="$work/DeskDancer.app"
-    # Velopack added its updater to the app and sealed it again; the seal has to hold.
-    codesign --verify --deep --strict --verbose=2 "$app"
+    # Velopack added its updater to the app and sealed it again. The seal has to hold, now
+    # and after the update: a Mac with Apple silicon runs nothing whose seal is broken.
+    intact() { codesign --verify --deep --strict --verbose=2 "$app"; }
+    intact
     start() { "$app/Contents/MacOS/DeskDancer" --update-feed "$feed" > "$work/app.log" 2>&1 & }
     installed() { sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$app/Contents/Resources/sq.version" 2> /dev/null; }
-    running() { pgrep -f "DeskDancer.*--update-feed" > /dev/null; }
+    pids() { pgrep -f "DeskDancer.*--update-feed" || true; }
     stop() { pkill -f "DeskDancer.*--update-feed" || true; }
     log="$HOME/Library/Logs/velopack_DeskDancer.log"
     ;;
@@ -61,8 +66,12 @@ case "$rid" in
     "$feed/DeskDancer-$rid-Setup.exe" --silent --installto "$(cygpath -w "$root")"
     start() { "$root/current/DeskDancer.exe" --update-feed "$(cygpath -w "$feed")" > "$work/app.log" 2>&1 & }
     installed() { sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$root/current/sq.version" 2> /dev/null; }
-    running() { tasklist //FI "IMAGENAME eq DeskDancer.exe" 2> /dev/null | grep -qi "DeskDancer.exe"; }
+    pids() {
+      tasklist //FI "IMAGENAME eq DeskDancer.exe" //FO CSV //NH 2> /dev/null | tr -d '\r' \
+        | sed -n 's/^"[Dd]esk[Dd]ancer\.exe","\([0-9]*\)".*/\1/p'
+    }
     stop() { taskkill //F //IM DeskDancer.exe > /dev/null 2>&1 || true; }
+    intact() { [ -f "$root/current/DeskDancer.exe" ]; }
     log="$LOCALAPPDATA/velopack/velopack_DeskDancer.log"
     ;;
   *)
@@ -70,6 +79,8 @@ case "$rid" in
     exit 1
     ;;
 esac
+
+running() { [ -n "$(pids)" ]; }
 
 fail() {
   echo "::error::Self-update ($rid): $1"
@@ -87,7 +98,15 @@ echo "::group::Pack $new"
 echo "::endgroup::"
 
 start
-echo "Started DeskDancer $old, with $new waiting in $feed"
+# Which process that is, to tell it from the one that comes back.
+first=""
+for _ in $(seq 1 75); do
+  first="$(echo $(pids))"
+  [ -z "$first" ] || break
+  sleep 0.2
+done
+[ -n "$first" ] || fail "the program did not start"
+echo "Started DeskDancer $old as process $first, with $new waiting in $feed"
 waited=0
 until [ "$(installed)" = "$new" ]; do
   [ "$waited" -lt "$patience" ] || fail "after $patience seconds the installed version is still '$(installed)', not $new"
@@ -107,5 +126,15 @@ done
 sleep 10
 running || fail "the program started again after updating itself, and then stopped"
 [ "$(installed)" = "$new" ] || fail "the installed version changed again, to '$(installed)'"
+# What is running has to be what came back, not what was started: that one read the old
+# version's files, and the files have been replaced since.
+now="$(echo $(pids))"
+for pid in $first; do
+  case " $now " in
+    *" $pid "*) fail "process $pid, which was started as $old, is still running: the program did not start again" ;;
+  esac
+done
+intact || fail "what the update left installed is not in one piece"
 stop
-echo "Self-update works on $rid: DeskDancer $old found $new, swapped itself for it and started again."
+echo "::group::Velopack's log"; tail -n 80 "$log" 2> /dev/null || echo "(none at $log)"; echo "::endgroup::"
+echo "Self-update works on $rid: DeskDancer $old (process $first) found $new, swapped itself for it and started again (process $now)."
