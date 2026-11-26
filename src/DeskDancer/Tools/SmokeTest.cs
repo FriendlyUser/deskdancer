@@ -9,6 +9,7 @@ using DeskDancer.Characters;
 using DeskDancer.Engine;
 using DeskDancer.Platform;
 using DeskDancer.Ui;
+using DeskDancer.Updates;
 
 namespace DeskDancer.Tools;
 
@@ -579,6 +580,21 @@ public static class SmokeTest
                 window.Refresh();
                 // After all that looking for characters again, the page still shows the mate's.
                 if (!Same(ShownCharacter(), First().Settings.Character)) Fail($"it ends up showing the mate as {ShownCharacter()}, not '{First().Settings.Character}'");
+
+                // Updates. A copy that Velopack did not put in, such as the one a test is run on,
+                // cannot update itself: it says so, and being asked to changes and breaks nothing.
+                // (A copy that can is tried out for real by .github/update-test.sh.)
+                var updater = app.Updater;
+                if (string.IsNullOrWhiteSpace(updater.Version) || updater.Version == "unknown") Fail("it does not know which version it is");
+                if (!window.UpdateNote.Contains(updater.CanUpdate ? "version" : "cannot update itself")) Fail("the Updates card says: " + window.UpdateNote);
+                if (!updater.CanUpdate)
+                {
+                    _ = updater.CheckAsync();
+                    app.RestartToUpdate();
+                    if (updater.State != UpdateState.Unavailable || app.Mates.Count != 2)
+                        Fail($"being asked to update changed something in a copy that cannot update itself: its updates are now {updater.State}");
+                }
+                Note($"updates: this is version {updater.Version}, and {(updater.CanUpdate ? $"it can update itself ({updater.State})" : "this copy cannot update itself, which it says")}");
 
                 Note($"the Settings window ({window.Bounds.Width:0}x{window.Bounds.Height:0}) has {window.Switches.Count} switches, the mate, the tempo and the characters folder; every one of them works");
             }, WaitingFor: () => app.SettingsWindow is { IsVisible: true, Bounds.Width: > 0 } ? null : "the Settings window did not open"),

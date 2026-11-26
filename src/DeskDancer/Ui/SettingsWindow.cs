@@ -8,6 +8,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using DeskDancer.Characters;
 using DeskDancer.Platform;
+using DeskDancer.Updates;
 
 namespace DeskDancer.Ui;
 
@@ -22,6 +23,8 @@ namespace DeskDancer.Ui;
 /// path, choose another one and look for characters again.</item>
 /// <item>Saving: whether changes are saved as they are made, Save now, Reset to defaults,
 /// and where the settings file is.</item>
+/// <item>Updates: which version this is, whether it keeps itself up to date, a button to
+/// look for a newer one now, and one to restart into a version that has been downloaded.</item>
 /// </list>
 /// Everything takes effect straight away. The switches live in <see cref="Settings"/>, which
 /// the mates read as they go; <see cref="App.ApplySettings"/> passes on the two that something
@@ -41,8 +44,8 @@ public sealed class SettingsWindow : Window
     readonly Border _mateCard;
     readonly ComboBox _character = Choice(), _size = Choice(), _tempo = Choice();
     readonly SelectableTextBlock _folder = PathText();
-    readonly Button _usualFolder;
-    readonly TextBlock _autoNote, _saved, _status;
+    readonly Button _usualFolder, _checkNow, _restart;
+    readonly TextBlock _autoNote, _saved, _status, _version, _updateNote;
     List<CharacterInfo> _characters = [];
     MateWindow? _mate;
     bool _loading;      // true while the controls are being filled in, so that is not taken for a change
@@ -143,6 +146,19 @@ public sealed class SettingsWindow : Window
         _saved = Note("");
         saving.Children.Add(_saved);
 
+        // Updates.
+        var updates = Card(right, "Updates", out _);
+        _version = Text("");
+        updates.Children.Add(_version);
+        updates.Children.Add(Switch("Update automatically", nameof(Settings.AutoUpdate), () => settings.AutoUpdate, on => settings.AutoUpdate = on));
+        _checkNow = Press("Check now", () => _ = _app.Updater.CheckAsync());
+        _restart = Press("Restart to update", _app.RestartToUpdate);
+        updates.Children.Add(Buttons(_checkNow, _restart, Press("Downloads page", () => Say(_app.OpenPage(Updater.DownloadPage)))));
+        _updateNote = Note("");
+        updates.Children.Add(_updateNote);
+        _app.Updater.Changed += ShowUpdates;
+        Closed += (_, _) => _app.Updater.Changed -= ShowUpdates;
+
         // The page: a title with a line saying what just happened, over two columns of cards.
         // (The margin keeps the cards clear of the scroll bar, when the window is too short for them all.)
         var columns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,12,*"), Margin = new Thickness(0, 0, 14, 0) };
@@ -216,6 +232,33 @@ public sealed class SettingsWindow : Window
             _loading = false;
         }
         ShowSaving();
+        ShowUpdates();
+    }
+
+    /// <summary>What the Updates card is saying.</summary>
+    public string UpdateNote => _updateNote.Text ?? "";
+
+    /// <summary>Says, on the Updates card, which version this is and how keeping it up to date is going.</summary>
+    void ShowUpdates()
+    {
+        var updater = _app.Updater;
+        _version.Text = $"This is DeskDancer {updater.Version}.";
+        _switches[nameof(Settings.AutoUpdate)].IsEnabled = updater.CanUpdate;
+        _checkNow.IsEnabled = updater.CanUpdate && updater.State is not (UpdateState.Checking or UpdateState.Downloading);
+        _restart.IsVisible = updater.State == UpdateState.Ready;
+        string looked = updater.LastChecked is { } at ? $" Last looked at {at:HH:mm}." : "";
+        _updateNote.Text = updater.State switch
+        {
+            UpdateState.Unavailable => "This copy cannot update itself: it was not put in by one of DeskDancer's own downloads. New versions are on the downloads page.",
+            UpdateState.Checking => "Looking for a newer version...",
+            UpdateState.Downloading => $"Downloading version {updater.NewVersion}: {updater.Progress}%",
+            UpdateState.Ready => _app.Settings.AutoUpdate
+                ? $"Version {updater.NewVersion} is ready. It goes in the next time the mates are at rest, or now if you press \"Restart to update\"."
+                : $"Version {updater.NewVersion} is ready. It goes in the next time DeskDancer starts, or now if you press \"Restart to update\".",
+            UpdateState.Failed => $"Could not update: {updater.Problem}",
+            _ => (updater.LastChecked != null ? "This is the newest version." : _app.Settings.AutoUpdate ? "It looks for a newer version a few times a day." : "It only looks for a newer version when you ask.") + looked,
+        };
+        _updateNote.Foreground = updater.State == UpdateState.Failed ? Warning : Muted;
     }
 
     static int Nearest(IEnumerable<double> choices, double value) =>
@@ -239,6 +282,7 @@ public sealed class SettingsWindow : Window
     {
         bool saved = _app.Settings.Save(saveNow);
         _app.ApplySettings();
+        ShowUpdates();
         if (saved) ShowSaving();
         else Say("The settings could not be saved; the log says why.");
     }

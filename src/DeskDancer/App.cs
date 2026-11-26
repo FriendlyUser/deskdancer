@@ -9,6 +9,7 @@ using DeskDancer.Characters;
 using DeskDancer.Engine;
 using DeskDancer.Tools;
 using DeskDancer.Ui;
+using DeskDancer.Updates;
 
 namespace DeskDancer;
 
@@ -27,6 +28,13 @@ public sealed class App : Application
     public List<MateWindow> Mates { get; } = [];
     /// <summary>The Settings window while it is open.</summary>
     public SettingsWindow? SettingsWindow { get; private set; }
+
+    Updater? _updater;
+    /// <summary>Keeps the program up to date from its releases; see <see cref="Updates.Updater"/>.</summary>
+    public Updater Updater => _updater ??= new Updater(Options.UpdateFeed, Environment.GetCommandLineArgs().Skip(1).ToArray());
+
+    /// <summary>How long after starting the first look for a newer version is taken, and how often after that.</summary>
+    static readonly TimeSpan FirstUpdateCheck = TimeSpan.FromSeconds(30), UpdateCheckEvery = TimeSpan.FromHours(6);
 
     public override void Initialize()
     {
@@ -97,6 +105,7 @@ public sealed class App : Application
                     Log.Error("Unhandled error", e.Exception);
                     e.Handled = true;
                 };
+                KeepUpToDate();
             }
         }
         base.OnFrameworkInitializationCompleted();
@@ -242,6 +251,69 @@ public sealed class App : Application
             Log.Error($"Could not open the folder {folder}", ex);
             return $"Could not open the folder {folder}: {ex.Message}";
         }
+    }
+
+    /// <summary>Shows a web page in the browser. Returns what went wrong, or null.</summary>
+    public string? OpenPage(string address)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = address, UseShellExecute = true });
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Could not open {address}", ex);
+            return $"Could not open {address}: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// The self-update loop. A mate can be left on the desktop for weeks, so being up to date
+    /// cannot wait for the program to be started again: it looks for a newer version shortly
+    /// after starting and a few times a day after that, downloads one it finds, and restarts
+    /// into it at a quiet moment. All of that is switched off by "Update automatically" on the
+    /// Settings window, which then only looks when asked.
+    /// </summary>
+    void KeepUpToDate()
+    {
+        if (!Updater.CanUpdate) return;
+        void Look()
+        {
+            if (Settings.AutoUpdate) _ = Updater.CheckAsync();
+        }
+        // A feed given on the command line is there to try updates out, so it is looked at straight away.
+        DispatcherTimer.RunOnce(Look, Options.UpdateFeed != null ? TimeSpan.FromSeconds(2) : FirstUpdateCheck);
+        DispatcherTimer.Run(() =>
+        {
+            Look();
+            return true;
+        }, UpdateCheckEvery);
+        DispatcherTimer.Run(() =>
+        {
+            if (Settings.AutoUpdate && Updater.State == UpdateState.Ready && AtRest()) RestartToUpdate();
+            return true;
+        }, TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>
+    /// True when nobody would mind the mates going away for a moment: none is being carried,
+    /// thrown, or in the middle of a dance or an action, no menu or Settings window is open,
+    /// and nothing has been changed that would be lost by closing.
+    /// </summary>
+    bool AtRest() =>
+        SettingsWindow == null && !Settings.Unsaved
+        && Mates.All(m => !m.MenuOpen && m.Brain.State is MateState.Idle or MateState.Walk or MateState.Sit or MateState.Sleep);
+
+    /// <summary>
+    /// Closes the program so that the version that has been downloaded can go in; Velopack's
+    /// updater then starts the new one. Nothing happens if no newer version is ready.
+    /// </summary>
+    public void RestartToUpdate()
+    {
+        if (Updater.State != UpdateState.Ready) return;
+        Settings.Save();
+        if (Updater.BeginRestart()) Quit();
     }
 
     public void Quit(int exitCode = 0)
