@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using DeskDancer.Tools;
+using DeskDancer.Updates;
+using Velopack;
 
 namespace DeskDancer;
 
@@ -8,7 +10,7 @@ namespace DeskDancer;
 public sealed class CliOptions
 {
     public bool Help, Version, Fresh, SmokeTest, Screenshots, Verbose;
-    public string? Character, CharactersFolder, ExportSample, RenderTest, Out;
+    public string? Character, CharactersFolder, ExportSample, RenderTest, Out, UpdateFeed;
     public double Seconds = 12;
     public string? Error;
 
@@ -28,6 +30,9 @@ public sealed class CliOptions
         Developer tools:
           --export-sample <dir>   Write the built-in character out as an example image pack
           --render-test <dir>     Render every dance move to PNG contact sheets
+          --update-feed <where>   Look for new versions in this folder or at this web address
+                                  instead of on GitHub, and look straight away: for trying
+                                  updates out
           --smoke-test            Start, exercise every feature for a few seconds, exit 0 on success
           --seconds <n>           How long the smoke test runs (default 12)
           --out <dir>             Where the smoke test saves its snapshots
@@ -55,6 +60,7 @@ public sealed class CliOptions
                 case "--export-sample": o.ExportSample = Next(); break;
                 case "--render-test": o.RenderTest = Next(); break;
                 case "--out": o.Out = Next(); break;
+                case "--update-feed": o.UpdateFeed = Next(); break;
                 case "--seconds":
                     if (!double.TryParse(Next(), System.Globalization.CultureInfo.InvariantCulture, out o.Seconds))
                         o.Error = "--seconds needs a number";
@@ -71,6 +77,15 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Velopack comes first. While a version is being installed, updated or removed it
+        // runs this program with arguments of its own, and this answers them and exits. A
+        // newer version that was downloaded the last time is put in here too, and the
+        // program started again: but not when it was only asked a question or to run a
+        // test, which should be answered by the copy that was asked. Nothing else of
+        // DeskDancer's own may run before this.
+        bool passingThrough = args.Any(a => a is "--version" or "--help" or "-h" or "/?" or "--smoke-test" or "--render-test" or "--export-sample");
+        VelopackApp.Build().SetAutoApplyOnStartup(!passingThrough).Run();
+
         var options = CliOptions.Parse(args);
         if (options.Error != null)
         {
@@ -85,7 +100,7 @@ internal static class Program
         }
         if (options.Version)
         {
-            Console.WriteLine(typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "unknown");
+            Console.WriteLine(Updater.CurrentVersion());
             return 0;
         }
 
