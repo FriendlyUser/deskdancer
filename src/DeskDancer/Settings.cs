@@ -89,6 +89,13 @@ public sealed class Settings
     public bool ClickThrough { get; set; } = true;
 
     /// <summary>
+    /// Look for a newer version every so often, download it, and restart into it when the
+    /// mates are at rest. Switched off, the program only looks when asked to on the Settings
+    /// window. Only a copy put in by one of DeskDancer's own downloads can update itself.
+    /// </summary>
+    public bool AutoUpdate { get; set; } = true;
+
+    /// <summary>
     /// A folder of the user's own choosing for their characters, picked on the Settings
     /// window. It is looked in before the usual one, which is still looked in after it, as
     /// are the characters that come with the program. Null for none.
@@ -155,6 +162,7 @@ public sealed class Settings
         Effects = fresh.Effects;
         AlwaysOnTop = fresh.AlwaysOnTop;
         ClickThrough = fresh.ClickThrough;
+        AutoUpdate = fresh.AutoUpdate;
         AutoSave = fresh.AutoSave;
         DisabledMoves = [];
     }

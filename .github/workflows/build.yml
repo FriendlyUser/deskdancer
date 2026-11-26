@@ -10,6 +10,13 @@ on:
         default: "1"
   # The release workflow runs this one to build and test what it publishes.
   workflow_call:
+    inputs:
+      version:
+        description: >-
+          The version being released, like 1.2.0. Left empty, the packages are made with the
+          version in DeskDancer.csproj, only to be sure that they can be.
+        type: string
+        default: ""
 
 env:
   DOTNET_NOLOGO: true
@@ -176,6 +183,52 @@ jobs:
           name: smoke-${{ matrix.rid }}
           path: smoke
           if-no-files-found: warn
+
+      # The next steps are Velopack's (https://velopack.io). It installs DeskDancer, and lets
+      # an installed copy update itself from the releases on GitHub. Its tool packs the
+      # build made above; .github/pack.sh says what comes out.
+      - name: Tools for packing (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y -qq squashfs-tools zstd
+
+      - name: Tools for packing (macOS)
+        if: runner.os == 'macOS'
+        run: command -v zstd > /dev/null || brew install zstd
+
+      # Installs one version, offers it a newer one, and waits for it to find that, swap
+      # itself for it and come back.
+      - name: Self-update test
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a -s "-screen 0 1280x720x24" bash -c 'openbox & sleep 1; .github/update-test.sh ${{ matrix.rid }}'
+          else
+            .github/update-test.sh ${{ matrix.rid }}
+          fi
+
+      # The packages a release is made of. Every build makes them, to be sure that it can;
+      # the release workflow gives the version and publishes them. For a release, the one
+      # before it is fetched first, so that a package of just the differences is made too.
+      - name: Pack with Velopack
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          version="${VERSION:-$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/DeskDancer/DeskDancer.csproj)}"
+          if [ -n "$VERSION" ]; then
+            vpk --yes --legacyConsole --skip-updates download github --repoUrl "https://github.com/$GITHUB_REPOSITORY" \
+              --channel ${{ matrix.rid }} --outputDir Releases --token "$GH_TOKEN"
+          fi
+          .github/pack.sh ${{ matrix.rid }} "$version" Releases
+
+      - name: Upload packages
+        if: inputs.version != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: Velopack-${{ matrix.rid }}
+          path: Releases
 
       # An app is a folder whose signature and file permissions matter, and an artifact
       # upload keeps neither. ditto makes a zip that does.

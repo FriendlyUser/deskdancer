@@ -9,6 +9,7 @@ using DeskDancer.Characters;
 using DeskDancer.Engine;
 using DeskDancer.Platform;
 using DeskDancer.Ui;
+using DeskDancer.Updates;
 
 namespace DeskDancer.Tools;
 
@@ -25,10 +26,17 @@ public static class SmokeTest
     /// or null when that is nothing. It is held until then, and fails the run with those
     /// words if it is kept waiting too long.
     /// </summary>
-    sealed record Step(double At, string Name, Action Run, Func<string?>? WaitingFor = null);
+    sealed record Step(double At, string Name, Action Run, Func<string?>? WaitingFor = null, double WaitUpTo = Patience);
 
-    /// <summary>Seconds a step may be kept waiting, and seconds the first frame may take to appear.</summary>
+    /// <summary>Seconds a step may be kept waiting unless it says otherwise, and seconds the first frame may take to appear.</summary>
     const double Patience = 10, StartUpLimit = 30;
+
+    /// <summary>
+    /// Seconds the check of every clip may take. It decodes every frame of every character
+    /// there is, so it grows with each character that is added, and on the slowest of the
+    /// machines the builds run on it no longer fits in <see cref="Patience"/>.
+    /// </summary>
+    const double EveryClipLimit = 40;
 
     /// <summary>The most one hold-up counts for on the run's clock, in seconds.</summary>
     const double LongestTick = 0.5;
@@ -863,6 +871,21 @@ public static class SmokeTest
                 // After all that looking for characters again, the page still shows the mate's.
                 if (!Same(ShownCharacter(), First().Settings.Character)) Fail($"it ends up showing the mate as {ShownCharacter()}, not '{First().Settings.Character}'");
 
+                // Updates. A copy that Velopack did not put in, such as the one a test is run on,
+                // cannot update itself: it says so, and being asked to changes and breaks nothing.
+                // (A copy that can is tried out for real by .github/update-test.sh.)
+                var updater = app.Updater;
+                if (string.IsNullOrWhiteSpace(updater.Version) || updater.Version == "unknown") Fail("it does not know which version it is");
+                if (!window.UpdateNote.Contains(updater.CanUpdate ? "version" : "cannot update itself")) Fail("the Updates card says: " + window.UpdateNote);
+                if (!updater.CanUpdate)
+                {
+                    _ = updater.CheckAsync();
+                    app.RestartToUpdate();
+                    if (updater.State != UpdateState.Unavailable || app.Mates.Count != 2)
+                        Fail($"being asked to update changed something in a copy that cannot update itself: its updates are now {updater.State}");
+                }
+                Note($"updates: this is version {updater.Version}, and {(updater.CanUpdate ? $"it can update itself ({updater.State})" : "this copy cannot update itself, which it says")}");
+
                 Note($"the Settings window ({window.Bounds.Width:0}x{window.Bounds.Height:0}) has {window.Switches.Count} switches, the mate, the tempo and the characters folder; every one of them works");
             }, WaitingFor: () => app.SettingsWindow is { IsVisible: true, Bounds.Width: > 0 } ? null : "the Settings window did not open"),
             // A moment later, once the window has laid itself out again: what it is showing.
@@ -957,7 +980,7 @@ public static class SmokeTest
                         throw new InvalidOperationException($"character '{id}' has a clip that cannot be read: {error}");
                 Note($"every clip of {string.Join(", ", packs)} can be decoded");
             }, WaitingFor: () => app.Library.LoadedPacks.FirstOrDefault(p => !p.Checked) is { } pack
-                ? $"the clips of '{pack.Id}' are still being checked" : null),
+                ? $"the clips of '{pack.Id}' are still being checked" : null, WaitUpTo: EveryClipLimit),
         };
 
         // On macOS the window takes the mouse only while the pointer is on the character, so
@@ -1029,7 +1052,7 @@ public static class SmokeTest
                     }
                     if (step.WaitingFor?.Invoke() is { } problem)
                     {
-                        if (watch.Elapsed.TotalSeconds - held > Patience) throw new InvalidOperationException($"{problem} (waited {Patience:0}s)");
+                        if (watch.Elapsed.TotalSeconds - held > step.WaitUpTo) throw new InvalidOperationException($"{problem} (waited {step.WaitUpTo:0}s)");
                         waited = true;
                         return;     // look again on the next tick
                     }

@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using DeskDancer.Characters;
 using DeskDancer.Engine;
 using DeskDancer.Platform;
+using DeskDancer.Updates;
 
 namespace DeskDancer.Ui;
 
@@ -82,6 +83,9 @@ public sealed class MateWindow : Window
     public ICharacter Character => _character;
     /// <summary>Frames drawn so far; the smoke test uses this to prove the window is alive.</summary>
     public int FrameCount { get; private set; }
+
+    /// <summary>True while the right-click menu is showing.</summary>
+    public bool MenuOpen => _menu.IsOpen;
 
     /// <summary>Opens the right-click menu as if the user had asked for it.</summary>
     public void OpenMenu()
@@ -476,6 +480,9 @@ public sealed class MateWindow : Window
         if (ClickThrough.Supported)
             menu.Items.Add(Check("Click through empty space", settings.ClickThrough, v => Toggle(x => settings.ClickThrough = x, v)));
         menu.Items.Add(new Separator());
+        // A newer version that has been downloaded goes in by itself when the mates are at rest; this is for now.
+        if (_app.Updater is { State: UpdateState.Ready, NewVersion: { } newer })
+            menu.Items.Add(Item($"Restart to update to {newer}", _app.RestartToUpdate));
         menu.Items.Add(Item("Settings...", () => _app.OpenSettings(this)));
         menu.Items.Add(Item("Quit", () => _app.Quit()));
     }

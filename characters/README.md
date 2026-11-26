@@ -10,6 +10,11 @@ A character is a folder of images. Put the folder in either of these places:
   **Settings...** shows where it is and lets you keep your characters in another folder
   instead; that one is then looked in first, and this one after it.
 
+Use your personal one if DeskDancer came from one of its downloads. Such a copy updates
+itself, and each update replaces the folder next to the program with the new version's;
+on Linux and macOS that folder cannot be written to at all. The one next to the program is
+for a copy you built yourself.
+
 Then right-click the mate and choose **Character > Reload characters**.
 
 On Android, put the folder in a folder of your own on the phone and choose that folder in
@@ -61,7 +66,7 @@ once through at its own speed, as long as the animation is, with no notes and no
 and then the mate goes back to standing about. It is also done now and then unasked. Start
 and end an action standing as in your idle picture, so the mate goes into it and comes out
 of it without a jump. `domo` has three: `action_bubble_tea`, `action_fart` and
-`action_apple_tree`.
+`action_apple_tree`; `piplup` has one, `action_take_a_bow`.
 
 An action can take the mate across the screen. Draw the character running on the spot, in
 the middle of the picture, and say in `character.json` how far it has really got at each
@@ -130,6 +135,12 @@ clip loops without a jump however much it flickers, and it glows.
 built along a line that bows and curls, so it bends without creasing, with springs to make
 it trail and flop. It also shows how to turn a flat character round to its back, and how to
 change its colours from one clip to the next.
+
+`piplup` is drawn by a script after a picture, and is the one to copy if you have one
+drawing of a character and want it to turn round: its head and body are balls, with the
+face and markings placed on them as on a globe, and its measurements were taken from the
+picture. Its walk is also the one to copy for feet that do not slide: a foot on the floor
+goes back exactly as fast as the app moves the mate forward.
 
 ## character.json (optional)
 

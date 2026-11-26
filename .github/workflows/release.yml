@@ -4,6 +4,10 @@ name: release
 # runs the same tests as every other change (the build and android workflows), and puts
 # the downloads on a new GitHub release, tagged on the commit it was run from.
 #
+# The desktop downloads are packed by Velopack (https://velopack.io), and with them go the
+# packages and lists that copies already installed look for: publishing a release is what
+# makes every one of those copies update itself. See "Updates" in the README.
+#
 # Start it from the Actions tab: choose "release", then "Run workflow", pick the branch
 # (normally main) and give the version, like 1.0.0. Set <Version> in
 # src/DeskDancer/DeskDancer.csproj to the same number first; the Android app takes its
@@ -23,6 +27,8 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
+
       - name: Check the version
         env:
           VERSION: ${{ inputs.version }}
@@ -32,14 +38,29 @@ jobs:
             echo "::error::The version should look like 1.0.0, not '$VERSION'"
             exit 1
           fi
-          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          # A draft is what a run that failed part way leaves behind. It goes now, before the
+          # builds look through the releases for the version before this one: they would
+          # find this version in it, and refuse to pack the same version again.
+          draft="$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          if [ "$draft" = false ]; then
             echo "::error::v$VERSION has already been released"
+            exit 1
+          elif [ "$draft" = true ]; then
+            gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes
+          fi
+          # The program says which version it is from its project file, and an installed
+          # copy from the release it came in. They should agree.
+          built="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/DeskDancer/DeskDancer.csproj)"
+          if [ "$built" != "$VERSION" ]; then
+            echo "::error::DeskDancer.csproj says version $built, not $VERSION. Set <Version> there to $VERSION first."
             exit 1
           fi
 
   desktop:
     needs: check
     uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ inputs.version }}
 
   android:
     needs: check
@@ -52,50 +73,75 @@ jobs:
     needs: [desktop, android]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
       - uses: actions/download-artifact@v6
         with:
-          pattern: DeskDancer-*
-          path: artifacts
+          pattern: Velopack-*
+          path: packages
 
-      - name: Package the downloads
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          out="$GITHUB_WORKSPACE/out"
-          mkdir -p "$out"
-          (cd artifacts/DeskDancer-win-x64 && zip -qr9 "$out/DeskDancer-$VERSION-windows-x64.zip" .)
-          # Artifacts do not keep file permissions, so the program is made runnable again.
-          chmod +x artifacts/DeskDancer-linux-x64/DeskDancer
-          tar -C artifacts/DeskDancer-linux-x64 -czf "$out/DeskDancer-$VERSION-linux-x64.tar.gz" .
-          # The Mac builds are already zipped with ditto, which keeps the app's signature.
-          cp artifacts/DeskDancer-osx-arm64/DeskDancer-osx-arm64.zip "$out/DeskDancer-$VERSION-macos-apple-silicon.zip"
-          cp artifacts/DeskDancer-osx-x64/DeskDancer-osx-x64.zip "$out/DeskDancer-$VERSION-macos-intel.zip"
-          cp artifacts/DeskDancer-android/DeskDancer.apk "$out/DeskDancer-$VERSION-android.apk"
-          ls -la "$out"
+      - uses: actions/download-artifact@v6
+        with:
+          name: DeskDancer-android
+          path: android
 
+      # The release is put together as a draft, which nobody sees and no installed copy
+      # finds, and published once everything is on it. Velopack's tool adds each system's
+      # packages, and writes the list of them that installed copies read.
       - name: Publish the release
         env:
           VERSION: ${{ inputs.version }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          velopack="$(sed -n 's:.*Include="Velopack" Version="\([^"]*\)".*:\1:p' src/DeskDancer/DeskDancer.csproj)"
+          dotnet tool update --global vpk --version "$velopack" > /dev/null
+          cp android/DeskDancer.apk "DeskDancer-$VERSION-android.apk"
+
           cat > notes.md <<EOF
           ## Downloads
 
           | File | For |
           | --- | --- |
-          | \`DeskDancer-$VERSION-windows-x64.zip\` | Windows 10 and 11. Unzip and run \`DeskDancer.exe\`. |
-          | \`DeskDancer-$VERSION-linux-x64.tar.gz\` | Linux (X11, or Wayland with XWayland). Unpack and run \`DeskDancer\`. |
-          | \`DeskDancer-$VERSION-macos-apple-silicon.zip\` | Macs with Apple silicon, macOS 12 or later. |
-          | \`DeskDancer-$VERSION-macos-intel.zip\` | Intel Macs, macOS 12 or later. |
+          | \`DeskDancer-win-x64-Setup.exe\` | Windows 10 and 11. Run it: it installs DeskDancer for you and starts it. |
+          | \`DeskDancer-win-x64-Portable.zip\` | Windows, without installing. Unzip it anywhere and run \`DeskDancer.exe\`. |
+          | \`DeskDancer-linux-x64.AppImage\` | Linux (X11, or Wayland with XWayland). Make it executable and run it. |
+          | \`DeskDancer-osx-arm64-Portable.zip\` | Macs with Apple silicon, macOS 12 or later. Unzip it and move the app to Applications. |
+          | \`DeskDancer-osx-x64-Portable.zip\` | Intel Macs, macOS 12 or later. The same. |
           | \`DeskDancer-$VERSION-android.apk\` | Android 8 or later, installed by hand (a prototype). |
 
-          Keep the \`characters\` folder next to the program. The Mac app is not signed with an
-          Apple developer ID, so macOS asks before opening it the first time. Installing the
-          APK needs "install unknown apps" allowed for the app that opens it. The README's
+          Every download but the Android one keeps itself up to date from here on. The other
+          files, \`.nupkg\` and \`releases.*.json\`, are what installed copies fetch to do
+          that; nobody needs to download them by hand.
+
+          Neither the Windows installer nor the Mac app is signed with a bought certificate,
+          so Windows and macOS ask before running them the first time. Installing the APK
+          needs "install unknown apps" allowed for the app that opens it. The README's
           Platform notes cover each of these.
 
           EOF
-          gh release create "v$VERSION" "$GITHUB_WORKSPACE"/out/* \
+
+          if [ "$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null)" = true ]; then
+            gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes
+          fi
+          gh release create "v$VERSION" "DeskDancer-$VERSION-android.apk" --draft \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "DeskDancer $VERSION" --notes-file notes.md --generate-notes
+
+          for rid in win-x64 linux-x64 osx-arm64 osx-x64; do
+            # Uploading another system's packages than this machine's has to be asked for by name.
+            other="[${rid%%-*}]"
+            [ "$other" != "[linux]" ] || other=""
+            vpk $other --yes --legacyConsole --skip-updates upload github \
+              --outputDir "packages/Velopack-$rid" --channel "$rid" \
+              --repoUrl "https://github.com/$GITHUB_REPOSITORY" --token "$GH_TOKEN" \
+              --tag "v$VERSION" --releaseName "DeskDancer $VERSION" --merge
+          done
+
+          gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
+          gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
