@@ -12,14 +12,15 @@ namespace DeskDancer.Droid;
 
 /// <summary>
 /// The settings screen: permission, character, the folder of the user's own characters, the
-/// moves to use, and buttons to put the mate on the screen, make it dance and put it away.
-/// Long-pressing the mate brings this back.
+/// moves to use, and buttons to put the mate on the screen, make it dance, have it do one of
+/// its character's actions and put it away. Long-pressing the mate brings this back.
 ///
 /// Scripts can drive it too, which is how the CI test does:
 /// <c>adb shell am start -n io.github.friendlyuser.deskdancer/.MainActivity --es command start|dance|rest|stop [--es character mochi]</c>
 /// (<c>dance</c> starts or stops a dance; <c>rest</c> only stops one.)
+/// <c>--es command act --es action action_fart</c> has the mate do one of its actions.
 /// After those the screen gets out of the way, so the mate is seen over whatever was there.
-/// Adding <c>--ez calm true</c> keeps the mate from wandering off or dancing unasked, and
+/// Adding <c>--ez calm true</c> keeps the mate from wandering off, dancing or acting unasked, and
 /// leaves the saved settings alone, so screenshots catch it where it was put.
 /// <c>--es command reload</c> reads the characters folder again, and these leave the screen
 /// up: <c>choose-folder [--es folder Documents/DeskDancer]</c> opens the folder picker there,
@@ -42,6 +43,7 @@ public sealed class MainActivity : Activity
     Button _movesHeader = null!;
     LinearLayout _movesList = null!;
     readonly Dictionary<string, (CheckBox Box, bool BuiltIn)> _moveBoxes = [];
+    LinearLayout _actions = null!;
     // Set while boxes and buttons are being filled in, so that does not count as the user ticking them.
     bool _filling;
 
@@ -126,6 +128,9 @@ public sealed class MainActivity : Activity
         _forgetFolder = Action("Stop using this folder", ForgetFolder);
         FillFolder();
 
+        // A button for each of the character's actions, shown further down.
+        _actions = new LinearLayout(this) { Orientation = Orientation.Vertical };
+
         _movesHeader = Action("", () =>
         {
             _movesList.Visibility = _movesList.Visibility == ViewStates.Visible ? ViewStates.Gone : ViewStates.Visible;
@@ -154,10 +159,12 @@ public sealed class MainActivity : Activity
 
         Action("Put the mate on the screen", () => Start(null));
         Action("Dance", () => Send(MateService.ActionDance));
+        // Filled in along with the moves, above.
+        column.AddView(_actions);
         Action("Put it away", Stop);
         Text("On the screen: drag the mate to carry and throw it, tap it to poke it, double-tap it to " +
              "start or stop a dance, and long-press it to come back here. The notification has " +
-             "the same buttons.", 14);
+             "buttons to make it dance and put it away.", 14);
 
         _scroll = new ScrollView(this) { FillViewport = true };
         _scroll.AddView(column);
@@ -320,7 +327,7 @@ public sealed class MainActivity : Activity
 
     /// <summary>
     /// The checklist of moves, as in the desktop's "Moves to use" menu: this character's own
-    /// dances, then the built-in moves, each ticked while it is in use. The last built-in move
+    /// dances and actions, then the built-in moves, each ticked while it is in use. The last built-in move
     /// still on cannot be unticked, so there is always something to dance.
     /// </summary>
     void FillMoves()
@@ -338,11 +345,10 @@ public sealed class MainActivity : Activity
             view.SetPadding(0, Dp(12), 0, Dp(4));
             _movesList.AddView(view);
         }
-        void Box(DanceMove move)
+        void Box(DanceMove move) => BoxFor(move.Name, Moves.KeyOf(move, character.Id), move.Clip == null);
+        void BoxFor(string name, string key, bool builtIn)
         {
-            string key = Moves.KeyOf(move, character.Id);
-            bool builtIn = move.Clip == null;
-            var box = new CheckBox(this) { Text = move.Name };
+            var box = new CheckBox(this) { Text = name };
             box.CheckedChange += (_, e) =>
             {
                 if (_filling) return;
@@ -365,6 +371,11 @@ public sealed class MainActivity : Activity
         {
             Heading($"{character.DisplayName}'s own dances");
             own.ForEach(Box);
+        }
+        if (character.ActionClips.Count > 0)
+        {
+            Heading($"{character.DisplayName}'s actions");
+            foreach (var action in character.ActionClips) BoxFor(action.Name, Moves.KeyOf(action, character.Id), false);
         }
         Heading("Built-in moves");
         foreach (var move in all.Where(m => m.Clip == null)) Box(move);
@@ -398,6 +409,29 @@ public sealed class MainActivity : Activity
         bool open = _movesList.Visibility == ViewStates.Visible;
         _movesHeader.Text = $"Moves to use: {count} of {_moveBoxes.Count} on {(open ? "▾" : "▸")}";
         _filling = false;
+        FillActions();
+    }
+
+    /// <summary>
+    /// A button for each of the character's actions that is switched on, such as Domo's
+    /// Bubble Tea and Fart. Nothing at all for a character with none.
+    /// </summary>
+    void FillActions()
+    {
+        _actions.RemoveAllViews();
+        var character = Stage.Library.Load(Stage.CharacterId);
+        var on = character.ActionClips.Where(a => Stage.Settings.MoveEnabled(Moves.KeyOf(a, character.Id))).ToList();
+        if (on.Count == 0) return;
+        var title = new TextView(this) { Text = $"{character.DisplayName}'s actions" };
+        title.SetTextSize(Android.Util.ComplexUnitType.Sp, 14);
+        title.SetPadding(0, Dp(8), 0, 0);
+        _actions.AddView(title);
+        foreach (var action in on)
+        {
+            var button = new Button(this) { Text = action.Name };
+            button.Click += (_, _) => Send(MateService.ActionAct, action: action.Id);
+            _actions.AddView(button);
+        }
     }
 
     /// <summary>Opens the list of moves and, given one, scrolls it into the middle of the screen.</summary>
@@ -430,10 +464,11 @@ public sealed class MainActivity : Activity
         Refresh();
     }
 
-    void Send(string action, string? character = null)
+    void Send(string command, string? character = null, string? action = null)
     {
-        var intent = new Intent(this, typeof(MateService)).SetAction(action);
+        var intent = new Intent(this, typeof(MateService)).SetAction(command);
         if (character != null) intent.PutExtra(MateService.ExtraCharacter, character);
+        if (action != null) intent.PutExtra(MateService.ExtraAction, action);
         StartForegroundService(intent);
     }
 
@@ -454,6 +489,7 @@ public sealed class MainActivity : Activity
             Stage.Settings.Persist = false;
             Stage.Settings.Wander = false;
             Stage.Settings.AutoDance = false;
+            Stage.Settings.AutoActions = false;
         }
         Android.Util.Log.Info(MateOverlay.Tag, $"command '{command}'{(character == null ? "" : $" character '{character}'")}");
         switch (command)
@@ -461,6 +497,7 @@ public sealed class MainActivity : Activity
             case "start": Start(character); break;
             case "dance": Send(MateService.ActionDance); break;
             case "rest": Send(MateService.ActionRest); break;
+            case "act": Send(MateService.ActionAct, action: intent.GetStringExtra("action")); break;
             case "stop": Stop(); break;
             case "reload": SyncFolder(announce: true); break;
             // These need the screen, or open something over it, so it stays.

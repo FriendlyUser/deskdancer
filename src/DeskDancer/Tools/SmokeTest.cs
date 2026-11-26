@@ -134,8 +134,8 @@ public static class SmokeTest
         {
             var loading = Stopwatch.StartNew();
             var character = app.Library.Load(id);
-            Note($"loaded '{id}' in {loading.ElapsedMilliseconds} ms; its own dances: " +
-                 (character.DanceClips.Count == 0 ? "none" : string.Join(", ", character.DanceClips.Select(d => d.Name))));
+            static string List(IReadOnlyList<OwnClip> clips) => clips.Count == 0 ? "none" : string.Join(", ", clips.Select(c => c.Name));
+            Note($"loaded '{id}' in {loading.ElapsedMilliseconds} ms; its own dances: {List(character.DanceClips)}; its actions: {List(character.ActionClips)}");
         }
         bool Same(string a, string b) => a.Equals(b, StringComparison.OrdinalIgnoreCase);
         void MustBe(MateWindow mate, string id)
@@ -326,6 +326,60 @@ public static class SmokeTest
                 settings.DisabledMoves = kept;
                 Note($"with all but Sway switched off, the mate dances {Names(b.AvailableMoves())} and so does the party");
             }),
+            // An action is played once, off the beat: no notes, no dance floor, and a party
+            // waits for it to finish. It runs for seconds, so a brain of its own goes through
+            // one on a clock of its own, much faster than the windows run.
+            new(0.53, "an action", () =>
+            {
+                string? id = packs.FirstOrDefault(p => app.Library.Load(p).ActionClips.Count > 0);
+                if (id == null)
+                {
+                    Note("no installed character has an action; skipped");
+                    return;
+                }
+                var character = app.Library.Load(id);
+                var action = character.ActionClips[0];
+                double now = 0;
+                var clock = new BeatClock { TimeSource = () => now };
+                var conductor = new Conductor(clock);
+                var settings = new Settings { Persist = false, Wander = false, AutoDance = false, AutoActions = false };
+                var b = new MateBrain(clock, conductor, settings, character, new Random(3)) { H = 150, Left = 0, Right = 1600, Top = 0, Floor = 900 };
+                b.Place(800, 900);
+                int notes = 0;
+                double energy = 0;
+                void Run(double seconds)
+                {
+                    for (double t = 0; t < seconds; t += 1.0 / 60)
+                    {
+                        now += 1.0 / 60;
+                        b.Update(1.0 / 60);
+                        notes += b.Particles.Items.Count(p => p.Kind == ParticleKind.Note);
+                        energy = Math.Max(energy, b.Energy);
+                    }
+                }
+                void Fail(string why) => throw new InvalidOperationException($"{character.DisplayName}'s {action.Name}: {why}");
+
+                if (b.AllMoves().Any(m => m.Clip?.StartsWith("action", StringComparison.Ordinal) == true))
+                    Fail("an action is offered as a dance");
+                if (b.DoAction("action_no_such_thing")) Fail("an action the character does not have was started");
+                Run(0.5);
+                if (!b.DoAction(action.Id)) Fail("did not start");
+                Run(0.5);
+                if (b.State != MateState.Act || b.Clip != action.Id) Fail($"expected to be acting it out, was {b.State} showing {b.Clip}");
+                // A party starts while it is going on, and waits for it.
+                conductor.SetParty(true);
+                Run(action.Seconds - 1.2);
+                if (b.State != MateState.Act) Fail($"cut short at {action.Seconds - 0.7:0.0} of {action.Seconds:0.0} seconds: {b.State}");
+                if (notes > 0 || energy > 0.01) Fail($"it brought out the dance's notes ({notes}) or floor (energy {energy:0.00})");
+                Run(1.2);
+                if (b.State != MateState.Dance) Fail($"after it the mate should have joined the party, but is {b.State}");
+                conductor.SetParty(false);
+
+                // Switched off, it is not done unasked.
+                settings.SetMoveEnabled(b.KeyOf(action), false);
+                if (b.AvailableActions().Any(a => a.Id == action.Id)) Fail("still on offer once switched off");
+                Note($"{character.DisplayName}'s {action.Name} ran {action.Seconds:0.0} seconds with no notes and no dance floor, then the mate joined the party");
+            }),
             new(0.55, "party off, resize, menu", () =>
             {
                 app.SetParty(false);
@@ -346,6 +400,10 @@ public static class SmokeTest
                 Note($"the Dance move menu offers {offered} move(s); Moves to use has {boxes} to tick");
                 if (offered != 1) throw new InvalidOperationException("the Dance move menu should offer Sway alone");
                 if (boxes is not > 15) throw new InvalidOperationException("Moves to use should list the built-in moves and the mate's own");
+                // The Actions menu is there for a character with actions, and only then.
+                bool hasActions = First().Brain.AvailableActions().Count > 0;
+                if (items.FirstOrDefault(i => i.Header as string == "Actions") is not { } actions || actions.IsVisible != hasActions)
+                    throw new InvalidOperationException($"the Actions menu should be {(hasActions ? "shown" : "hidden")} for {First().Character.DisplayName}");
                 First().ContextMenu!.Close();
                 app.Settings.DisabledMoves.Clear();
             }, WaitingFor: () => First().ContextMenu?.IsOpen == true ? null : "context menu did not open"),

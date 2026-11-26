@@ -3,7 +3,11 @@ using static DeskDancer.Engine.Ease;
 
 namespace DeskDancer.Engine;
 
-public enum MateState { Idle, Walk, Sit, Sleep, Dance, Drag, Fall }
+/// <summary>
+/// What a mate is doing. <see cref="Act"/> is one of the character's own actions, such as
+/// having a drink: played once through, off the beat, with no notes and no dance floor.
+/// </summary>
+public enum MateState { Idle, Walk, Sit, Sleep, Dance, Act, Drag, Fall }
 
 /// <summary>
 /// Decides what one mate is doing and where it is. Knows nothing about windows or
@@ -30,6 +34,7 @@ public sealed class MateBrain
     double _blendT = 1, _blendDur;
 
     DanceSession? _session;
+    OwnClip _action;
     int _seenSerial = -1, _moveDir = 1;
     double _prevMoveT;
     long _lastNoteBeat = long.MinValue;
@@ -81,6 +86,9 @@ public sealed class MateBrain
     public ParticleSystem Particles { get; } = new();
     public bool IsDancing => State == MateState.Dance;
     public string? CurrentMoveName => State == MateState.Dance ? _session?.Current.Name : null;
+    public bool IsActing => State == MateState.Act;
+    /// <summary>The menu name of the action the mate is doing, if it is doing one.</summary>
+    public string? CurrentActionName => State == MateState.Act ? _action.Name : null;
 
     public ICharacter Character
     {
@@ -88,8 +96,10 @@ public sealed class MateBrain
         set
         {
             _character = value;
-            // A clip-based move from the old character means nothing to the new one.
+            // A clip-based move from the old character means nothing to the new one, and nor
+            // does an action, unless the new one has an action by that name too.
             if (_session != null && !ReferenceEquals(_session, _conductor.Session)) StopOwnSession();
+            if (State == MateState.Act && !value.ActionClips.Any(a => a.Id == _action.Id)) SetState(MateState.Idle, RandomIdle(), 0.3);
         }
     }
 
@@ -129,6 +139,44 @@ public sealed class MateBrain
     /// dance by the character and its clip, as its clips are no one else's.
     /// </summary>
     public string KeyOf(DanceMove move) => Moves.KeyOf(move, _character.Id);
+
+    /// <summary>Every action this mate's character has, switched on or not.</summary>
+    public IReadOnlyList<OwnClip> AllActions() => _character.ActionClips;
+
+    /// <summary>The character's actions, less any that are switched off. Often empty.</summary>
+    public IReadOnlyList<OwnClip> AvailableActions() => AllActions().Where(a => _settings.MoveEnabled(KeyOf(a))).ToList();
+
+    /// <summary>How an action is named in the settings, by the character and its clip.</summary>
+    public string KeyOf(OwnClip action) => Moves.KeyOf(action, _character.Id);
+
+    /// <summary>
+    /// Does one of the character's actions: plays its clip once from the start, at its own
+    /// speed, and then goes back to standing about. It keeps no beat, so there are no notes
+    /// and no dance floor, and a dance party leaves the mate be until it is done. Being
+    /// picked up, or told to sit, nap or dance, cuts it short. False if the character has no
+    /// action by that name.
+    /// </summary>
+    public bool DoAction(string id)
+    {
+        var action = AllActions().FirstOrDefault(a => a.Id == id);
+        if (action.Id == null) return false;
+        StopOwnSession();
+        _character.Prepare(action.Id);
+        _action = action;
+        _awake = 0;
+        SetState(MateState.Act, action.Seconds, 0.25);
+        // Straight from the first frame, even when it is the same action again.
+        _clip = action.Id;
+        _clipTime = 0;
+        return true;
+    }
+
+    /// <summary>Does one of the actions that are switched on, picked at random. False if there are none.</summary>
+    public bool StartRandomAction()
+    {
+        var pool = AvailableActions();
+        return pool.Count > 0 && DoAction(pool[_rng.Next(pool.Count)].Id);
+    }
 
     public void StartDance(IEnumerable<DanceMove> moves)
     {
@@ -256,14 +304,16 @@ public sealed class MateBrain
         _awake += dt;
         Beat = _clock.Beat;
 
-        bool onFloor = State is MateState.Idle or MateState.Walk or MateState.Sit or MateState.Sleep or MateState.Dance;
+        bool onFloor = State is MateState.Idle or MateState.Walk or MateState.Sit or MateState.Sleep or MateState.Dance or MateState.Act;
         if (onFloor)
         {
             // The floor can move: gravity toggled, taskbar resized, or dropped on another monitor.
             if (_baseY > Floor) _baseY = Floor;
             else if (_settings.Gravity && _baseY < Floor - 1) Drop();
 
-            if (_conductor.PartyOn && _conductor.Session is { } party && !ReferenceEquals(_session, party) && State != MateState.Fall)
+            // A mate in the middle of an action finishes it before it joins in.
+            if (_conductor.PartyOn && _conductor.Session is { } party && !ReferenceEquals(_session, party)
+                && State is not (MateState.Fall or MateState.Act))
                 BeginSession(party);
         }
 
@@ -291,6 +341,12 @@ public sealed class MateBrain
                 break;
             case MateState.Dance:
                 target = DanceFrame(out clip);
+                break;
+            case MateState.Act:
+                // The clip has all the motion in it, so the app adds none of its own.
+                target = MoveFrame.Neutral;
+                clip = _action.Id;
+                if (_stateTime >= _stateDuration) SetState(MateState.Idle, RandomIdle(), 0.3);
                 break;
             case MateState.Drag:
                 target = DragFrame(dt);
@@ -429,6 +485,8 @@ public sealed class MateBrain
             StartRandomDance(1 + _rng.Next(2));
             return;
         }
+        // A character with no actions sits down instead, as it always has.
+        if (_settings.AutoActions && r is >= 0.63 and < 0.68 && StartRandomAction()) return;
         if (r < 0.78) Sit();
         else if (r < 0.86 && _awake > 120) Sleep();
         else SetState(MateState.Idle, RandomIdle(), 0);

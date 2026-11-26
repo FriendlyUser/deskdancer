@@ -19,7 +19,8 @@ public sealed class RemixCharacter : ICharacter
     public bool IsRigged => true;
     public bool PixelArt => false;
     public int NaturalFacing => 1;
-    public IReadOnlyList<DanceClip> DanceClips => [];
+    public IReadOnlyList<OwnClip> DanceClips => [];
+    public IReadOnlyList<OwnClip> ActionClips => [];
     public bool HasClip(string clip) => false;
     public void Prepare(string clip) { }
 

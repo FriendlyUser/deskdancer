@@ -32,6 +32,8 @@ public sealed class Settings
     public double Bpm { get; set; } = 120;
     public bool Wander { get; set; } = true;
     public bool AutoDance { get; set; } = true;
+    /// <summary>Now and then do one of the character's own actions, such as having a drink, unasked.</summary>
+    public bool AutoActions { get; set; } = true;
     public bool Gravity { get; set; } = true;
     public bool Effects { get; set; } = true;
     public bool AlwaysOnTop { get; set; } = true;
@@ -39,11 +41,12 @@ public sealed class Settings
     public bool ClickThrough { get; set; } = true;
 
     /// <summary>
-    /// Dance moves switched off. A built-in move is listed by its id ("backflip"), and a
-    /// character's own dance by the character and its clip ("domo/dance_fart"), so that
-    /// switching one off leaves other characters' dances alone. A move that is switched off
-    /// is left out of the Dance move menu, random dances, dancing on its own, the dance
-    /// party and routines.
+    /// Dance moves and actions switched off. A built-in move is listed by its id
+    /// ("backflip"), and a character's own dance or action by the character and its clip
+    /// ("mochi/dance_spin", "domo/action_fart"), so that switching one off leaves other
+    /// characters' alone. A move that is switched off is left out of the Dance move menu,
+    /// random dances, dancing on its own, the dance party and routines; an action, out of
+    /// the Actions menu and what the mate does on its own.
     /// </summary>
     public List<string> DisabledMoves { get; set; } = [];
 

@@ -408,8 +408,14 @@ public sealed class MateWindow : Window
         // again whenever one is switched on or off from the checklist below.
         var moveMenu = new MenuItem { Header = "Dance move" };
         var routineMenu = new MenuItem { Header = "Routine" };
+        // The character's own actions, such as having a drink: not dances, so no beat and no notes.
+        var actionMenu = new MenuItem { Header = "Actions" };
         void FillDances()
         {
+            actionMenu.Items.Clear();
+            foreach (var a in Brain.AvailableActions()) actionMenu.Items.Add(Item(a.Name, () => Brain.DoAction(a.Id)));
+            actionMenu.IsVisible = actionMenu.Items.Count > 0;
+
             moveMenu.Items.Clear();
             foreach (var m in Brain.AvailableMoves()) moveMenu.Items.Add(Item(m.Name, () => Brain.StartDance([m, m])));
             // A routine plays without its switched-off moves, and goes if that leaves none.
@@ -434,10 +440,14 @@ public sealed class MateWindow : Window
             (Control)Check($"{bpm} BPM", Math.Abs(settings.Bpm - bpm) < 0.5, _ => _app.SetTempo(bpm)))));
         menu.Items.Add(new Separator());
 
+        menu.Items.Add(actionMenu);
+
         menu.Items.Add(Item("Sit down", Brain.Sit));
         menu.Items.Add(Item("Take a nap", Brain.Sleep));
         menu.Items.Add(Check("Wander around", settings.Wander, v => Toggle(x => settings.Wander = x, v)));
         menu.Items.Add(Check("Dance on its own", settings.AutoDance, v => Toggle(x => settings.AutoDance = x, v)));
+        if (Brain.AllActions().Count > 0)
+            menu.Items.Add(Check("Do actions on its own", settings.AutoActions, v => Toggle(x => settings.AutoActions = x, v)));
         menu.Items.Add(Check("Fall to the floor when dropped", settings.Gravity, v => Toggle(x => settings.Gravity = x, v)));
         menu.Items.Add(Check("Notes and sparkles", settings.Effects, v => Toggle(x => settings.Effects = x, v)));
         menu.Items.Add(new Separator());
@@ -463,8 +473,8 @@ public sealed class MateWindow : Window
     }
 
     /// <summary>
-    /// The "Moves to use" checklist: this character's own dances and the built-in moves,
-    /// each ticked if it is switched on. It stays open while boxes are ticked, so several can
+    /// The "Moves to use" checklist: this character's own dances and actions and the
+    /// built-in moves, each ticked if it is switched on. It stays open while boxes are ticked, so several can
     /// be changed in one go. The last built-in move still on cannot be switched off, so there
     /// is always something to dance. <paramref name="changed"/> runs after every change.
     /// </summary>
@@ -494,11 +504,11 @@ public sealed class MateWindow : Window
             Dispatcher.UIThread.Post(Refresh);
         }
 
-        MenuItem Box(DanceMove move)
+        MenuItem Box(DanceMove move) => BoxFor(move.Name, Brain.KeyOf(move), move.Clip == null);
+
+        MenuItem BoxFor(string name, string key, bool isBuiltIn)
         {
-            string key = Brain.KeyOf(move);
-            bool isBuiltIn = move.Clip == null;
-            var box = new MenuItem { Header = move.Name, ToggleType = MenuItemToggleType.CheckBox, StaysOpenOnClick = true };
+            var box = new MenuItem { Header = name, ToggleType = MenuItemToggleType.CheckBox, StaysOpenOnClick = true };
             box.Click += (_, _) =>
             {
                 if (!(isBuiltIn && LastBuiltIn(key))) settings.SetMoveEnabled(key, !settings.MoveEnabled(key));
@@ -516,6 +526,13 @@ public sealed class MateWindow : Window
         {
             items.Add(Heading($"{_character.DisplayName}'s own dances"));
             items.AddRange(own.Select(Box));
+            items.Add(new Separator());
+        }
+        var actions = Brain.AllActions();
+        if (actions.Count > 0)
+        {
+            items.Add(Heading($"{_character.DisplayName}'s actions"));
+            items.AddRange(actions.Select(a => BoxFor(a.Name, Brain.KeyOf(a), false)));
             items.Add(new Separator());
         }
         items.Add(Heading("Built-in moves"));

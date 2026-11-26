@@ -40,14 +40,6 @@
       ],
       "name": "Happy Arms"
     },
-    "dance_bubble_tea": {
-      "file": "dance_bubble_tea.webp",
-      "anchor": [
-        172.0,
-        351.0
-      ],
-      "name": "Bubble Tea"
-    },
     "dance_chomp": {
       "file": "dance_chomp.webp",
       "anchor": [
@@ -56,14 +48,6 @@
       ],
       "name": "Chomp"
     },
-    "dance_fart": {
-      "file": "dance_fart.webp",
-      "anchor": [
-        212.0,
-        371.0
-      ],
-      "name": "Fart"
-    },
     "dance_stomp": {
       "file": "dance_stomp.webp",
       "anchor": [
@@ -71,6 +55,22 @@
         355.0
       ],
       "name": "Monster Stomp"
+    },
+    "action_bubble_tea": {
+      "file": "action_bubble_tea.webp",
+      "anchor": [
+        176.0,
+        351.0
+      ],
+      "name": "Bubble Tea"
+    },
+    "action_fart": {
+      "file": "action_fart.webp",
+      "anchor": [
+        212.0,
+        372.0
+      ],
+      "name": "Fart"
     },
     "drag": {
       "file": "drag.webp",

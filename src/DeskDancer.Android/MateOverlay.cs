@@ -417,6 +417,16 @@ public sealed class MateOverlay : Java.Lang.Object, Choreographer.IFrameCallback
         Android.Util.Log.Info(Tag, $"dancing: {Brain.IsDancing}");
     }
 
+    /// <summary>
+    /// Does one of the character's actions, such as Domo's Bubble Tea: played once through,
+    /// with no notes. A dance party carries on without the mate until it is done.
+    /// </summary>
+    public void DoAction(string id)
+    {
+        bool started = Brain.DoAction(id);
+        Android.Util.Log.Info(Tag, started ? $"action '{id}' started" : $"'{_character.Id}' has no action '{id}'");
+    }
+
     /// <summary>Ends a dance if one is going, and otherwise leaves the mate be.</summary>
     public void Rest()
     {

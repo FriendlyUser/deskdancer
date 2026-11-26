@@ -10,7 +10,7 @@ mouth full of teeth. Because he is drawn fresh for every frame, any part can mov
 arms lift and curl, the legs swing and lift, the mouth opens, snaps shut and roars, the
 eyes blink, and the whole mate can squash, stretch, lean and jump. He can also sit down
 with his legs out in front of him, bring an arm round in front to hold a cup of bubble
-tea, and let off a cloud of gas.
+tea, and let off a cloud of gas: his two actions, which play once through rather than loop.
 
 Each clip is a small function of time that returns a pose. The arms are not posed by
 hand beyond that: a spring carries them, pushed about by how the shoulders move, so they
@@ -580,11 +580,13 @@ ARM_PUSH = 0.55                         # how hard the body's movement throws th
 ARM_CURL = 2.6                          # degrees the hand trails behind per radian/second of swing
 
 
-def animate(clip, seconds, fps, calm, step=1 / 500):
+def animate(clip, seconds, fps, calm, loop=True, step=1 / 500):
     """Samples clip(t) through one turn of the loop, lets the arms swing, and returns the
     frames as (pose, milliseconds). A frame is held for as long as nothing has visibly
     moved; a calm clip waits for a little more movement, so the tail end of a settling arm
-    does not cost a frame every time."""
+    does not cost a frame every time. A clip that is played once and not looped (an action)
+    is worked out the same way, as it starts and ends standing at rest, but its last frame
+    is kept where it is and not joined on to its first."""
     n = int(round(seconds / step))
     poses = [{**DEFAULT, **clip(i * step)} for i in range(n)]
     lifts = np.array([p["arms"] for p in poses], np.float64)
@@ -623,7 +625,7 @@ def animate(clip, seconds, fps, calm, step=1 / 500):
             frames[-1] = (frames[-1][0], frames[-1][1] + ms)
         else:
             frames.append((pose, ms))
-    if len(frames) > 1 and same(frames[0][0], frames[-1][0], within):
+    if loop and len(frames) > 1 and same(frames[0][0], frames[-1][0], within):
         frames[0] = (frames[0][0], frames[0][1] + frames.pop()[1])
     return frames
 
@@ -780,73 +782,109 @@ def mix(a, b, t):
 
 
 def bubble_tea(t):
-    """Brings out a cup of bubble tea, takes three long pulls at the straw, each fetching a
-    pearl up it, sighs happily and puts the cup away. The arm that holds the cup comes
-    round in front of him, and is kept from swinging while it has something to hold."""
+    """Brings out a cup of bubble tea and gives it a shake. Takes three long pulls at the
+    straw, each fetching a pearl up it, lowers the cup with a happy sigh and sways, then
+    goes back for the rest, four more pulls, until the tea is all but gone. Peers into the
+    cup at the one pearl left at the bottom, shakes it, gives up with a sigh and puts the
+    cup away. The arm that holds the cup comes round in front of him, and is kept from
+    swinging while it has something to hold."""
     rest, out = (24.0, -14.0), (52.0, 4.0)                   # the arm hanging, and swung out to the side
-    held, raised = reach(1, 70, -98), reach(1, 69, -109)     # holding the cup, and lifting the straw into his mouth
-    have = 0.24 <= t < 3.22                                  # the cup is out, and that arm is in front
-    pulls = (0.90, 1.34, 1.78)
+    raised = reach(1, 69, -109)                              # lifting the straw into his mouth
+    shaking = bump(t, 0.70, 0.08, 0.56, 0.08)                # shaking the cup to mix it up
+    wobble = math.sin(2 * math.pi * (t - 0.70) / 0.28)
+    peer = bump(t, 6.50, 0.22, 0.90, 0.20)                   # holding it up to look inside
+    jiggle = math.sin(2 * math.pi * (t - 6.86) / 0.24) * bump(t, 6.86, 0.05, 0.38, 0.05)
+    held = reach(1, 70 + 5 * wobble * shaking + 10 * peer, -98 - 3 * abs(wobble) * shaking + 6 * peer)
+    have = 0.24 <= t < 8.06                                  # the cup is out, and that arm is in front
+    first, second = (1.70, 2.14, 2.58), (4.74, 5.16, 5.58, 6.00)
+    pulls = first + second
     pull = max(bump(t, at, 0.10, 0.14, 0.12) for at in pulls)
-    sipping = bump(t, 0.70, 0.14, 1.40, 0.14)
-    sigh = bump(t, 2.40, 0.10, 0.30, 0.16)
+    sipping = bump(t, 1.46, 0.14, 1.44, 0.14) + bump(t, 4.50, 0.14, 1.70, 0.14)
+    sigh = bump(t, 3.22, 0.10, 0.30, 0.16)                   # a happy one after the first sips
+    sway = bump(t, 3.56, 0.20, 0.56, 0.20)
+    glum = bump(t, 7.42, 0.12, 0.30, 0.18)                   # and a glum one when it has run out
     hop = bump(t, 0.24, 0.10, 0.0, 0.16)                     # a little jump for joy as the cup appears
 
     arm = mix(mix(rest, out, ease(t, 0.0, 0.24)), held, ease(t, 0.28, 0.56))
     arm = mix(arm, raised, sipping)
-    arm = mix(mix(arm, out, ease(t, 2.96, 3.22)), rest, ease(t, 3.24, 3.50))
+    arm = mix(mix(arm, out, ease(t, 7.80, 8.06)), rest, ease(t, 8.08, 8.34))
     cup = None
     if have:
-        grow = (0.3 + 0.82 * ease(t, 0.24, 0.42) - 0.12 * ease(t, 0.42, 0.54)) * (1 - 0.7 * ease(t, 2.98, 3.22))
-        tilt = 14 * (1 - ease(t, 0.28, 0.54)) + 14 * ease(t, 2.96, 3.2)
+        grow = (0.3 + 0.82 * ease(t, 0.24, 0.42) - 0.12 * ease(t, 0.42, 0.54)) * (1 - 0.7 * ease(t, 7.82, 8.06))
+        tilt = (14 * (1 - ease(t, 0.28, 0.54)) + 14 * ease(t, 7.80, 8.04)
+                + 9 * wobble * shaking - 12 * peer + 10 * jiggle)
         hx, hy = hand_at(1, *arm)
         cup = (round(hx + GRIP[0] * grow, 1), round(hy + GRIP[1] * grow, 1), round(tilt, 1), round(grow, 2),
-               round(1 - 0.38 * ease(t, pulls[0], pulls[-1] + 0.36), 2),
+               round(1 - 0.38 * ease(t, first[0], first[-1] + 0.36) - 0.52 * ease(t, second[0], second[-1] + 0.36), 2),
                round(sum(ease(t, at + 0.04, at + 0.38) for at in pulls), 2))
-    return dict(eyes=HAPPY if 0.34 <= t < 2.98 else OPEN,
-                mouth=round(1 + 0.12 * hop - 0.48 * sipping - 0.10 * pull + 0.24 * sigh, 2),
-                squash=0.018 * pull - 0.022 * sigh - 0.03 * hop, dy=-8 * hop, lean=-2.0 * sigh, look=(0.0, round(3 * sipping, 1)),
-                arms=(24 + 10 * sigh, arm[0]), bend=(-14 + 24 * sigh, arm[1]),
-                front=(False, have), loose=(1.0, 1 - ease(t, 0.16, 0.24) + ease(t, 3.22, 3.36)), cup=cup)
+    if 0.34 <= t < 6.50:
+        eyes = HAPPY
+    elif glum > 0.3:
+        eyes = (0.6, 0.6)
+    else:
+        eyes = OPEN
+    return dict(eyes=eyes,
+                mouth=round(1 + 0.12 * hop - 0.48 * sipping - 0.10 * pull + 0.24 * sigh - 0.3 * peer + 0.12 * glum, 2),
+                squash=0.018 * pull - 0.022 * sigh - 0.03 * hop + 0.02 * glum, dy=-8 * hop,
+                lean=round(-2.0 * sigh + 2.5 * math.sin(2 * math.pi * (t - 3.56) / 0.98) * sway + 1.5 * glum, 2),
+                look=(round(4 * peer, 1), round(3 * sipping + 6 * peer, 1)),
+                arms=(24 + 10 * sigh + 14 * glum, arm[0]), bend=(-14 + 24 * sigh + 30 * glum, arm[1]),
+                front=(False, have), loose=(1.0, 1 - ease(t, 0.16, 0.24) + ease(t, 8.06, 8.20)), cup=cup)
 
 
 def fart(t):
-    """Strains, lets one go with a little hop, looks relieved, and then wafts the cloud away
-    with the arm on that side."""
-    strain = ease(t, 0.05, 0.55) * (1 - ease(t, 0.86, 0.9))
-    shake = (1.2 if int(t / 0.06) % 2 else -1.2) * ease(t, 0.3, 0.5) * (1 - ease(t, 0.84, 0.88))
-    air = min(max((t - 0.88) / 0.34, 0.0), 1.0)              # the hop, from leaving the floor to landing
-    landed = max(0.0, t - 1.22)
-    relief = bump(t, 1.22, 0.14, 1.0, 0.3)
-    waft = bump(t, 1.62, 0.18, 0.72, 0.2)
-    if t < 0.88:
-        eyes = (0.55, 0.55) if strain > 0.5 else OPEN
-    elif t < 1.22:
+    """Glances one way and the other to see that no one is looking, and strains, but
+    nothing comes. Looks round behind him, puzzled, tries again harder and lets one go with
+    a hop. Looks relieved, wafts the cloud away with the arm on that side for a good while,
+    and then looks off into the distance as if nothing had happened."""
+    first = ease(t, 1.05, 1.50) * (1 - ease(t, 2.05, 2.30))  # a try that comes to nothing
+    second = ease(t, 2.85, 3.30) * (1 - ease(t, 3.64, 3.68)) # and one that does
+    strain = max(0.8 * first, second)
+    shaking = 0.6 * ease(t, 1.25, 1.40) * (1 - ease(t, 2.00, 2.10)) + ease(t, 3.05, 3.25) * (1 - ease(t, 3.62, 3.66))
+    shake = (1.2 if int(t / 0.06) % 2 else -1.2) * shaking
+    huh = bump(t, 2.28, 0.16, 0.36, 0.16)                    # puzzled that nothing came
+    air = min(max((t - 3.66) / 0.34, 0.0), 1.0)              # the hop, from leaving the floor to landing
+    landed = max(0.0, t - 4.00)
+    relief = bump(t, 4.00, 0.14, 1.0, 0.3)
+    waft = bump(t, 4.40, 0.18, 1.40, 0.20)
+    innocent = bump(t, 6.18, 0.20, 0.66, 0.20)               # nothing to do with him
+    if t < 1.2:
+        eyes = OPEN
+    elif t < 3.66:
+        eyes = CLOSED if second > 0.5 else (0.55, 0.55) if first > 0.5 else OPEN
+    elif t < 4.00:
         eyes = WIDE
     else:
-        eyes = HAPPY if t < 1.76 else OPEN
-    return dict(eyes=eyes, mouth=round(1 - 0.95 * strain + 0.25 * math.sin(math.pi * air) + 0.06 * relief, 2),
+        eyes = HAPPY if t < 4.56 else OPEN
+    look = (-7 * bump(t, 0.10, 0.16, 0.22, 0.14) + 7 * bump(t, 0.64, 0.16, 0.22, 0.14)
+            - 6 * huh - 8 * bump(t, 4.50, 0.20, 1.30, 0.22) + 7 * innocent,
+            2 * huh - 4 * innocent)
+    return dict(eyes=eyes,
+                mouth=round(1 - 0.95 * strain + 0.25 * math.sin(math.pi * air) + 0.06 * relief - 0.3 * huh - 0.45 * innocent, 2),
                 squash=0.075 * strain - 0.07 * math.sin(math.pi * air)
-                       + (0.07 * math.exp(-landed * 9) * math.cos(landed * 16) if t >= 1.22 else 0.0),
-                dy=-14 * 4 * air * (1 - air), dx=round(shake, 1) + 3 * relief, lean=-2.5 * strain + 3.0 * relief,
-                look=(round(-8 * bump(t, 1.72, 0.2, 0.62, 0.22), 1), 0.0),
-                arms=(24 + 12 * strain + 70 * waft + 16 * math.sin(2 * math.pi * (t - 1.7) / 0.36) * bump(t, 1.76, 0.08, 0.5, 0.1),
-                      24 + 12 * strain),
-                bend=(-14 - 44 * strain + 44 * waft, -14 - 44 * strain),
-                gas=round((t - 0.86) / 1.6, 3) if 0.86 < t < 2.46 else None)
+                       + (0.07 * math.exp(-landed * 9) * math.cos(landed * 16) if t >= 4.00 else 0.0),
+                dy=-14 * 4 * air * (1 - air), dx=round(shake, 1) + 3 * relief,
+                lean=round(-2.5 * strain + 3.0 * relief - 2.0 * huh + 1.5 * math.sin(2 * math.pi * (t - 6.18) / 0.76) * innocent, 2),
+                look=(round(look[0], 1), round(look[1], 1)),
+                arms=(24 + 12 * strain + 16 * huh + 70 * waft
+                      + 16 * math.sin(2 * math.pi * (t - 4.48) / 0.36) * bump(t, 4.54, 0.08, 1.18, 0.1),
+                      24 + 12 * strain + 16 * huh),
+                bend=(-14 - 44 * strain + 20 * huh + 44 * waft, -14 - 44 * strain + 20 * huh),
+                gas=round((t - 3.64) / 2.4, 3) if 3.64 < t < 6.04 else None)
 
 
 CLIPS = {
-    # key: file, name in the Dance move menu, the clip, its length, frames a second, calm
+    # key: file, name in the Dance move or Actions menu, the clip, its length, frames a second, calm
     "idle": ("idle.webp", None, idle, 10.0, 20, True),
     "walk": ("walk.webp", None, walk, 0.52, 25, False),
     "sit": ("sit.webp", None, sitting, 7.0, 20, True),
     "sleep": ("sleep.webp", None, asleep, 4.0, 20, True),
     "dance": ("dance.webp", "Happy Arms", happy_arms, 1.0, 25, False),
-    "dance_bubble_tea": ("dance_bubble_tea.webp", "Bubble Tea", bubble_tea, 3.6, 12.5, True),
     "dance_chomp": ("dance_chomp.webp", "Chomp", chomp, 1.0, 25, False),
-    "dance_fart": ("dance_fart.webp", "Fart", fart, 3.06, 50 / 3, True),
     "dance_stomp": ("dance_stomp.webp", "Monster Stomp", stomp, 1.0, 25, False),
+    # Actions: played once through, off the beat, so they begin and end standing at rest.
+    "action_bubble_tea": ("action_bubble_tea.webp", "Bubble Tea", bubble_tea, 8.6, 12.5, True),
+    "action_fart": ("action_fart.webp", "Fart", fart, 7.32, 50 / 3, True),
     "drag": ("drag.webp", None, carried, 0.40, 25, False),
     "fall": ("fall.webp", None, falling, 0.24, 25, False),
 }
@@ -856,7 +894,7 @@ def build(key, painter=Flat):
     """Renders one clip: its frames cropped to what they use, their timings, and where the
     feet are in the cropped frames."""
     _, _, clip, seconds, fps, calm = CLIPS[key]
-    timeline = animate(clip, seconds, fps, calm)
+    timeline = animate(clip, seconds, fps, calm, loop=not key.startswith("action"))
     images = [render(pose, painter) for pose, _ in timeline]
     used = np.max([im[..., 3] for im in images], axis=0) > 0
     ys, xs = np.nonzero(used.any(axis=1))[0], np.nonzero(used.any(axis=0))[0]

@@ -238,11 +238,13 @@ public sealed class SpriteCharacter : ICharacter
         var idle = _idle.Frames(wait: true) ?? throw new InvalidDataException("The idle clip could not be read.");
         _idleHeight = idle.ContentHeight;
         AspectRatio = Math.Clamp(idle.ContentWidth / Math.Max(1, idle.ContentHeight), 0.3, 2.5);
-        DanceClips = clips
-            .Where(c => c.Key.StartsWith("dance", StringComparison.Ordinal))
+        List<OwnClip> Starting(string prefix) => clips
+            .Where(c => c.Key.StartsWith(prefix, StringComparison.Ordinal))
             .OrderBy(c => c.Key, StringComparer.Ordinal)
-            .Select(c => new DanceClip(c.Key, c.Value.Name, c.Value.Seconds))
+            .Select(c => new OwnClip(c.Key, c.Value.Name, c.Value.Seconds))
             .ToList();
+        DanceClips = Starting(SpritePackLoader.DancePrefix);
+        ActionClips = Starting(SpritePackLoader.ActionPrefix);
     }
 
     public string Id { get; }
@@ -252,7 +254,8 @@ public sealed class SpriteCharacter : ICharacter
     public bool IsRigged => false;
     public bool PixelArt { get; }
     public int NaturalFacing { get; }
-    public IReadOnlyList<DanceClip> DanceClips { get; }
+    public IReadOnlyList<OwnClip> DanceClips { get; }
+    public IReadOnlyList<OwnClip> ActionClips { get; }
     public IReadOnlyCollection<string> ClipNames => _clips.Keys;
 
     /// <summary>The clips whose frames are in memory right now.</summary>
@@ -350,6 +353,12 @@ public sealed class SpriteCharacter : ICharacter
 public static partial class SpritePackLoader
 {
     public const string ManifestName = "character.json";
+    /// <summary>A clip whose name starts with this is a dance.</summary>
+    public const string DancePrefix = "dance";
+    /// <summary>A clip whose name starts with this is an action: played once, off the beat.</summary>
+    public const string ActionPrefix = "action";
+
+    static bool IsAction(string key) => key.StartsWith(ActionPrefix, StringComparison.Ordinal);
 
     static readonly string[] ImageExtensions = [".png", ".gif", ".webp", ".jpg", ".jpeg", ".bmp"];
     const int MaxFramesPerClip = 400;
@@ -402,7 +411,8 @@ public static partial class SpritePackLoader
         public string? Folder;
         public int Columns = 1, Rows = 1, Count;
         public double? Fps;
-        public bool Loop = true;
+        /// <summary>Whether the clip repeats. Unless the pack says, everything but an action does.</summary>
+        public bool? Loop;
         public string? Name;
         public double Scale = 1;
         public double? AnchorX, AnchorY;
@@ -569,7 +579,7 @@ public static partial class SpritePackLoader
                 src.Rows = (int)Math.Clamp(Num(c, "rows") ?? 1, 1, 256);
                 src.Count = (int)Math.Clamp(Num(c, "count") ?? 0, 0, 65536);
                 src.Fps = Num(c, "fps");
-                src.Loop = Bool(c, "loop") ?? true;
+                src.Loop = Bool(c, "loop");
                 src.Name = Str(c, "name");
                 src.Scale = Math.Clamp(Num(c, "scale") ?? 1, 0.05, 20);
                 if (c.TryGetProperty("anchor", out var anchor) && anchor.ValueKind == JsonValueKind.Array && anchor.GetArrayLength() == 2)
@@ -601,7 +611,8 @@ public static partial class SpritePackLoader
 
     /// <summary>
     /// "Walk Cycle_8x1" → "walk_cycle" with an 8×1 sheet. Names the app does not know
-    /// become extra dances, so any spare animation is still usable.
+    /// become extra dances, so any spare animation is still usable; those starting "action"
+    /// stay actions.
     /// </summary>
     static string NormaliseKey(string raw, out int columns, out int rows)
     {
@@ -617,7 +628,8 @@ public static partial class SpritePackLoader
         key = key.Trim('_');
         if (key.Length == 0) key = "idle";
         if (Aliases.TryGetValue(key, out var alias)) key = alias;
-        if (!KnownClips.Contains(key) && !key.StartsWith("dance", StringComparison.Ordinal)) key = "dance_" + key;
+        if (!KnownClips.Contains(key) && !key.StartsWith(DancePrefix, StringComparison.Ordinal) && !IsAction(key))
+            key = DancePrefix + "_" + key;
         return key;
     }
 
@@ -642,13 +654,15 @@ public static partial class SpritePackLoader
         }
     }
 
+    /// <summary>"dance_moon_walk" → "Moon Walk", and "action_drink" → "Drink".</summary>
     static string PrettyName(string key)
     {
-        string rest = key.StartsWith("dance_", StringComparison.Ordinal) ? key["dance_".Length..] : key;
+        string kind = IsAction(key) ? ActionPrefix : DancePrefix;
+        string rest = key.StartsWith(kind + "_", StringComparison.Ordinal) ? key[(kind.Length + 1)..] : key;
         var words = rest.Split('_', StringSplitOptions.RemoveEmptyEntries)
             .Select(w => char.ToUpperInvariant(w[0]) + w[1..]);
         string name = string.Join(' ', words);
-        return name.Length == 0 ? "Dance" : name;
+        return name.Length == 0 ? IsAction(key) ? "Action" : "Dance" : name;
     }
 
     // ---- Decoding ----
@@ -1075,7 +1089,7 @@ public static partial class SpritePackLoader
         return new SpriteClip(kept, new PixelSize(outW, outH))
         {
             Ends = EndTimes(durations),
-            Loop = src.Loop,
+            Loop = src.Loop ?? !IsAction(src.Key),
             AnchorX = anchorX,
             AnchorY = anchorY,
             ContentWidth = contentW,
