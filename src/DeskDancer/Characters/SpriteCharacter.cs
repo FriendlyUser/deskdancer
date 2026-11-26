@@ -18,12 +18,25 @@ public readonly record struct DecodedFrame(SKBitmap Pixels, int Left, int Top);
 /// A frame stays as the decoder left it until the first time it is drawn, and only then is
 /// copied into a bitmap the window can show. That copy is the one part of loading that
 /// has to be done on the UI thread, and done like this it is one frame's worth at a time.
+///
+/// A long clip that is played once through is not unpacked at all: its frames are read
+/// from a <see cref="FrameStream"/> as they are shown.
 /// </summary>
 public sealed class SpriteClip : IDisposable
 {
     readonly DecodedFrame?[] _decoded;
     readonly Bitmap?[] _frames;
     readonly PixelSize _size;
+    readonly FrameStream? _stream;
+
+    /// <summary>A clip whose frames are read as they are shown.</summary>
+    public SpriteClip(FrameStream stream)
+    {
+        _stream = stream;
+        _decoded = [];
+        _frames = [];
+        _size = stream.Size;
+    }
 
     public SpriteClip(DecodedFrame[] frames, PixelSize size)
     {
@@ -48,22 +61,32 @@ public sealed class SpriteClip : IDisposable
     public double DecodeTime { get; set; }
 
     public double Duration => Ends[^1];
-    public int FrameCount => _frames.Length;
+    public int FrameCount => Ends.Length;
+    /// <summary>True if the frames are read as they are shown, and not all kept unpacked.</summary>
+    public bool Streamed => _stream != null;
     /// <summary>Memory the frames take up, in bytes.</summary>
-    public long Bytes => (long)_size.Width * _size.Height * 4 * _frames.Length;
+    public long Bytes => _stream?.Bytes ?? (long)_size.Width * _size.Height * 4 * _frames.Length;
 
     public Bitmap FrameAt(double time)
     {
         int i = 0;
-        if (_frames.Length > 1)
+        if (Ends.Length > 1)
         {
             double t = Loop ? time % Duration : Math.Min(time, Duration - 1e-6);
             if (t < 0) t = 0;
             i = Array.BinarySearch(Ends, t);
-            i = Math.Min(i < 0 ? ~i : i + 1, _frames.Length - 1);
+            i = Math.Min(i < 0 ? ~i : i + 1, Ends.Length - 1);
         }
+        if (_stream != null) return _stream.FrameAt(i);
         return _frames[i] ??= ToBitmap(i);
     }
+
+    /// <summary>
+    /// Makes sure every frame can be decoded. One that is unpacked has shown as much
+    /// already; one that is read as it is shown is gone through now, and this throws if any
+    /// of it cannot be read.
+    /// </summary>
+    public void CheckFrames() => _stream?.CheckAll();
 
     unsafe Bitmap ToBitmap(int i)
     {
@@ -79,6 +102,7 @@ public sealed class SpriteClip : IDisposable
 
     public void Dispose()
     {
+        _stream?.Dispose();
         for (int i = 0; i < _frames.Length; i++)
         {
             _frames[i]?.Dispose();
@@ -106,8 +130,10 @@ public sealed class LazyClip
     volatile Exception? _unreadable;
 
     /// <param name="ready">The frames, if they have already been decoded.</param>
-    public LazyClip(string key, string name, double seconds, string folder, Func<SpriteClip> decode, SpriteClip? ready = null)
+    public LazyClip(string key, string name, double seconds, string folder, Func<SpriteClip> decode, SpriteClip? ready = null,
+        ClipTravel? travel = null)
     {
+        Travel = travel;
         Key = key;
         Name = name;
         Seconds = seconds;
@@ -120,6 +146,8 @@ public sealed class LazyClip
     public string Name { get; }
     /// <summary>How long one run of the clip takes, read from its files without decoding them.</summary>
     public double Seconds { get; }
+    /// <summary>Where the clip takes the mate, if it is an action that goes somewhere.</summary>
+    public ClipTravel? Travel { get; }
     /// <summary>Why the frames could not be decoded, if that was tried and went wrong.</summary>
     public Exception? Failure => _failure ?? _unreadable;
     public bool InMemory => _frames != null;
@@ -151,7 +179,9 @@ public sealed class LazyClip
         {
             // Waiting for another thread here is safe: decoding never needs this one.
             _frames = decoding != null ? decoding.GetAwaiter().GetResult() : _decode();
-            Log.Info($"Loaded the {_where}: {_frames.FrameCount} frames, {_frames.Bytes / 1e6:0.0} MB, decoded in {_frames.DecodeTime:0} ms");
+            Log.Info(_frames.Streamed
+                ? $"Opened the {_where}: {_frames.FrameCount} frames, to be read as they are shown"
+                : $"Loaded the {_where}: {_frames.FrameCount} frames, {_frames.Bytes / 1e6:0.0} MB, decoded in {_frames.DecodeTime:0} ms");
         }
         catch (Exception ex)
         {
@@ -170,7 +200,8 @@ public sealed class LazyClip
     {
         try
         {
-            _decode().Dispose();
+            using var clip = _decode();
+            clip.CheckFrames();
         }
         catch (Exception ex)
         {
@@ -241,7 +272,7 @@ public sealed class SpriteCharacter : ICharacter
         List<OwnClip> Starting(string prefix) => clips
             .Where(c => c.Key.StartsWith(prefix, StringComparison.Ordinal))
             .OrderBy(c => c.Key, StringComparer.Ordinal)
-            .Select(c => new OwnClip(c.Key, c.Value.Name, c.Value.Seconds))
+            .Select(c => new OwnClip(c.Key, c.Value.Name, c.Value.Seconds, c.Value.Travel))
             .ToList();
         DanceClips = Starting(SpritePackLoader.DancePrefix);
         ActionClips = Starting(SpritePackLoader.ActionPrefix);
@@ -283,6 +314,13 @@ public sealed class SpriteCharacter : ICharacter
     }
 
     public void Prepare(string clip) => Resolve(clip).Fetch();
+
+    public ClipReadiness Readiness(string clip)
+    {
+        var found = Resolve(clip);
+        if (found.Frames() != null) return ClipReadiness.Ready;
+        return found.Failure != null ? ClipReadiness.Lost : ClipReadiness.Coming;
+    }
 
     /// <summary>
     /// Has frames in memory before returning: those of the idle clip, which nothing can be
@@ -362,6 +400,12 @@ public static partial class SpritePackLoader
 
     static readonly string[] ImageExtensions = [".png", ".gif", ".webp", ".jpg", ".jpeg", ".bmp"];
     const int MaxFramesPerClip = 400;
+    /// <summary>
+    /// A clip that is read as it is shown can be far longer than one that is unpacked: its
+    /// frames are never all in memory, so there is nothing to save by cutting it short.
+    /// </summary>
+    const int MaxStreamedFrames = 6000;
+    const int MaxTravelKeys = 4000;
 
     /// <summary>
     /// Frames longer than this on their longest side are shrunk when a pack is read. The
@@ -416,6 +460,8 @@ public static partial class SpritePackLoader
         public string? Name;
         public double Scale = 1;
         public double? AnchorX, AnchorY;
+        /// <summary>Where an action takes the mate: see <see cref="ClipTravel"/>.</summary>
+        public ClipTravel? Travel;
         /// <summary>Only the first frame is used, and held: an idle clip borrowed from another clip.</summary>
         public bool Still;
     }
@@ -520,7 +566,8 @@ public static partial class SpritePackLoader
         foreach (var src in sources.Values.OrderBy(s => s.Key == "idle" ? 0 : 1))
         {
             clips[src.Key] = new LazyClip(src.Key, src.Name ?? PrettyName(src.Key), seconds[src.Key], dir,
-                () => DecodeClip(dir, src, options, idleHeight, idleShrink, out _), src.Key == "idle" ? idle : null);
+                () => StreamClip(dir, src, options, idleShrink) ?? DecodeClip(dir, src, options, idleHeight, idleShrink, out _),
+                src.Key == "idle" ? idle : null, src.Travel);
         }
 
         string name = options.Name ?? Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
@@ -586,6 +633,15 @@ public static partial class SpritePackLoader
                 {
                     src.AnchorX = anchor[0].GetDouble();
                     src.AnchorY = anchor[1].GetDouble();
+                }
+                // Where an action takes the mate: [[seconds, heights], ...].
+                if (IsAction(key) && c.TryGetProperty("travel", out var travel) && travel.ValueKind == JsonValueKind.Array)
+                {
+                    var keys = travel.EnumerateArray()
+                        .Where(k => k.ValueKind == JsonValueKind.Array && k.GetArrayLength() == 2
+                                    && k[0].ValueKind == JsonValueKind.Number && k[1].ValueKind == JsonValueKind.Number)
+                        .Take(MaxTravelKeys).Select(k => (k[0].GetDouble(), k[1].GetDouble())).ToList();
+                    if (keys.Count > 0) src.Travel = new ClipTravel(keys);
                 }
             }
             if (src.File == null && src.Folder == null)
@@ -684,6 +740,92 @@ public static partial class SpritePackLoader
         throw new InvalidDataException($"Could not make a {info.Width}x{info.Height} bitmap.");
     }
 
+    /// <summary>A clip whose frames would take at least this many bytes unpacked is read as it is shown, if it can be.</summary>
+    public const long StreamFrom = 16L << 20;
+    /// <summary>And a frame of it may take no more than this many bytes: 2000 pixels square, about.</summary>
+    public const long LargestStreamedFrame = 16L << 20;
+
+    /// <summary>
+    /// Opens a clip to be read a frame at a time as it is shown (see <see cref="FrameStream"/>),
+    /// or returns null for one that is to be unpacked whole as usual. Reading as it goes
+    /// suits a clip that is played once through, is one animated file of some size, and says
+    /// in character.json where its feet are; that has to be said, because working it out
+    /// means looking at every frame.
+    /// </summary>
+    static SpriteClip? StreamClip(string dir, ClipSource src, PackOptions options, double idleShrink)
+    {
+        if (!MayStream(src, options)) return null;
+        string file = Path.Combine(dir, src.File!);
+        if (!File.Exists(file)) return null;
+
+        var watch = Stopwatch.StartNew();
+        SKData? data = FileBytes(file);
+        SKCodec? codec = null;
+        try
+        {
+            codec = SKCodec.Create(data);
+            if (codec == null) return null;
+            var info = InfoFor(codec.Info.Width, codec.Info.Height);
+            if (StreamPlan(codec, info) is not { } builtOn) return null;
+            var frameInfo = codec.FrameInfo;
+            var durations = new List<double>(builtOn.Length);
+            for (int i = 0; i < builtOn.Length; i++) durations.Add(FrameSeconds(frameInfo[i]));
+
+            Action<SKBitmap>? finish = options.RemoveBackground == false ? null : frame => MaybeRemoveBackground(frame, options);
+            var stream = new FrameStream(data, codec, info, builtOn, finish, NewFrame, src.File!);
+            data = null;
+            codec = null;
+            return new SpriteClip(stream)
+            {
+                Ends = EndTimes(durations),
+                Loop = false,
+                AnchorX = src.AnchorX!.Value,
+                AnchorY = src.AnchorY!.Value,
+                ContentWidth = info.Width,
+                ContentHeight = info.Height,
+                // Clips share the idle clip's pixel scale, and this one is not shrunk.
+                Scale = src.Scale * idleShrink,
+                DecodeTime = watch.Elapsed.TotalMilliseconds,
+            };
+        }
+        finally
+        {
+            codec?.Dispose();
+            data?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Whether a clip is of the kind that is read as it is shown, going by what the pack
+    /// says of it: played once through, one file and not a sheet of frames, with where its
+    /// feet are given, and not to be scaled to match the idle clip.
+    /// </summary>
+    static bool MayStream(ClipSource src, PackOptions options) =>
+        !(src.Loop ?? !IsAction(src.Key)) && !src.Still && src.File != null && src.Columns * src.Rows <= 1
+        && src.AnchorX != null && src.AnchorY != null && !options.Normalize;
+
+    /// <summary>
+    /// For an animated file that can be read as it is shown: for each of its frames, the
+    /// earlier frame it is stored as changes to, or -1 for one that stands by itself. Null
+    /// for a file that is to be unpacked whole instead: one small enough to be simpler that
+    /// way, one so vast in the frame that even the few frames kept at once would be too much
+    /// (unpacking shrinks it), or one whose frames are built on too many others at once.
+    /// </summary>
+    static int[]? StreamPlan(SKCodec codec, SKImageInfo info)
+    {
+        int n = Math.Min(codec.FrameCount, MaxStreamedFrames);
+        if (n < 2 || info.Width <= 0 || info.Height <= 0 || info.BytesSize64 * n < StreamFrom || info.BytesSize64 > LargestStreamedFrame)
+            return null;
+        var frameInfo = codec.FrameInfo;
+        var builtOn = new int[n];
+        for (int i = 0; i < n; i++)
+        {
+            int needs = frameInfo[i].RequiredFrame;
+            builtOn[i] = needs >= 0 && needs < i ? needs : -1;
+        }
+        return FrameStream.MostAtOnce(builtOn) > FrameStream.MostKept ? null : builtOn;
+    }
+
     /// <summary>
     /// Decodes one clip and measures it. This is where the time goes when a pack is
     /// loaded, and none of it touches the UI, so it can be done on any thread.
@@ -723,18 +865,21 @@ public static partial class SpritePackLoader
             foreach (var file in Directory.EnumerateFiles(folder).Where(IsImage).OrderBy(f => f, NaturalOrder.Instance))
             {
                 if (durations.Count >= limit) break;
-                ReadFile(file, 1, 1, 0, fps, options, durations, frames, limit);
+                ReadFile(file, 1, 1, 0, fps, options, durations, frames, limit, false);
             }
         }
         else
         {
             string file = Path.Combine(dir, src.File!);
             if (!File.Exists(file)) throw new InvalidDataException($"File not found: {src.File}");
-            ReadFile(file, src.Columns, src.Rows, src.Count, fps, options, durations, frames, limit);
+            ReadFile(file, src.Columns, src.Rows, src.Count, fps, options, durations, frames, limit, MayStream(src, options));
         }
         if (durations.Count == 0) throw new InvalidDataException($"Clip '{src.Key}' has no frames.");
         if (src.Still) durations[0] = 1;
     }
+
+    /// <summary>How long a frame of an animated file is shown. One that claims next to no time gets a tenth of a second, as browsers give it.</summary>
+    static double FrameSeconds(SKCodecFrameInfo frame) => frame.Duration <= 10 ? 0.1 : frame.Duration / 1000.0;
 
     /// <summary>The time at which each frame ends, given how long each one is shown.</summary>
     static double[] EndTimes(List<double> durations)
@@ -775,7 +920,7 @@ public static partial class SpritePackLoader
     }
 
     static unsafe void ReadFile(string path, int columns, int rows, int count, double fps, PackOptions options,
-        List<double> durations, List<SKBitmap>? frames, int limit)
+        List<double> durations, List<SKBitmap>? frames, int limit, bool mayStream)
     {
         // The file is read into memory and the decoder is made from that, never straight from
         // the file. Made from a file, the decoder is handed a stream, and for WebP Skia frees
@@ -795,11 +940,10 @@ public static partial class SpritePackLoader
         {
             var frameInfo = codec.FrameInfo;
             int n = Math.Min(Math.Min(animated, MaxFramesPerClip), limit);
-            for (int i = 0; i < n; i++)
-            {
-                int ms = frameInfo[i].Duration;
-                durations.Add(ms <= 10 ? 0.1 : ms / 1000.0);
-            }
+            // Only how long it runs is wanted, and it is a clip that will be read as it is
+            // shown: all of it counts, however long it is.
+            if (frames == null && mayStream && limit > n && StreamPlan(codec, info) is { } plan) n = plan.Length;
+            for (int i = 0; i < n; i++) durations.Add(FrameSeconds(frameInfo[i]));
             if (frames == null) return;
 
             // Animated GIF / WebP. Later frames are often stored as changes to an earlier one,

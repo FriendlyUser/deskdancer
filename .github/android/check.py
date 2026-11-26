@@ -12,6 +12,8 @@ Checks, in order:
   * it moves while dancing: the dancing screenshots differ from one another;
   * it can be dragged: the log shows a drag that started from the scripted swipe;
   * asked to, Domo does his Fart action, once, and then stands about again;
+  * his Apple Tree action, which is read a frame at a time as it is shown and takes him
+    across the screen, plays through, moves him, and leaves him standing;
   * a character put in a folder on the phone, once that folder is chosen in the folder
     picker, is copied in, can be put on the screen and is visible there;
   * the folder opens in the Files app;
@@ -155,7 +157,8 @@ else:
     else:
         failures.append("dancing screenshots missing")
 
-    for name, title in (("3-thrown", "just after the drag"), ("4-landed", "after landing"), ("4-acting", "Domo farting")):
+    for name, title in (("3-thrown", "just after the drag"), ("4-landed", "after landing"), ("4-acting", "Domo farting"),
+                        ("4-tree", "Domo and his apple tree")):
         shot = load(name)
         if shot is not None:
             m = difference(home, shot) > 40
@@ -182,6 +185,26 @@ else:
         failures.append("the mate never showed the Fart action")
     elif ("Idle", "idle") not in states[states.index(("Act", "action_fart")):]:
         failures.append("the mate did not go back to standing after its action")
+
+if "action 'action_apple_tree' started" not in log:
+    failures.append("the act command did not start Domo's Apple Tree")
+else:
+    acting = log.split("action 'action_apple_tree' started", 1)[1].split("command 'stop'", 1)[0]
+    rows = re.findall(r"state=(\w+) clip=(\w+) foot=\((-?\d+),-?\d+\).*?hit=\(-?\d+,-?\d+ \d+x(\d+)\)", acting)
+    states = [(state, clip) for state, clip, _, _ in rows]
+    print("after the Apple Tree command, as logged every two seconds:", [(state, clip, int(x)) for state, clip, x, _ in rows])
+    if ("Act", "action_apple_tree") not in states:
+        failures.append("the mate never showed the Apple Tree action")
+    elif ("Idle", "idle") not in states[states.index(("Act", "action_apple_tree")):]:
+        failures.append("the mate did not go back to standing after the Apple Tree action")
+    else:
+        # He runs off one way and back the other. However little room the screen leaves
+        # him, that is most of his own height.
+        xs = [int(x) for _, _, x, _ in rows]
+        tall = max(int(h) for _, _, _, h in rows)
+        print(f"during it his feet were between {min(xs)} and {max(xs)} across, and he is about {tall} tall")
+        if max(xs) - min(xs) < 0.6 * tall:
+            failures.append(f"the Apple Tree action did not take the mate anywhere (his feet stayed between {min(xs)} and {max(xs)})")
 
 # Frame rate and the time spent drawing, as the app logged them every two seconds. The
 # emulator draws everything in software, so these are a floor, not what a phone does.

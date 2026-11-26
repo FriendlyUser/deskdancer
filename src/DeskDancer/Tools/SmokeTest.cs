@@ -338,15 +338,23 @@ public static class SmokeTest
                     return;
                 }
                 var character = app.Library.Load(id);
-                var action = character.ActionClips[0];
+                // One that stays where it is and one that goes somewhere, where there is one of each.
+                var action = character.ActionClips.Where(a => a.Travel == null).DefaultIfEmpty(character.ActionClips[0]).First();
+                var goes = character.ActionClips.FirstOrDefault(a => a.Travel != null);
+
                 double now = 0;
                 var clock = new BeatClock { TimeSource = () => now };
                 var conductor = new Conductor(clock);
                 var settings = new Settings { Persist = false, Wander = false, AutoDance = false, AutoActions = false };
-                var b = new MateBrain(clock, conductor, settings, character, new Random(3)) { H = 150, Left = 0, Right = 1600, Top = 0, Floor = 900 };
-                b.Place(800, 900);
+                MateBrain At(double x)
+                {
+                    var brain = new MateBrain(clock, conductor, settings, character, new Random(3)) { H = 150, Left = 0, Right = 1600, Top = 0, Floor = 900 };
+                    brain.Place(x, 900);
+                    return brain;
+                }
+                var b = At(800);
                 int notes = 0;
-                double energy = 0;
+                double energy = 0, leftmost = 0, rightmost = 0;
                 void Run(double seconds)
                 {
                     for (double t = 0; t < seconds; t += 1.0 / 60)
@@ -355,7 +363,17 @@ public static class SmokeTest
                         b.Update(1.0 / 60);
                         notes += b.Particles.Items.Count(p => p.Kind == ParticleKind.Note);
                         energy = Math.Max(energy, b.Energy);
+                        leftmost = Math.Min(leftmost, b.FootX);
+                        rightmost = Math.Max(rightmost, b.FootX);
                     }
+                }
+                // An action starts when its pictures have been read. This clock runs far
+                // ahead of the real one, so they are waited for here, on the real one.
+                void Start(OwnClip which)
+                {
+                    var waiting = Stopwatch.StartNew();
+                    while (character.Readiness(which.Id) == ClipReadiness.Coming && waiting.ElapsedMilliseconds < 8000) Thread.Sleep(5);
+                    if (!b.DoAction(which.Id)) throw new InvalidOperationException($"{character.DisplayName}'s {which.Name} did not start");
                 }
                 void Fail(string why) => throw new InvalidOperationException($"{character.DisplayName}'s {action.Name}: {why}");
 
@@ -363,7 +381,7 @@ public static class SmokeTest
                     Fail("an action is offered as a dance");
                 if (b.DoAction("action_no_such_thing")) Fail("an action the character does not have was started");
                 Run(0.5);
-                if (!b.DoAction(action.Id)) Fail("did not start");
+                Start(action);
                 Run(0.5);
                 if (b.State != MateState.Act || b.Clip != action.Id) Fail($"expected to be acting it out, was {b.State} showing {b.Clip}");
                 // A party starts while it is going on, and waits for it.
@@ -379,7 +397,50 @@ public static class SmokeTest
                 settings.SetMoveEnabled(b.KeyOf(action), false);
                 if (b.AvailableActions().Any(a => a.Id == action.Id)) Fail("still on offer once switched off");
                 Note($"{character.DisplayName}'s {action.Name} ran {action.Seconds:0.0} seconds with no notes and no dance floor, then the mate joined the party");
+
+                // An action that goes somewhere takes the mate there: as it is drawn where
+                // there is room for that, and the other way round where there is not.
+                if (goes.Travel is { } travel)
+                {
+                    void Went(double from, int side, string where)
+                    {
+                        b = At(from);
+                        leftmost = rightmost = from;
+                        Run(0.3);
+                        Start(goes);
+                        Run(goes.Seconds + 0.6);
+                        double low = Math.Min(side * travel.Min, side * travel.Max), high = Math.Max(side * travel.Min, side * travel.Max);
+                        string went = $"ran {goes.Seconds:0.0} seconds, went from {(leftmost - from) / b.H:0.00} to {(rightmost - from) / b.H:0.00} heights and ended {(b.FootX - from) / b.H:0.00} along";
+                        if (b.State == MateState.Act) throw new InvalidOperationException($"{goes.Name} was still going after {goes.Seconds + 0.6:0.0} seconds");
+                        if (Math.Abs((b.FootX - from) / b.H - side * travel.End) > 0.03 || Math.Abs((leftmost - from) / b.H - low) > 0.03
+                            || Math.Abs((rightmost - from) / b.H - high) > 0.03)
+                            throw new InvalidOperationException($"{goes.Name}, {where}, {went}; it should go from {low:0.00} to {high:0.00} and end {side * travel.End:0.00} along");
+                        if (b.Facing * character.NaturalFacing != side)
+                            throw new InvalidOperationException($"{goes.Name}, {where}, should be shown {(side > 0 ? "as it is drawn" : "the other way round")}");
+                        Note($"{character.DisplayName}'s {goes.Name}, {where}, {went}");
+                    }
+                    Went(800, 1, "with room all round");
+                    // Then near the side it goes furthest towards: too near for that, with
+                    // room to go that far the other way. So it is shown the other way round.
+                    double far = Math.Max(-travel.Min, travel.Max), near = Math.Min(-travel.Min, travel.Max);
+                    double inFrom = (0.42 + (far + near) / 2) * 150;      // the brain keeps 0.42 of a height off the edge
+                    if (far - near > 0.5) Went(-travel.Min >= travel.Max ? inFrom : 1600 - inFrom, -1, "close to the edge of the screen");
+                }
+
+                // And for real, on the screen: the second mate becomes that character and does it.
+                var showing = goes.Id != null ? goes : action;
+                app.Mates[1].SetCharacter(id);
+                if (!app.Mates[1].Brain.DoAction(showing.Id)) throw new InvalidOperationException($"{showing.Name} did not start on the screen");
             }),
+            new(0.545, "action on screen", () =>
+            {
+                var mate = app.Mates[1];
+                Snap(mate, "3-action");
+                Note($"the second mate is showing '{mate.Brain.Clip}'; in memory: {Held()}");
+                if (mate.Character is SpriteCharacter pack && pack.ClipNames.Contains(mate.Brain.Clip) && !pack.InMemory(mate.Brain.Clip))
+                    throw new InvalidOperationException("the action's pictures are not in memory");
+            }, WaitingFor: () => app.Mates[1].Brain is { IsActing: true } acting && acting.Clip.StartsWith("action", StringComparison.Ordinal)
+                ? null : app.Mates[1].Character.ActionClips.Count == 0 ? null : $"the second mate is not acting: {app.Mates[1].Brain.State} showing {app.Mates[1].Brain.Clip}"),
             new(0.55, "party off, resize, menu", () =>
             {
                 app.SetParty(false);
@@ -389,6 +450,8 @@ public static class SmokeTest
             }),
             new(0.63, "menu open", () =>
             {
+                // The second mate is a second or so into its action by now.
+                Snap(app.Mates[1], "3-action-later");
                 int entries = First().ContextMenu!.Items.Count;
                 Note($"menu has {entries} entries");
                 if (entries < 10) throw new InvalidOperationException("context menu was not populated");
@@ -418,6 +481,8 @@ public static class SmokeTest
                 var b = First().Brain;
                 if (b.State != MateState.Drag) throw new InvalidOperationException($"expected Drag, was {b.State}");
                 Snap(First(), "4-carried");
+                // And the second mate is well into its action: for Domo's Apple Tree, the tree is up.
+                Snap(app.Mates[1], "4-action-on");
                 b.EndDrag();
             }, WaitingFor: ClipNotInMemory),
             new(0.86, "sit, swap character", () =>
