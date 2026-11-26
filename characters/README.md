@@ -46,10 +46,19 @@ Name each file after what it is for. Everything is optional except some kind of 
 | `drag` | being carried by the mouse (falls back to `fall`) |
 | `fall` | dropping through the air (falls back to `drag`) |
 | `dance`, `dance_anything` | each one becomes its own entry under **Dance move** |
+| `action_anything` | each one becomes its own entry under **Actions** (see below) |
 | any other name | also becomes a dance, so no animation goes to waste |
 
 A missing animation is covered by the idle picture plus built-in motion. When you do
 supply `walk`, the built-in waddle is switched off so your frames are shown as drawn.
+
+A dance and an action are shown in different ways. A dance is danced to the beat: it
+repeats for as long as the move lasts, with music notes rising and a glowing floor under
+the mate. An action, such as `action_drink`, is something the mate does: it is played
+once through at its own speed, as long as the animation is, with no notes and no floor,
+and then the mate goes back to standing about. It is also done now and then unasked. Start
+and end an action standing as in your idle picture, so the mate goes into it and comes out
+of it without a jump. `domo` has two, `action_bubble_tea` and `action_fart`.
 
 An animation can be supplied in three ways:
 
@@ -139,8 +148,8 @@ Per animation, inside `clips`:
 | --- | --- |
 | `file` or `folder` | Where the frames are, relative to the character folder. |
 | `columns`, `rows`, `count` | Sprite sheet grid, and how many cells are used if the last row is not full. |
-| `fps`, `loop` | Frame rate and whether it repeats. |
-| `name` | Menu name for a dance. |
+| `fps`, `loop` | Frame rate and whether it repeats. Everything repeats unless told otherwise, except an action. |
+| `name` | Menu name for a dance or an action. |
 | `scale` | Size multiplier for this animation only. |
 | `anchor` | `[x, y]` position of the point between the feet, in pixels of one frame, if the automatic guess is off. |
 

@@ -73,25 +73,28 @@ A change to a clip here changes both, once each pack has been rebuilt.
 | `sleep.webp` | Napping where he sits, mouth opening a little with each breath. The app adds the breathing and the Zs. |
 | `dance.webp` | During all 15 built-in dance moves, which add their own body motion. Also listed as **Happy Arms**. |
 | `dance_chomp.webp`, `dance_stomp.webp` | Their own entries under **Dance move**, **Chomp** and **Monster Stomp**. Clip dances get no motion from the app, so the hops and stomps are drawn in. Each loops in one second, which is two beats at the usual 120 BPM. |
-| `dance_bubble_tea.webp` | **Bubble Tea** under **Dance move**. He brings out a cup, takes three pulls at the straw, sighs and puts it away. 3.6 seconds. |
-| `dance_fart.webp` | **Fart** under **Dance move**. He strains, lets one go with a hop, looks relieved and wafts the cloud away. 3.06 seconds. |
+| `action_bubble_tea.webp` | **Bubble Tea** under **Actions**. He brings out a cup and gives it a shake, takes three long pulls at the straw, lowers it with a happy sigh and sways, then goes back for four more until the tea is all but gone. He peers in at the one pearl left at the bottom, shakes the cup, gives up with a glum sigh and puts it away. 8.6 seconds. |
+| `action_fart.webp` | **Fart** under **Actions**. He glances one way and the other, strains, and nothing comes. He looks round behind him, puzzled, tries again harder and lets one go with a hop, looks relieved, wafts the cloud away for a good while, and then looks off into the distance as if nothing had happened. 7.3 seconds. |
 | `drag.webp` | Being carried. |
 | `fall.webp` | Dropping through the air. |
 
-Bubble Tea and Fart are picked like any dance: the menu runs a move twice over, so he
-has a second cup, or lets another one go. Like any dance they also turn up by themselves
-when he dances on his own or you double-click him, once each time. Both are a little
-over three seconds long, which is four beats even at the slowest tempo in the menu, so
-the app never has to repeat one to fill a move.
+Bubble Tea and Fart are actions, not dances. The app plays an action once through at its
+own speed, with no music notes and no dance floor, and then he goes back to standing
+about. Pick one under **Actions** in the right-click menu (on Android, its button under
+**Dance** in the settings); now and then he also does one by himself. They are never
+part of a dance, a double-click's dance or the dance party. Because an action is not
+looped, each starts and ends standing at rest, and `make_frames.py` keeps its last frame
+where it is instead of joining it on to the first, as it does for a loop. The app plays
+a clip whose key starts with `action` once unless `character.json` says otherwise.
 
 Frames are not free. The app keeps the idle clip unpacked in memory the whole time, and
 each other clip while it is being shown and for a minute afterwards. `make_frames.py`
-prints the total for every clip when it finishes (about 141 MB, of which idle is 28 and
-Bubble Tea and Fart are 45). Three things keep it down: each clip is cropped to what it
-uses; a frame is held for as long as nothing has visibly moved, so standing still costs
-one frame, not hundreds; and the two long clips are drawn at fewer frames a second than
-the dances. On disk the pack is about 1 MB, because flat colour packs down well without
-any loss.
+prints the total for every clip when it finishes (about 198 MB, of which idle is 28,
+Bubble Tea 46 and Fart 56; only one action is shown at a time). Three things keep it down:
+each clip is cropped to what it uses; a frame is held for as long as nothing has visibly
+moved, so standing still costs one frame, not hundreds; and the two long actions are drawn
+at fewer frames a second than the dances. On disk the pack is about 1.5 MB, because flat
+colour packs down well without any loss.
 
 ## Changing things
 
@@ -120,9 +123,11 @@ Each clip is a short function near the end of `make_frames.py` (`idle`, `walk`,
   `dx`, `dy` for the whole mate (negative `dy` is up)
 
 Distances are in units: standing, he is 300 tall. `CLIPS` lists each clip's length, how
-many frames a second to sample it at, and whether it is a calm one. The clip must end as
-it began, because it loops. To add a dance, write another function and add a line to
-`CLIPS`; any key starting with `dance_` appears under **Dance move**.
+many frames a second to sample it at, and whether it is a calm one. A clip must end as it
+began: a dance because it loops, an action because he goes into it and comes out of it
+standing. To add a dance, write another function and add a line to `CLIPS`; any key
+starting with `dance_` appears under **Dance move**, and any starting with `action_`
+under **Actions**.
 
 Two helpers save working out angles by hand. `reach(side, x, y)` gives the lift and bend
 that put a hand at a place, and `hand_at(side, lift, bend)` says where a hand is, which

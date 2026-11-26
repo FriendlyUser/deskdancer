@@ -20,8 +20,11 @@ public readonly struct CharacterFrame
     public double Trail { get; init; }
 }
 
-/// <summary>An animation clip made by the artist that can be offered as a dance.</summary>
-public readonly record struct DanceClip(string Id, string Name, double Seconds);
+/// <summary>
+/// One of a character's own animations, made by the artist, that is offered as a dance or as
+/// an action. <paramref name="Seconds"/> is how long it runs once through.
+/// </summary>
+public readonly record struct OwnClip(string Id, string Name, double Seconds);
 
 /// <summary>
 /// A drawable character. <see cref="Draw"/> works in a local space whose origin is the
@@ -41,7 +44,13 @@ public interface ICharacter
     bool PixelArt { get; }
     /// <summary>+1 when the art faces right, -1 when it faces left; decides when to mirror it.</summary>
     int NaturalFacing { get; }
-    IReadOnlyList<DanceClip> DanceClips { get; }
+    /// <summary>Clips whose names start with "dance": danced to the beat, with notes, for as long as a move lasts.</summary>
+    IReadOnlyList<OwnClip> DanceClips { get; }
+    /// <summary>
+    /// Clips whose names start with "action": things the mate does, such as having a drink.
+    /// Each is played once through at its own speed, with no beat, notes or dance floor.
+    /// </summary>
+    IReadOnlyList<OwnClip> ActionClips { get; }
     bool HasClip(string clip);
     /// <summary>
     /// Says a clip is about to be shown. A character that only fetches its pictures when

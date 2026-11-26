@@ -68,14 +68,16 @@ cloud of gas is soft all the way through.
 
 The same eleven as Domo's, with the same names in the menu: `idle`, `walk`, `sit`,
 `sleep`, `drag`, `fall`, `dance` (**Happy Arms**, shown during all 15 built-in moves),
-and the dances of his own, **Chomp**, **Monster Stomp**, **Bubble Tea** and **Fart**.
+the dances of his own, **Chomp** and **Monster Stomp**, and his two actions, **Bubble
+Tea** and **Fart**.
 What each one does is in [Domo's README](../../domo/_source/README.md#the-clips).
 
 The app keeps the idle clip unpacked in memory the whole time, and each other clip while
 it is being shown and for a minute afterwards. `make_frames.py` prints the total for
-every clip when it finishes (about 143 MB, of which idle is 28). On disk the pack is
-about 4 MB: fleece is all fine detail, which does not pack down without loss, so these
-clips are saved the way a photo is, where Domo's flat colour is saved exactly.
+every clip when it finishes (about 201 MB, of which idle is 28 and the two actions 104).
+On disk the pack is about 6 MB: fleece is all fine detail, which does not pack down
+without loss, so these clips are saved the way a photo is, where Domo's flat colour is
+saved exactly.
 
 ## Changing things
 

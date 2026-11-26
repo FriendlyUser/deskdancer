@@ -21,7 +21,10 @@ public sealed class MateService : Service
     public const string ActionRest = "io.github.friendlyuser.deskdancer.REST";
     /// <summary>Reads the mate's character afresh, after the characters were scanned again.</summary>
     public const string ActionReload = "io.github.friendlyuser.deskdancer.RELOAD";
+    /// <summary>Does one of the character's actions, such as Domo's Bubble Tea, named by <see cref="ExtraAction"/>.</summary>
+    public const string ActionAct = "io.github.friendlyuser.deskdancer.ACT";
     public const string ExtraCharacter = "character";
+    public const string ExtraAction = "action";
 
     const int NotificationId = 1;
     const string ChannelId = "mate";
@@ -59,6 +62,7 @@ public sealed class MateService : Service
             _overlay.Refresh();
             if (action == ActionDance) _overlay.ToggleDance();
             else if (action == ActionRest) _overlay.Rest();
+            else if (action == ActionAct && intent?.GetStringExtra(ExtraAction) is { } id) _overlay.DoAction(id);
         }
         catch (Exception ex)
         {

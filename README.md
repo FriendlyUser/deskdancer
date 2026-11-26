@@ -31,8 +31,10 @@ and she has three dances of her own: Serenade, Hair Flip and Wave Hello. Pick he
 
 **Domo** is an image pack with no picture behind it: a script draws every frame, so his
 arms, legs, eyes and mouth all move. He toddles when he wanders, sits down with his legs
-out in front of him, snaps his teeth, and has four dances of his own: Chomp, Monster
-Stomp, Bubble Tea, where he brings out a cup and drinks it through a straw, and Fart.
+out in front of him, snaps his teeth, and has two dances of his own, Chomp and Monster
+Stomp. He also has two actions, things he does now and then that are not dances: Bubble
+Tea, where he brings out a cup, shakes it and drinks it through a straw down to the last
+pearl, and Fart.
 How he is drawn, and how to change him, is in
 [characters/domo/_source](characters/domo/_source/README.md). Domo is NHK's mascot; this
 is a fan drawing, and NHK had no part in it.
@@ -150,11 +152,13 @@ The right-click menu has everything else:
 
 - **Dance move / Routine**: pick one of 15 moves or a choreographed routine.
 - **Moves to use**: untick the moves you don't care for, built-in ones and the
-  character's own. See [Switching moves off](#switching-moves-off) below.
+  character's own dances and actions. See [Switching moves off](#switching-moves-off) below.
 - **Dance party**: every mate on screen dances non-stop, in sync.
 - **Tempo**: 80 to 160 BPM. All moves are written against the beat, so they follow it.
-- **Sit down / Take a nap**, and switches for wandering, dancing on its own, falling
-  when dropped, and the notes-and-sparkles effects.
+- **Actions**: for a character that has some, such as Domo's Bubble Tea and Fart, have it
+  do one. See [Actions](#actions) below.
+- **Sit down / Take a nap**, and switches for wandering, dancing on its own, doing its
+  actions on its own, falling when dropped, and the notes-and-sparkles effects.
 - **Character / Size / Add another mate**: switch character, resize from 50% to 300%,
   or put several mates on screen at once.
 - **Always on top**, **Click through empty space**, **Quit**.
@@ -168,10 +172,21 @@ the screen. Routines chain them: Disco Fever, Street, Acrobat and Chill.
 Every move works on every character. Remix also moves its arms, legs, head and face;
 image characters are bounced, leaned, spun and flipped as a whole.
 
+### Actions
+
+Some characters can do things that are not dances: Domo and Plush Domo can have a bubble
+tea (about 8½ seconds) and fart (about 7). An action is played once through at its own
+speed, with no music notes and no dance floor under the mate, and then the mate goes back
+to standing about. Pick one from **Actions** in the right-click menu; a mate also does one
+of its actions now and then on its own, unless **Do actions on its own** is unticked.
+Picking it up, or telling it to sit, nap or dance, cuts an action short, and a **Dance
+party** waits for the mate to finish one before it joins in. A character of your own can
+have actions too: see [characters/README.md](characters/README.md#adding-animations).
+
 ### Switching moves off
 
-Right-click the mate and open **Moves to use**. It lists the character's own dances first,
-then the 15 built-in moves, each ticked while it is in use. Untick the ones you don't care
+Right-click the mate and open **Moves to use**. It lists the character's own dances and
+actions first, then the 15 built-in moves, each ticked while it is in use. Untick the ones you don't care
 for; the menu stays open, so you can go down the list in one go, and **Switch them all back
 on** undoes the lot. A move that is switched off is left out everywhere:
 
@@ -180,25 +195,28 @@ on** undoes the lot. A move that is switched off is left out everywhere:
 - the **Dance party**, even one that is already going,
 - **Routines**, which play without it, and disappear from the menu if that leaves nothing.
 
-The built-in moves are shared by every mate. A character's own dances are switched off for
-that character alone, so switching off Domo's Fart leaves Plush Domo's alone. One built-in
+An action that is switched off is left out of the **Actions** menu and is never done unasked.
+
+The built-in moves are shared by every mate. A character's own dances and actions are
+switched off for that character alone, so switching off Domo's Fart leaves Plush Domo's
+alone. One built-in
 move always stays on, so there is always something to dance: the last one cannot be
 unticked.
 
 The choice is saved with the other settings (see below), in `settings.json` under
 `DisabledMoves`. You can also edit it there while the app is closed: a built-in move is
-listed by its id, and a character's own dance as the character's folder name and the
-clip's name, joined by a slash.
+listed by its id, and a character's own dance or action as the character's folder name and
+the clip's name, joined by a slash.
 
 ```json
-"DisabledMoves": ["backflip", "cartwheel", "tornado", "domo/dance_fart", "sprig/dance_spin_attack"]
+"DisabledMoves": ["backflip", "cartwheel", "tornado", "domo/action_fart", "sprig/dance_spin_attack"]
 ```
 
 The ids of the built-in moves are `bounce`, `sway`, `disco`, `sidestep`, `shuffle`,
 `wiggle`, `headbang`, `poplock`, `starjump`, `twirl`, `tornado`, `backflip`,
 `cartwheel`, `moonwalk` and `strut`. A character's clip names are the names under
 `clips` in its `character.json`, or, if it has none, its file names without the
-extension, such as `dance_spin_attack`.
+extension, such as `dance_spin_attack` or `action_fart`.
 
 On Android the same checklist is in the settings: long-press the mate, then tap **Moves to
 use** to open it.
@@ -240,7 +258,8 @@ underneath, which on Android 12 and later means the mate is drawn slightly see-t
 as Android requires of anything that lets touches pass. Tick **Solid mate** in the
 settings to draw it at full strength instead; taps right around it then stop reaching
 the app underneath. The settings also have **Moves to use**, the same checklist as on
-the desktop (see [Switching moves off](#switching-moves-off)).
+the desktop (see [Switching moves off](#switching-moves-off)), and, under the Dance button,
+a button for each of the character's actions that is switched on.
 
 **Your own characters on Android.** Make a folder on the phone, say `Documents/DeskDancer`,
 and put each character in a folder of its own inside it, laid out as on a computer (see
@@ -313,7 +332,9 @@ The GitHub Actions workflow builds for Windows, Linux and both kinds of Mac, and
 the smoke test on each. The smoke test starts the real app and drives it: dancing, a
 two-mate party, the menu, dragging and throwing, with Mochi, Remix and the example pack
 each taking a turn. It switches off every move but one and checks that the mate, the
-party, the routines and the menu offer that one alone. It checks that a pack holds only
+party, the routines and the menu offer that one alone. It runs one of Domo's actions
+through to the end and checks that it brought no notes or dance floor, that a party waited
+for it, and that it is not offered once switched off. It checks that a pack holds only
 the animations its mates have shown, that they come back after being taken away, and
 that every animation of every pack can be read. On Windows and macOS it also reads
 pixels back off the screen to confirm that the window is see-through and the character
@@ -326,7 +347,8 @@ A second workflow, `android`, builds the APK and runs it on an Android 14 emulat
 grants the overlay permission, puts Mochi on the home screen, makes it dance and drags it
 with a scripted swipe, then compares screenshots with one of the bare home screen: the
 mate has to be visible, the stage around it has to be see-through, the dancing frames have
-to differ, and the drag has to reach the mate. Then it puts Kori's pictures in
+to differ, and the drag has to reach the mate. Domo then does his Fart action, and has to
+go back to standing about once it is over. Then it puts Kori's pictures in
 `Documents/DeskDancer/my-kori` on the phone (Kori itself comes in the APK), chooses that
 folder in Android's folder picker by tapping through it as a person would, and checks that
 the character is copied in and visible on the screen. It also checks

@@ -517,6 +517,9 @@ public static class Moves
     /// </summary>
     public static string KeyOf(DanceMove move, string characterId) => move.Clip == null ? move.Id : $"{characterId}/{move.Id}";
 
+    /// <summary>How one of a character's actions is named in the settings: "domo/action_fart".</summary>
+    public static string KeyOf(Characters.OwnClip action, string characterId) => $"{characterId}/{action.Id}";
+
     /// <summary>Wraps an artist-made animation clip so it can be queued like any other move.</summary>
     public static DanceMove FromClip(string clip, string name, double beats) => new()
     {

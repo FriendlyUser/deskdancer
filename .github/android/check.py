@@ -11,6 +11,7 @@ Checks, in order:
     through unchanged, so there is no box or tint around the mate;
   * it moves while dancing: the dancing screenshots differ from one another;
   * it can be dragged: the log shows a drag that started from the scripted swipe;
+  * asked to, Domo does his Fart action, once, and then stands about again;
   * a character put in a folder on the phone, once that folder is chosen in the folder
     picker, is copied in, can be put on the screen and is visible there;
   * the folder opens in the Files app;
@@ -154,7 +155,7 @@ else:
     else:
         failures.append("dancing screenshots missing")
 
-    for name, title in (("3-thrown", "just after the drag"), ("4-landed", "after landing")):
+    for name, title in (("3-thrown", "just after the drag"), ("4-landed", "after landing"), ("4-acting", "Domo farting")):
         shot = load(name)
         if shot is not None:
             m = difference(home, shot) > 40
@@ -169,6 +170,18 @@ if "drag started" not in log:
     failures.append("the mate did not pick up the scripted drag")
 if "dancing: True" not in log:
     failures.append("the dance command did not start a dance")
+
+# ---- An action ----
+if "action 'action_fart' started" not in log:
+    failures.append("the act command did not start Domo's Fart")
+else:
+    acting = log.split("action 'action_fart' started", 1)[1].split("command 'stop'", 1)[0]
+    states = re.findall(r"state=(\w+) clip=(\w+)", acting)
+    print("after the act command, as logged every two seconds:", states)
+    if ("Act", "action_fart") not in states:
+        failures.append("the mate never showed the Fart action")
+    elif ("Idle", "idle") not in states[states.index(("Act", "action_fart")):]:
+        failures.append("the mate did not go back to standing after its action")
 
 # Frame rate and the time spent drawing, as the app logged them every two seconds. The
 # emulator draws everything in software, so these are a floor, not what a phone does.

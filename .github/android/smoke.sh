@@ -4,8 +4,8 @@
 #   bash .github/android/smoke.sh DeskDancer.apk out-dir
 #
 # Installs the APK, grants "display over other apps" the way a person would in Settings,
-# puts Mochi on the home screen, makes it dance and drags it, taking screenshots along the
-# way. Then it puts a character in a folder on the phone, chooses that folder in the
+# puts Mochi on the home screen, makes it dance and drags it, and has Domo do his Fart
+# action, taking screenshots along the way. Then it puts a character in a folder on the phone, chooses that folder in the
 # phone's folder picker by tapping through it, shows the character, opens the folder in the
 # Files app and switches a move off in the settings. check.py then looks at the screenshots
 # and the log and decides whether it passed.
@@ -96,6 +96,15 @@ if [[ $hit =~ hit=\((-?[0-9]+),(-?[0-9]+)\ ([0-9]+)x([0-9]+)\) ]]; then
 else
   echo "no hit box in the log"
 fi
+
+log "an action: Domo's Fart"
+adb shell am start -W -n $pkg/.MainActivity --es command start --es character domo --ez calm true
+sleep 6
+adb shell am start -W -n $pkg/.MainActivity --es command act --es action action_fart
+sleep 3
+shot 4-acting
+# It runs for a little over seven seconds, and then he stands about again.
+sleep 8
 
 log "still running?"
 adb shell pidof $pkg && echo "running" || echo "NOT RUNNING"
