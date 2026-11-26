@@ -163,7 +163,24 @@ The right-click menu has everything else:
   actions on its own, falling when dropped, and the notes-and-sparkles effects.
 - **Character / Size / Add another mate**: switch character, resize from 50% to 300%,
   or put several mates on screen at once.
-- **Always on top**, **Click through empty space**, **Quit**.
+- **Always on top**, **Click through empty space**, **Settings...**, **Quit**.
+
+### Settings
+
+**Settings...** in the right-click menu opens a window with the things most people want to
+change, on one page. Every change takes effect straight away.
+
+| Card | What is on it |
+| --- | --- |
+| **This mate** | The character and the size of the mate whose menu you opened it from. |
+| **What the mates do** | Wander around, dance on its own, do actions on its own, fall when dropped, notes and sparkles, and the tempo. |
+| **On the desktop** | Always on top, and click through empty space. |
+| **Your characters** | The folder characters of your own are kept in, with **Open folder**, **Copy path**, **Change...** to keep them somewhere else, **Use the usual folder** to go back, and **Reload characters**. |
+| **Saving** | **Save changes as I make them** (on to begin with; switched off, changes last until you quit unless you press **Save now**), **Reset to defaults** (the tempo, the switches and the moves; your mates and characters are kept), and where the settings file is, with **Open folder**. |
+
+A folder chosen with **Change...** is looked in first. The usual folder is still looked in
+after it, and so are the characters that come with DeskDancer, so nothing you already had
+goes missing.
 
 ### The moves
 
@@ -299,7 +316,8 @@ Turn the feature off in the menu if it misbehaves with your setup.
 Settings are remembered in `%APPDATA%\DeskDancer` on Windows, `~/.config/DeskDancer` on
 Linux and `~/Library/Application Support/DeskDancer` on macOS, along with a log file if
 something goes wrong. That includes which character each mate is, so a mate you already
-have stays as it was when the program is updated.
+have stays as it was when the program is updated. The [Settings](#settings) window shows
+where that is on your computer and opens the folder.
 
 ## Command line
 
@@ -322,7 +340,7 @@ src/DeskDancer/
     MateBrain.cs    Idle / walk / sit / sleep / dance / drag / fall state machine
     Conductor.cs    Beat clock and the shared session behind the dance party
   Characters/   Remix (drawn in code) and the loader for image packs
-  Ui/           The transparent window, its menu and the renderer
+  Ui/           The transparent window, its menu and the renderer, and the Settings window
   Platform/     Click-through for Windows, X11 and macOS; getting freed memory back on Linux
   Tools/        Smoke test, contact sheets and the example pack exporter
 src/DeskDancer.Android/

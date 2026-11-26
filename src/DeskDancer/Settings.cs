@@ -11,6 +11,9 @@ public sealed class MateSettings
     public string Character { get; set; } = CharacterIds.Default;
     /// <summary>Size multiplier on top of the character's own preferred height.</summary>
     public double Scale { get; set; } = 1.0;
+
+    /// <summary>The sizes offered in the menu and on the Settings window (1 is 100%).</summary>
+    public static readonly double[] Sizes = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0];
 }
 
 public static class CharacterIds
@@ -39,6 +42,22 @@ public sealed class Settings
     public bool AlwaysOnTop { get; set; } = true;
     /// <summary>Let clicks on the empty area around a mate reach the windows underneath.</summary>
     public bool ClickThrough { get; set; } = true;
+
+    /// <summary>
+    /// A folder of the user's own choosing for their characters, picked on the Settings
+    /// window. It is looked in before the usual one, which is still looked in after it, as
+    /// are the characters that come with the program. Null for none.
+    /// </summary>
+    public string? CharactersFolder { get; set; }
+
+    /// <summary>
+    /// Write every change to disk as it is made. Switched off (on the Settings window), a
+    /// change lasts until the program is closed, unless it is saved by hand.
+    /// </summary>
+    public bool AutoSave { get; set; } = true;
+
+    /// <summary>The tempos offered in the menu and on the Settings window, in beats per minute.</summary>
+    public static readonly int[] Tempos = [80, 100, 120, 140, 160];
 
     /// <summary>
     /// Dance moves and actions switched off. A built-in move is listed by its id
@@ -72,6 +91,29 @@ public sealed class Settings
     /// <summary>False for throwaway runs (smoke tests) that must not touch the user's saved settings.</summary>
     [JsonIgnore] public bool Persist { get; set; } = true;
 
+    /// <summary>True when something has changed that is not on disk yet, which only happens with <see cref="AutoSave"/> off.</summary>
+    [JsonIgnore] public bool Unsaved { get; private set; }
+
+    /// <summary>
+    /// Puts the tempo, every switch and the moves back to how a new copy of the program has
+    /// them. The mates themselves (which characters, how big) and the characters folder are
+    /// kept. Call <see cref="Save"/> afterwards.
+    /// </summary>
+    public void ResetToDefaults()
+    {
+        var fresh = new Settings();
+        Bpm = fresh.Bpm;
+        Wander = fresh.Wander;
+        AutoDance = fresh.AutoDance;
+        AutoActions = fresh.AutoActions;
+        Gravity = fresh.Gravity;
+        Effects = fresh.Effects;
+        AlwaysOnTop = fresh.AlwaysOnTop;
+        ClickThrough = fresh.ClickThrough;
+        AutoSave = fresh.AutoSave;
+        DisabledMoves = [];
+    }
+
     static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
@@ -94,15 +136,19 @@ public sealed class Settings
         }
     }
 
-    static string FilePath => Path.Combine(ConfigDir, "settings.json");
+    /// <summary>The file the settings are kept in.</summary>
+    public static string FilePath => Path.Combine(ConfigDir, "settings.json");
 
-    public static Settings Load()
+    public static Settings Load() => LoadFrom(FilePath);
+
+    /// <summary>Reads settings from a file; the defaults if it is not there or cannot be read.</summary>
+    public static Settings LoadFrom(string path)
     {
         try
         {
-            if (File.Exists(FilePath))
+            if (File.Exists(path))
             {
-                var loaded = JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), Json);
+                var loaded = JsonSerializer.Deserialize<Settings>(File.ReadAllText(path), Json);
                 if (loaded != null)
                 {
                     loaded.Mates ??= [];
@@ -124,17 +170,37 @@ public sealed class Settings
         return new Settings();
     }
 
-    public void Save()
+    /// <summary>
+    /// Writes the settings to disk, and returns false if that could not be done. Nothing is
+    /// written by a throwaway run, nor, with <see cref="AutoSave"/> off, unless
+    /// <paramref name="now"/> is true: the change is then only noted in <see cref="Unsaved"/>.
+    /// </summary>
+    public bool Save(bool now = false)
     {
-        if (!Persist) return;
+        if (!Persist) return true;
+        if (!AutoSave && !now)
+        {
+            Unsaved = true;
+            return true;
+        }
+        if (!SaveTo(FilePath)) return false;
+        Unsaved = false;
+        return true;
+    }
+
+    /// <summary>Writes the settings to a file, making its folder if need be. Returns false if that could not be done.</summary>
+    public bool SaveTo(string path)
+    {
         try
         {
-            Directory.CreateDirectory(ConfigDir);
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(this, Json));
+            if (Path.GetDirectoryName(path) is { Length: > 0 } folder) Directory.CreateDirectory(folder);
+            File.WriteAllText(path, JsonSerializer.Serialize(this, Json));
+            return true;
         }
         catch (Exception ex)
         {
             Log.Error("Could not save settings", ex);
+            return false;
         }
     }
 }
