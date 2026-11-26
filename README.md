@@ -49,13 +49,18 @@ photo. He does everything Domo does, Bubble Tea, Fart and Apple Tree included, b
 from the same shapes and the same clips by a different painter:
 [characters/domo-plush/_source](characters/domo-plush/_source/README.md).
 
-<img src="characters/piplup/idle.png" alt="Piplup" height="150">
+![Piplup in seven poses](docs/piplup.png)
 
-**Piplup** is the quick kind of image pack: one picture and nothing else. It is a fan
-drawing by @ros…, taken off its background and stood upright on a level floor. The app
-does the rest, so Piplup breathes, waddles, sits, naps and does every dance move, bounced,
-leaned, spun and flipped as a whole. Pick it under **Character**, or start with
-`--character piplup`. How the picture was prepared is in
+**Piplup** is drawn by a script as well, after one picture of it: thick black lines, flat
+colours and one hard-edged shadow on each part. Its head and body are two balls, with the
+face, the cape and the buttons placed on them as on a globe, so it can look about, nod and
+turn right round. Standing, it blinks, glances round at you, shakes a flipper, wags its
+tail and puffs out its chest. It waddles on webbed feet that stay where they are put on
+the floor, sits with its feet out in front, and naps with a bubble at its beak. It has
+three dances of its own: **Bubbles**, when it blows a stream of bubbles and hops as they
+burst; **Pirouette**, twice round on one foot; and **Belly Slide**, down on its front and
+off across the floor. It also has an action, **Take a Bow**. Pick it under **Character**,
+or start with `--character piplup`. How it is drawn, and how to change it, is in
 [characters/piplup/_source](characters/piplup/_source/README.md). Piplup is a Pokémon and
 belongs to Nintendo, Creatures and Game Freak, who had no part in this pack.
 
@@ -194,12 +199,13 @@ image characters are bounced, leaned, spun and flipped as a whole.
 ### Actions
 
 Some characters can do things that are not dances: Domo and Plush Domo can have a bubble
-tea (about 8½ seconds), fart (about 7) and be chased by an apple (about 17). An action is
-played once through at its own speed, with no music notes and no dance floor under the
-mate, and then the mate goes back to standing about. Pick one from **Actions** in the
-right-click menu; a mate also does one of its actions now and then on its own, unless **Do
-actions on its own** is unticked. Picking it up, or telling it to sit, nap or dance, cuts
-an action short, and a **Dance party** waits for the mate to finish one before it joins in.
+tea (about 8½ seconds), fart (about 7) and be chased by an apple (about 17), and Piplup can
+take a bow (4). An action is played once through at its own speed, with no music notes and
+no dance floor under the mate, and then the mate goes back to standing about. Pick one from
+**Actions** in the right-click menu; a mate also does one of its actions now and then on
+its own, unless **Do actions on its own** is unticked. Picking it up, or telling it to sit,
+nap or dance, cuts an action short, and a **Dance party** waits for the mate to finish one
+before it joins in.
 
 An action can take the mate somewhere. In Apple Tree, Domo runs about two and three
 quarter heights one way and nearly four and a half back, and ends up to one side of where
