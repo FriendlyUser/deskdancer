@@ -189,9 +189,9 @@ syncs = re.findall(r"characters folder synced: (\d+) character\(s\) \(([^)]*)\)"
 print("characters folder read:", syncs or "never")
 if "characters folder chosen" not in log:
     failures.append("no folder was chosen in the folder picker")
-if not any("kori" in names.split(", ") for _, names in syncs):
+if not any("my-kori" in names.split(", ") for _, names in syncs):
     failures.append("the character put in the chosen folder was not copied in")
-if "mate 'kori' on screen" not in log:
+if "mate 'my-kori' on screen" not in log:
     failures.append("the character from the folder was not put on the screen")
 kori = load("7-kori")
 if kori is not None and home is not None:

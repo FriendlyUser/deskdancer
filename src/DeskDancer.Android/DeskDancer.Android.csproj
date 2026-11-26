@@ -44,13 +44,14 @@
   </ItemGroup>
 
   <!--
-    Character packs that ship inside the APK, one line each. They are copied out of it into
-    the app's own storage on first start, because the pack loader reads ordinary files.
-    Remix, the robot drawn in code, needs no files.
+    Every character pack in the repository's characters folder ships inside the APK. They are
+    copied out of it into the app's own storage on first start, because the pack loader reads
+    ordinary files. Working files (a pack's _source folder) stay behind, as the app never reads
+    them. Remix, the robot drawn in code, needs no files.
   -->
   <ItemGroup>
-    <AndroidAsset Include="..\..\characters\mochi\**\*" Exclude="..\..\characters\mochi\_source\**"
-                  Link="Assets\characters\mochi\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidAsset Include="..\..\characters\*\**\*" Exclude="..\..\characters\*\_source\**"
+                  Link="Assets\characters\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

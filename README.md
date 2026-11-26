@@ -234,8 +234,8 @@ apps** and switch it on; on recent Android versions a sideloaded app may first n
 It stands on the navigation bar over whatever app is open. Drag it to carry and throw
 it, double-tap it to dance, and long-press it for the settings. A notification stays up
 while it is out, because Android only keeps an app on the screen that way; it has Dance
-and Put away buttons. The APK carries Mochi and Remix; other packs are one line each in
-`src/DeskDancer.Android/DeskDancer.Android.csproj`. Touches around the mate go to the app
+and Put away buttons. The APK carries every character in this repository's `characters`
+folder, and Remix. Touches around the mate go to the app
 underneath, which on Android 12 and later means the mate is drawn slightly see-through,
 as Android requires of anything that lets touches pass. Tick **Solid mate** in the
 settings to draw it at full strength instead; taps right around it then stop reaching
@@ -255,8 +255,9 @@ screen opens, or when you tap **Reload characters**, and a character you take ou
 folder goes from DeskDancer too. **Open the folder** shows it in the phone's Files app, to
 add or remove characters there, and **Choose another folder** or **Stop using this folder**
 changes your mind. Folders whose names start with `.` or `_`, such as a character's
-`_source` folder, are not copied, as DeskDancer never reads them. A character with the same
-folder name as one in the APK, such as `mochi`, is left out in favour of the APK's.
+`_source` folder, are not copied, as DeskDancer never reads them. A character of yours with
+the same folder name as one that comes in the APK, such as `mochi`, is used in its place,
+as on the desktop.
 
 **Clicking through.** The mate lives in a small transparent window. So that the empty
 part of it does not block what is underneath, only the area around the character
@@ -325,9 +326,10 @@ A second workflow, `android`, builds the APK and runs it on an Android 14 emulat
 grants the overlay permission, puts Mochi on the home screen, makes it dance and drags it
 with a scripted swipe, then compares screenshots with one of the bare home screen: the
 mate has to be visible, the stage around it has to be see-through, the dancing frames have
-to differ, and the drag has to reach the mate. Then it puts Kori in `Documents/DeskDancer`
-on the phone, chooses that folder in Android's folder picker by tapping through it as a
-person would, and checks that Kori is copied in and visible on the screen. It also checks
+to differ, and the drag has to reach the mate. Then it puts Kori's pictures in
+`Documents/DeskDancer/my-kori` on the phone (Kori itself comes in the APK), chooses that
+folder in Android's folder picker by tapping through it as a person would, and checks that
+the character is copied in and visible on the screen. It also checks
 that the folder opens in the Files app, and that unticking Backflip under **Moves to use**
 switches it off. The screenshots are saved as artifacts, and a rough outline of what
 appeared on the screen is printed in the job's log.
