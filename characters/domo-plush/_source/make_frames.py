@@ -34,7 +34,7 @@ _spec = importlib.util.spec_from_file_location("domo", PACK.parent / "domo" / "_
 domo = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(domo)
 
-OUT, SS, W, H = domo.OUT, domo.SS, domo.W, domo.H
+OUT, SS = domo.OUT, domo.SS
 move, shift, stretch = domo.move, domo.shift, domo.stretch
 
 # ---------------------------------------------------------------- colours, 0..1
@@ -51,6 +51,18 @@ TEA = np.array([218, 182, 146], np.float32) / 255
 PEARL = np.array([40, 26, 22], np.float32) / 255
 STRAW = np.array([240, 224, 184], np.float32) / 255
 GAS = np.array([208, 220, 142], np.float32) / 255
+BARK = np.array([156, 116, 80], np.float32) / 255
+LEAF = np.array([104, 168, 76], np.float32) / 255
+LEAF_DARK = np.array([72, 132, 62], np.float32) / 255
+LEAF_LIGHT = np.array([150, 200, 100], np.float32) / 255
+APPLE = np.array([216, 44, 40], np.float32) / 255
+UNRIPE = np.array([166, 200, 88], np.float32) / 255
+STALK = np.array([92, 62, 38], np.float32) / 255
+GLOSS = np.array([255, 236, 228], np.float32) / 255
+BLUSH = np.array([246, 198, 84], np.float32) / 255
+SPARK = np.array([255, 224, 110], np.float32) / 255
+SPARK_EDGE = np.array([232, 160, 40], np.float32) / 255
+PUFF = np.array([246, 244, 236], np.float32) / 255
 
 # ---------------------------------------------------------------- the fleece
 
@@ -58,7 +70,7 @@ TILE = 384                                 # the fleece repeats every this many 
 # Each part takes its fleece from a different stretch of the cloth: how far its own space
 # is moved across it, in units.
 CUT_FROM = {"body": (0, 170), "arm_l": (150, -40), "arm_r": (-150, -40), "leg_l": (120, 130), "leg_r": (-120, 130),
-            "foot_l": (60, 200), "foot_r": (-200, 200)}
+            "foot_l": (60, 200), "foot_r": (-200, 200), "trunk": (40, 330), "leaves": (-130, 400)}
 
 
 def weave(seed=7):
@@ -121,8 +133,8 @@ class Plush:
     been multiplied by how solid it is, which is what lets soft edges lie over one another."""
 
     def __init__(self):
-        self.colour = np.zeros((H, W, 3), np.float32)
-        self.solid = np.zeros((H, W), np.float32)
+        self.colour = np.zeros((domo.H, domo.W, 3), np.float32)          # the canvas is not the same size for every clip
+        self.solid = np.zeros((domo.H, domo.W), np.float32)
         self.pile = None                               # the body's pile and where it is, for the edge of the mouth
 
     # ---- what everything is built from
@@ -133,7 +145,7 @@ class Plush:
         px = [domo.Canvas.px(s) for s in shapes]
         both = np.concatenate(px) / SS
         x0, y0 = (max(int(math.floor(v)) - room, 0) for v in both.min(axis=0))
-        x1, y1 = (min(int(math.ceil(v)) + room, limit) for v, limit in zip(both.max(axis=0), (W, H)))
+        x1, y1 = (min(int(math.ceil(v)) + room, limit) for v, limit in zip(both.max(axis=0), (domo.W, domo.H)))
         im = Image.new("L", ((x1 - x0) * SS, (y1 - y0) * SS), 0)
         pen = ImageDraw.Draw(im)
         for s in px:
@@ -274,6 +286,76 @@ class Plush:
         for pearl in parts["rising"]:
             self.lay(where, np.broadcast_to(PEARL, solid.shape + (3,)), on(pearl) * 0.7)
         self.lay(where, np.broadcast_to(np.float32(1.0), solid.shape + (3,)), cup * np.clip(gleam, 0, 1) * 0.55)
+
+    def stuffed(self, shapes, colour, cloth=None, room=12, soft=1.5, shadow=0.30):
+        """Something soft and filled, in a colour of its own: darker towards its edge, lit
+        from the upper left, casting a little shadow on what is behind. Given `cloth`, how
+        its own space lies on the canvas and which stretch of fleece it is cut from, it is
+        made of fleece; without, of something smooth."""
+        where, solid = self.cover(shapes, room)
+        light, pile = self.cloth(*cloth, where) if cloth else (1.0, 0.0)
+        edge = step((blur(solid, soft) + 0.30 * pile - 0.5) / 0.36 + 0.5)
+        glow = blur(solid, 5.0)
+        lit = np.clip(nudged(glow, -3, -4) - glow, -1, 1)
+        tone = (0.66 + 0.34 * depth(solid, 6.0) ** 0.8) * (1 + 0.6 * lit) * light
+        self.shade(where, shadow * nudged(blur(solid, 3.0), 0, 2))
+        self.lay(where, colour * tone[..., None], edge)
+
+    def tree(self, parts):
+        """A toy tree: a trunk, boughs and clumps of leaves cut from the same fleece he is,
+        in their own colours, with shiny little apples sewn on. The clumps at the back are
+        a darker green, and the ones the light catches a lighter one."""
+        space = parts["space"]
+        if parts["grass"]:
+            self.stuffed(parts["grass"], LEAF, room=5, soft=0.8, shadow=0.15)
+        where, _ = self.cover(parts["wood"], 12)
+        self.stuffed(parts["wood"], BARK, (space, "trunk"))
+        for band, by in ((parts["shade"], 0.22), (parts["shine"], -0.16)):
+            for shape in band:                              # darker down one side, lighter down the other
+                patch, cover = self.cover([shape], 6)
+                self.colour[patch] *= (1 - by * blur(cover, 2.4))[..., None]
+        for line in parts["bark"]:
+            self.crease(line)
+        if parts["sprout"]:
+            self.stuffed(parts["sprout"], LEAF, room=6, soft=0.9, shadow=0.2)
+        if parts["back"]:
+            self.stuffed(parts["back"], LEAF_DARK, (space, "leaves"))
+        if parts["body"]:
+            self.stuffed(parts["body"], LEAF, (space, "leaves"))
+        if parts["light"]:
+            patch, cover = self.cover(parts["light"], 10)
+            light, _ = self.cloth(space, "leaves", patch)
+            self.lay(patch, LEAF_LIGHT * (light * (0.9 + 0.1 * depth(cover, 5.0)))[..., None], blur(cover, 3.2) * 0.85)
+        for curl in parts["scallops"]:
+            self.crease(curl)
+        for apple, shine in parts["fruit"]:
+            self.stuffed([apple], APPLE, room=5, soft=0.8, shadow=0.26)
+            patch, cover = self.cover([shine], 3)
+            self.lay(patch, np.broadcast_to(GLOSS, cover.shape + (3,)), blur(cover, 0.8) * 0.8)
+
+    def apple(self, parts):
+        """Smooth and shiny, where everything else is fleece."""
+        self.stuffed([parts["stalk"]], STALK, room=4, soft=0.7, shadow=0.15)
+        self.stuffed([parts["leaf"]], LEAF, room=5, soft=0.8, shadow=0.2)
+        self.stuffed([parts["body"]], UNRIPE + (APPLE - UNRIPE) * parts["ripe"], room=8, soft=0.9, shadow=0.32)
+        where, blush = self.cover([parts["blush"]], 6)
+        self.lay(where, np.broadcast_to(BLUSH, blush.shape + (3,)), blur(blush, 2.0) * (0.8 * parts["ripe"]))
+        where, shine = self.cover([parts["shine"]], 4)
+        self.lay(where, np.broadcast_to(GLOSS, shine.shape + (3,)), blur(shine, 1.1) * 0.8)
+
+    def spark(self, edge, star, core, solid):
+        """A twinkle: light, so it glows a little round its edge."""
+        for shape, colour, room, soft, strength in ((edge, SPARK_EDGE, 6, 1.5, 0.85), (star, SPARK, 3, 0.6, 1.0),
+                                                    (core, np.float32(1.0) * np.ones(3, np.float32), 2, 0.6, 0.9)):
+            where, cover = self.cover([shape], room)
+            self.lay(where, np.broadcast_to(colour, cover.shape + (3,)), blur(cover, soft) * (strength * solid))
+
+    def puff(self, puffs, solid):
+        where, cover = self.cover(puffs, 12)
+        cloud = blur(cover, 2.2)
+        glow = blur(cover, 4.0)
+        lit = np.clip(nudged(glow, -3, -4) - glow, -1, 1)
+        self.lay(where, PUFF * ((0.86 + 0.14 * depth(cover, 6.0)) * (1 + 0.45 * lit))[..., None], cloud * (0.92 * solid))
 
     def gas(self, puffs, solid):
         where, cover = self.cover(puffs, 12)

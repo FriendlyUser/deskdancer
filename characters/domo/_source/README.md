@@ -56,6 +56,19 @@ lid, a straw, tea that goes down as he drinks and pearls in the bottom that go u
 straw one at a time. A cloud of gas is a handful of puffs that start small behind him,
 drift off, grow and fade.
 
+**The tree and the apple.** An apple tree can stand beside him, half as tall again as he
+is. Its trunk leans a little, spreads at the foot into two roots, is darker down one side
+and lighter down the other, and has lines and a knot in its bark; it forks into three
+boughs. Its leaves are sixteen clumps in three greens: shaded ones at the back and
+underneath, the body of the tree, and the ones the light catches, with single leaves
+sticking out round the edge, six small apples among them and tufts of grass at its foot.
+It grows: a shoot with two leaves, then the trunk, then the boughs, and then the leaves a
+clump at a time, each coming out a little too far and settling. It can bend over, and
+shrink to nothing. An apple is drawn separately, in front of everything, so it can hang
+from the tree, drop, bounce (it squashes against the floor), roll and be thrown. It is
+green when it is small and red with a yellow side when it is ripe, which is what shows it
+turning as it rolls. Twinkles and puffs of dust can be put anywhere.
+
 **Painters.** The script keeps what a pose is apart from how it is painted. It works out
 where every shape goes and hands them, from the back to the front, to a painter. The one
 here, `Flat`, fills each shape with one colour and gives it a dark edge. The Plush Domo
@@ -75,32 +88,45 @@ A change to a clip here changes both, once each pack has been rebuilt.
 | `dance_chomp.webp`, `dance_stomp.webp` | Their own entries under **Dance move**, **Chomp** and **Monster Stomp**. Clip dances get no motion from the app, so the hops and stomps are drawn in. Each loops in one second, which is two beats at the usual 120 BPM. |
 | `action_bubble_tea.webp` | **Bubble Tea** under **Actions**. He brings out a cup and gives it a shake, takes three long pulls at the straw, lowers it with a happy sigh and sways, then goes back for four more until the tea is all but gone. He peers in at the one pearl left at the bottom, shakes the cup, gives up with a glum sigh and puts it away. 8.6 seconds. |
 | `action_fart.webp` | **Fart** under **Actions**. He glances one way and the other, strains, and nothing comes. He looks round behind him, puzzled, tries again harder and lets one go with a hop, looks relieved, wafts the cloud away for a good while, and then looks off into the distance as if nothing had happened. 7.3 seconds. |
+| `action_apple_tree.webp` | **Apple Tree** under **Actions**. Twinkles gather out of thin air, a shoot pops out of the ground beside him, and all at once it is an apple tree with its leaves bursting out over his head. He ducks and gawps at it. An apple swells on it and ripens; he reaches for it; it swings, hangs still and drops in front of him. He jumps out of his skin, the tree vanishes, and he bolts with the apple rolling after him. He looks back and it is far behind, relaxes, looks back again and it is at his heels, and jumps: it bowls on underneath him and stops. He watches it. It starts back towards him, so he bolts the way he came, and it bounds after him in bigger and bigger hops until it hits something, sails over and lands in his open mouth. He skids to a stop with it between his teeth, blinks and swallows it. 15.4 seconds, 25 frames a second. |
 | `drag.webp` | Being carried. |
 | `fall.webp` | Dropping through the air. |
 
-Bubble Tea and Fart are actions, not dances. The app plays an action once through at its
-own speed, with no music notes and no dance floor, and then he goes back to standing
-about. Pick one under **Actions** in the right-click menu (on Android, its button under
-**Dance** in the settings); now and then he also does one by himself. They are never
+Bubble Tea, Fart and Apple Tree are actions, not dances. The app plays an action once
+through at its own speed, with no music notes and no dance floor, and then he goes back to
+standing about. Pick one under **Actions** in the right-click menu (on Android, its button
+under **Dance** in the settings); now and then he also does one by himself. They are never
 part of a dance, a double-click's dance or the dance party. Because an action is not
 looped, each starts and ends standing at rest, and `make_frames.py` keeps its last frame
 where it is instead of joining it on to the first, as it does for a loop. The app plays
 a clip whose key starts with `action` once unless `character.json` says otherwise.
 
+**Running away.** In Apple Tree he runs 2.75 of his own heights to the left and 4.4 back
+to the right, but not in the clip: there he runs on the spot in the middle of the picture,
+and the apple is drawn where it is beside him. `apple_tree_travel` says how far he has
+really got at each moment, `make_frames.py` writes that into `character.json` as the
+clip's `travel`, and the app moves him across the screen by it as the clip plays. That
+keeps the frames small, and lets the app play the whole thing the other way round where
+the screen has no room for it as drawn. It is also why the tree goes back where it came
+from before he sets off: anything standing on the ground would have to be drawn sliding
+out of the picture, 25 times a second, while the app moves him 60 times a second, and
+would judder. The apple does not, because it is never far from keeping pace with him.
+
 Frames are not free. The app keeps the idle clip unpacked in memory the whole time, and
-each other clip while it is being shown and for a minute afterwards. `make_frames.py`
-prints the total for every clip when it finishes (about 198 MB, of which idle is 28,
-Bubble Tea 46 and Fart 56; only one action is shown at a time). Three things keep it down:
-each clip is cropped to what it uses; a frame is held for as long as nothing has visibly
-moved, so standing still costs one frame, not hundreds; and the two long actions are drawn
-at fewer frames a second than the dances. On disk the pack is about 1.5 MB, because flat
-colour packs down well without any loss.
+each other clip but the actions while it is being shown and for a minute afterwards.
+`make_frames.py` prints the total for those when it finishes: about 96 MB, of which idle
+is 28. Two things keep it down: each clip is cropped to what it uses, and a frame is held
+for as long as nothing has visibly moved, so standing still costs one frame, not hundreds.
+The actions are not counted, because the app does not unpack them. It reads a long clip
+that is played once through a frame at a time as it is shown, which is what lets Apple
+Tree be 375 big frames; unpacked, they would be 480 MB. On disk the pack is about 5 MB,
+3.3 of them Apple Tree: flat colour packs down well without any loss.
 
 ## Changing things
 
 Each clip is a short function near the end of `make_frames.py` (`idle`, `walk`,
-`sitting`, `asleep`, `happy_arms`, `chomp`, `stomp`, `bubble_tea`, `fart`, `carried`,
-`falling`). It is given the time in seconds and returns a pose. A pose can set:
+`sitting`, `asleep`, `happy_arms`, `chomp`, `stomp`, `bubble_tea`, `fart`, `apple_tree`,
+`carried`, `falling`). It is given the time in seconds and returns a pose. A pose can set:
 
 - `eyes`: a pair, each `"open"`, `"wide"`, `"happy"`, `"closed"`, or a number from 0 to 1
   for how far shut
@@ -119,11 +145,24 @@ Each clip is a short function near the end of `make_frames.py` (`idle`, `walk`,
   tipped, its size from 0 to 1, how full it is from 1 to 0, and how many pearls have gone
   up the straw (1.5 is one swallowed and another half way up)
 - `gas`: a cloud of gas, by its age: 0 just let off, 1 gone
+- `tree`: an apple tree, as how much of it has come up from 0 to 1, how many seconds ago
+  its leaves began to come out, how far it is bent over in degrees, how much it is
+  stretched upwards (1 is not at all) and its size from 0 to 1
+- `apple`: an apple, in front of everything, as where its middle is (x, y), how far it is
+  turned in degrees, its size, how much it is squashed against the floor and how ripe it
+  is from 0, green, to 1. It is not moved with him: give it where it is.
+- `fx`: twinkles `("spark", x, y, size, turn, strength)` and puffs
+  `("puff", x, y, size, strength)`, likewise where they are; `twinkle()` and `puff()` make
+  ones that come and go
 - `squash` (positive is shorter and wider), `lean` (degrees, positive tips right), and
   `dx`, `dy` for the whole mate (negative `dy` is up)
 
 Distances are in units: standing, he is 300 tall. `CLIPS` lists each clip's length, how
-many frames a second to sample it at, and whether it is a calm one. A clip must end as it
+many frames a second to sample it at, and whether it is a calm one. Three more lists just
+below it are for clips out of the ordinary: `ROOM` gives a clip a bigger canvas than the
+rest (the app's window for a mate reaches 300 units to each side of his feet and 540
+above them, and no further), `SAVE` saves one with other settings, and `TRAVEL` names the
+function that says where an action takes him. A clip must end as it
 began: a dance because it loops, an action because he goes into it and comes out of it
 standing. To add a dance, write another function and add a line to `CLIPS`; any key
 starting with `dance_` appears under **Dance move**, and any starting with `action_`
@@ -135,5 +174,7 @@ is how the cup is kept in his grip.
 
 The arms' springiness is set by `ARM_HZ`, `ARM_DAMPING`, `ARM_PUSH` and `ARM_CURL`, just
 above the clips. His proportions and colours are the constants at the top: `BODY`,
-`SHOULDER`, `LEG`, `EYES`, `MOUTH`, `FUR` and the rest, with the cup's and the cloud's
-after them. `OUT` sets how large the frames are saved.
+`SHOULDER`, `LEG`, `EYES`, `MOUTH`, `FUR` and the rest, with the cup's, the cloud's, the
+tree's (`TRUNK`, `BOUGHS`, `CLUMPS`, `FRUIT` and so on) and the apple's after them. When
+things happen in Apple Tree is the list of times above `apple_tree`, and how fast he and
+the apple go is `his_speed` and `apple_speed`. `OUT` sets how large the frames are saved.

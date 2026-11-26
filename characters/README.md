@@ -58,7 +58,22 @@ the mate. An action, such as `action_drink`, is something the mate does: it is p
 once through at its own speed, as long as the animation is, with no notes and no floor,
 and then the mate goes back to standing about. It is also done now and then unasked. Start
 and end an action standing as in your idle picture, so the mate goes into it and comes out
-of it without a jump. `domo` has two, `action_bubble_tea` and `action_fart`.
+of it without a jump. `domo` has three: `action_bubble_tea`, `action_fart` and
+`action_apple_tree`.
+
+An action can take the mate across the screen. Draw the character running on the spot, in
+the middle of the picture, and say in `character.json` how far it has really got at each
+moment, with `travel` (see below): the app moves the mate by that much while the action
+plays. Anything else in the picture that should stay put on the ground then has to be
+drawn sliding the other way, and looks best if it is gone before the running starts.
+Where the screen has no room for the journey, the app plays the action mirrored and goes
+the other way.
+
+A long action costs next to no memory. One that is a single animated GIF or WebP, with its
+`anchor` given in `character.json`, is not unpacked like other animations: its frames are
+read from the file one at a time as they are shown. So it can be long, and drawn as
+smoothly as you like. What it shows still has to fit in the mate's window, which reaches
+one of the character's heights to each side of its feet and 1.8 heights above them.
 
 An animation can be supplied in three ways:
 
@@ -126,7 +141,8 @@ Add this file to the folder to adjust things. Every setting is optional.
   "clips": {
     "walk": { "file": "walk.png", "columns": 8, "rows": 1, "fps": 12 },
     "dance_spin": { "folder": "spin", "name": "Spin", "fps": 15, "loop": true },
-    "sleep": { "file": "nap.gif", "scale": 0.9, "anchor": [64, 120] }
+    "sleep": { "file": "nap.gif", "scale": 0.9, "anchor": [64, 120] },
+    "action_dash": { "file": "dash.webp", "anchor": [150, 290], "travel": [[1.0, 0], [3.0, -2.5], [5.0, 0]] }
   }
 }
 ```
@@ -152,6 +168,7 @@ Per animation, inside `clips`:
 | `name` | Menu name for a dance or an action. |
 | `scale` | Size multiplier for this animation only. |
 | `anchor` | `[x, y]` position of the point between the feet, in pixels of one frame, if the automatic guess is off. |
+| `travel` | For an action that goes somewhere: a list of `[seconds, distance]` pairs saying how far the mate has got by each moment, in the character's own heights, positive to the right of the picture, with straight lines between. It starts at 0 and stays where the last pair leaves it. |
 
 ## If it does not show up
 

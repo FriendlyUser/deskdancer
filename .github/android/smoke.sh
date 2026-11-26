@@ -4,8 +4,9 @@
 #   bash .github/android/smoke.sh DeskDancer.apk out-dir
 #
 # Installs the APK, grants "display over other apps" the way a person would in Settings,
-# puts Mochi on the home screen, makes it dance and drags it, and has Domo do his Fart
-# action, taking screenshots along the way. Then it puts a character in a folder on the phone, chooses that folder in the
+# puts Mochi on the home screen, makes it dance and drags it, and has Domo do two of his
+# actions, Fart and Apple Tree (which takes him across the screen), taking screenshots
+# along the way. Then it puts a character in a folder on the phone, chooses that folder in the
 # phone's folder picker by tapping through it, shows the character, opens the folder in the
 # Files app and switches a move off in the settings. check.py then looks at the screenshots
 # and the log and decides whether it passed.
@@ -105,6 +106,14 @@ sleep 3
 shot 4-acting
 # It runs for a little over seven seconds, and then he stands about again.
 sleep 8
+
+log "an action that goes somewhere: Domo's Apple Tree"
+adb shell am start -W -n $pkg/.MainActivity --es command act --es action action_apple_tree
+# The tree is up after two seconds, and gone again before five.
+sleep 3.5
+shot 4-tree
+# Then he runs off one way and back the other, for fifteen seconds in all, and stands about.
+sleep 17
 
 log "still running?"
 adb shell pidof $pkg && echo "running" || echo "NOT RUNNING"

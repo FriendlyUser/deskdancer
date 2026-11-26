@@ -32,9 +32,11 @@ and she has three dances of her own: Serenade, Hair Flip and Wave Hello. Pick he
 **Domo** is an image pack with no picture behind it: a script draws every frame, so his
 arms, legs, eyes and mouth all move. He toddles when he wanders, sits down with his legs
 out in front of him, snaps his teeth, and has two dances of his own, Chomp and Monster
-Stomp. He also has two actions, things he does now and then that are not dances: Bubble
+Stomp. He also has three actions, things he does now and then that are not dances: Bubble
 Tea, where he brings out a cup, shakes it and drinks it through a straw down to the last
-pearl, and Fart.
+pearl; Fart; and Apple Tree, where an apple tree comes up out of thin air beside him and
+drops an apple at his feet, and he runs for it, one way across the screen and back the
+other, with the apple rolling after him until it lands in his mouth.
 How he is drawn, and how to change him, is in
 [characters/domo/_source](characters/domo/_source/README.md). Domo is NHK's mascot; this
 is a fan drawing, and NHK had no part in it.
@@ -43,7 +45,7 @@ is a fan drawing, and NHK had no part in it.
 
 **Plush Domo** is the same Domo made of fleece, with felt teeth and glossy beads for
 eyes. He is still a flat drawing, and the fleece is made by a script, not taken from a
-photo. He does everything Domo does, Bubble Tea and Fart included, because he is drawn
+photo. He does everything Domo does, Bubble Tea, Fart and Apple Tree included, because he is drawn
 from the same shapes and the same clips by a different painter:
 [characters/domo-plush/_source](characters/domo-plush/_source/README.md).
 
@@ -155,8 +157,8 @@ The right-click menu has everything else:
   character's own dances and actions. See [Switching moves off](#switching-moves-off) below.
 - **Dance party**: every mate on screen dances non-stop, in sync.
 - **Tempo**: 80 to 160 BPM. All moves are written against the beat, so they follow it.
-- **Actions**: for a character that has some, such as Domo's Bubble Tea and Fart, have it
-  do one. See [Actions](#actions) below.
+- **Actions**: for a character that has some, such as Domo's Bubble Tea, Fart and Apple
+  Tree, have it do one. See [Actions](#actions) below.
 - **Sit down / Take a nap**, and switches for wandering, dancing on its own, doing its
   actions on its own, falling when dropped, and the notes-and-sparkles effects.
 - **Character / Size / Add another mate**: switch character, resize from 50% to 300%,
@@ -175,13 +177,21 @@ image characters are bounced, leaned, spun and flipped as a whole.
 ### Actions
 
 Some characters can do things that are not dances: Domo and Plush Domo can have a bubble
-tea (about 8½ seconds) and fart (about 7). An action is played once through at its own
-speed, with no music notes and no dance floor under the mate, and then the mate goes back
-to standing about. Pick one from **Actions** in the right-click menu; a mate also does one
-of its actions now and then on its own, unless **Do actions on its own** is unticked.
-Picking it up, or telling it to sit, nap or dance, cuts an action short, and a **Dance
-party** waits for the mate to finish one before it joins in. A character of your own can
-have actions too: see [characters/README.md](characters/README.md#adding-animations).
+tea (about 8½ seconds), fart (about 7) and be chased by an apple (about 15). An action is
+played once through at its own speed, with no music notes and no dance floor under the
+mate, and then the mate goes back to standing about. Pick one from **Actions** in the
+right-click menu; a mate also does one of its actions now and then on its own, unless **Do
+actions on its own** is unticked. Picking it up, or telling it to sit, nap or dance, cuts
+an action short, and a **Dance party** waits for the mate to finish one before it joins in.
+
+An action can take the mate somewhere. In Apple Tree, Domo runs about two and three
+quarter heights one way and nearly four and a half back, and ends up to one side of where
+he started. Where the screen leaves no room for that, the whole action is played the other
+way round, tree and all; and if there is no room either way, he runs on the spot against
+the edge of the screen for the part that does not fit.
+
+A character of your own can have actions too: see
+[characters/README.md](characters/README.md#adding-animations).
 
 ### Switching moves off
 
@@ -326,7 +336,10 @@ An image pack is not read all at once. Its idle animation is read when the chara
 picked, which at start-up happens on another thread while the window is being put
 together. Each of its other animations is read the first time the mate needs it, and
 dropped again after a minute out of use. A mate that mostly stands about holds little
-more than its idle frames.
+more than its idle frames. A long action is not unpacked at all: it is shown once from
+start to finish, so its frames are read from the file one at a time as they are shown,
+and Domo's fifteen seconds of Apple Tree cost a few megabytes where unpacked they would
+be 480.
 
 The GitHub Actions workflow builds for Windows, Linux and both kinds of Mac, and runs
 the smoke test on each. The smoke test starts the real app and drives it: dancing, a
@@ -334,7 +347,9 @@ two-mate party, the menu, dragging and throwing, with Mochi, Remix and the examp
 each taking a turn. It switches off every move but one and checks that the mate, the
 party, the routines and the menu offer that one alone. It runs one of Domo's actions
 through to the end and checks that it brought no notes or dance floor, that a party waited
-for it, and that it is not offered once switched off. It checks that a pack holds only
+for it, and that it is not offered once switched off; runs Apple Tree twice, with room
+and without, and checks that the mate goes where the action says, the right way round;
+and has a mate do it on the screen. It checks that a pack holds only
 the animations its mates have shown, that they come back after being taken away, and
 that every animation of every pack can be read. On Windows and macOS it also reads
 pixels back off the screen to confirm that the window is see-through and the character
@@ -348,7 +363,8 @@ grants the overlay permission, puts Mochi on the home screen, makes it dance and
 with a scripted swipe, then compares screenshots with one of the bare home screen: the
 mate has to be visible, the stage around it has to be see-through, the dancing frames have
 to differ, and the drag has to reach the mate. Domo then does his Fart action, and has to
-go back to standing about once it is over. Then it puts Kori's pictures in
+go back to standing about once it is over, and his Apple Tree, which has to play through
+and take him across the screen. Then it puts Kori's pictures in
 `Documents/DeskDancer/my-kori` on the phone (Kori itself comes in the APK), chooses that
 folder in Android's folder picker by tapping through it as a person would, and checks that
 the character is copied in and visible on the screen. It also checks
