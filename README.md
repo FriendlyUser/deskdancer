@@ -199,6 +199,34 @@ A folder chosen with **Change...** is looked in first. The usual folder is still
 after it, and so are the characters that come with DeskDancer, so nothing you already had
 goes missing.
 
+### The floor
+
+The mates stand on a floor, and nothing takes one below it. Carry a mate down past it and
+it stays on the floor, sliding along under your hand; throw it down and it lands there;
+and no dance, action or knock from another mate puts its feet under it. The floor itself
+is not drawn.
+
+To begin with it is the bottom of the screen's work area, so the mates stand on the
+taskbar or the Dock. There is nothing for it in the menu or on the Settings window. It has
+two entries in `settings.json` (see below), to be edited while the app is closed:
+
+```json
+"Floor": true,
+"FloorHeight": 0
+```
+
+`FloorHeight` is how far above the bottom of the work area the floor is, in pixels before
+any display scaling. At 200 the mates stand 200 pixels up the screen, on nothing you can
+see, and that is where they land when dropped. It is never so high that a mate would not
+fit on the screen, and anything below 0 counts as 0. `"Floor": false` takes the floor away
+again, and `FloorHeight` with it: a mate can then be carried below where it stands, as it
+could before there was one, and comes back up when you let go. **Reset to defaults**
+leaves both as they are.
+
+On Android the settings file is in the app's own storage, where it cannot be edited
+without developer tools, so there the floor is always on and is the top of the navigation
+bar.
+
 ### More than one mate
 
 Put a second mate on the screen with **Add another mate**, and they take notice of each

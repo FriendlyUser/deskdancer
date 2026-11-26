@@ -127,6 +127,9 @@ public static class SmokeTest
 
         // Ticks of the run's timer spent waiting for the Settings window to draw what it was last told.
         int looksAtSettings = 0;
+        // Where the first mate's floor and its window were before the floor was raised.
+        double lowFloor = 0;
+        int lowWindow = 0;
 
         MateWindow First() => app.Mates[0];
         Screen? MainScreen() => First().Screens.Primary ?? First().Screens.All.FirstOrDefault();
@@ -586,6 +589,132 @@ public static class SmokeTest
                 Note("two mates three heights apart walked over to each other and danced; switched off, they do not");
                 Clear();
             }),
+            // The floor, on mates run on a clock of their own: nothing takes one below it.
+            new(0.541, "the floor", () =>
+            {
+                double now = 0;
+                var clock = new BeatClock { TimeSource = () => now };
+                var conductor = new Conductor(clock);
+                var settings = new Settings { Persist = false, Wander = false, AutoDance = false, AutoActions = false };
+                const double floor = 900, h = 150;
+                static void Fail(string why) => throw new InvalidOperationException("the floor: " + why);
+
+                var brain = new MateBrain(clock, conductor, settings, First().Character, new Random(5)) { H = h, Left = 0, Right = 2400, Top = 0, Floor = floor };
+                brain.Place(1000, floor);
+                // How far under the floor the feet have been, and how far under it a move has put the body, at the worst.
+                double under = 0, sunk = 0;
+                void Run(double seconds, Action? each = null)
+                {
+                    for (double t = 0; t < seconds; t += 1.0 / 60)
+                    {
+                        now += 1.0 / 60;
+                        each?.Invoke();
+                        brain.Update(1.0 / 60);
+                        under = Math.Max(under, brain.FootY - brain.Floor);
+                        sunk = Math.Max(sunk, -brain.Body.Y);
+                    }
+                }
+                bool Standing() => brain.State != MateState.Fall && Math.Abs(brain.FootY - brain.Floor) < 0.01;
+                Run(0.5);
+
+                // Carried down past the floor, it stays on it and is slid along it.
+                brain.BeginDrag();
+                double x = brain.FootX;
+                Run(0.6, () => brain.DragTo(x += 4, floor + 260));
+                if (brain.State != MateState.Drag || Math.Abs(brain.FootY - floor) > 0.01)
+                    Fail($"carried 260 below the floor, the mate is {brain.State} at {brain.FootY:0.#} and the floor is at {floor}");
+                if (Math.Abs(brain.FootX - x) > 1) Fail("carried along below the floor, the mate did not go along it");
+                // Lifted, it comes up with the hand.
+                Run(0.3, () => brain.DragTo(x, floor - 120));
+                if (Math.Abs(brain.FootY - (floor - 120)) > 0.01) Fail($"lifted 120 off the floor, the mate is at {brain.FootY:0.#}");
+                // Let go below the floor, it is standing on it.
+                Run(0.2, () => brain.DragTo(x, floor + 80));
+                brain.EndDrag();
+                Run(0.1);
+                if (!Standing()) Fail($"let go below the floor, the mate is {brain.State} at {brain.FootY:0.#}");
+
+                // Thrown down hard, it lands on the floor and does not go through it.
+                brain.Place(1000, floor - 500);
+                brain.Drop(3 * h, 40 * h);
+                Run(3);
+                if (!Standing()) Fail($"thrown at the floor, the mate is {brain.State} at {brain.FootY:0.#}");
+                // Knocked flying, the same.
+                brain.Knock(5 * h, -4 * h);
+                Run(3);
+                if (!Standing()) Fail($"knocked flying, the mate is {brain.State} at {brain.FootY:0.#}");
+                // Put below the floor, it is on it by the next look.
+                brain.Place(1000, floor + 300);
+                Run(0.05);
+                if (!Standing()) Fail($"put below the floor, the mate is {brain.State} at {brain.FootY:0.#}");
+                // The floor comes up under it, and it comes up too. The floor goes back down, and it drops onto it.
+                brain.Floor = floor - 100;
+                Run(0.05);
+                if (!Standing()) Fail($"with the floor raised 100, the mate is {brain.State} at {brain.FootY:0.#}");
+                brain.Floor = floor;
+                Run(2);
+                if (!Standing()) Fail($"with the floor back down, the mate is {brain.State} at {brain.FootY:0.#}");
+
+                // Every dance and every action of both mates' characters, and the feet stay on it throughout.
+                int moves = 0, actions = 0;
+                foreach (var character in app.Mates.Select(m => m.Character).Distinct())
+                {
+                    brain.Character = character;
+                    foreach (var move in brain.AllMoves())
+                    {
+                        brain.StartDance([move]);
+                        Run(move.Beats * 60 / clock.Bpm + 0.4);
+                        moves++;
+                    }
+                    brain.StopDance();
+                    foreach (var action in character.ActionClips)
+                    {
+                        if (character.Readiness(action.Id) != ClipReadiness.Ready || !brain.DoAction(action.Id)) continue;
+                        Run(action.Seconds + 0.5);
+                        actions++;
+                    }
+                    Run(0.5);
+                }
+                if (under > 0.01) Fail($"a mate's feet went {under:0.#} below the floor");
+                if (sunk > 1e-9) Fail($"a move put a mate {sunk * h:0.#} below the floor");
+
+                // Switched off in the settings file, it is as it was before there was a floor:
+                // a mate goes where it is carried, and comes back up when it is let go.
+                settings.Floor = false;
+                brain.BeginDrag();
+                Run(0.3, () => brain.DragTo(1000, floor + 260));
+                if (brain.FootY < floor + 259) Fail($"with the floor switched off, a mate carried 260 below it is at {brain.FootY:0.#}");
+                brain.EndDrag();
+                Run(0.2);
+                if (!Standing()) Fail($"with the floor switched off, a mate let go below it is {brain.State} at {brain.FootY:0.#}");
+
+                // How high the floor is: a number in the settings file, scaled with the screen
+                // and kept to where a mate still fits on it.
+                var file = new Settings();
+                void Rise(double height, double scaling, double room, double expected)
+                {
+                    file.FloorHeight = height;
+                    double rise = file.FloorRise(scaling, room, 150 * scaling);
+                    if (Math.Abs(rise - expected) > 0.001) Fail($"a floor height of {height} at scaling {scaling} raised the floor {rise}, not {expected}");
+                }
+                Rise(0, 1, 1000, 0);
+                Rise(120, 1, 1000, 120);
+                Rise(120, 2, 2000, 240);
+                Rise(5000, 1, 1000, 1000 - 1.1 * 150);
+                Rise(-50, 1, 1000, 0);
+                Rise(double.NaN, 1, 1000, 0);
+                file.Floor = false;
+                Rise(120, 1, 1000, 0);
+
+                // Both are kept in the settings file, which is the only place they are found.
+                string path = Path.Combine(outDir, "floor-test.json");
+                file.FloorHeight = 64;
+                if (!file.SaveTo(path)) Fail("could not write " + path);
+                var back = Settings.LoadFrom(path);
+                if (back.Floor || back.FloorHeight != 64) Fail($"saved with the floor off and 64 high, read back {(back.Floor ? "on" : "off")} and {back.FloorHeight} high");
+                var fresh = new Settings();
+                if (!fresh.Floor || fresh.FloorHeight != 0) Fail("a new copy of the settings should have the floor on, and not raised");
+                Note($"the floor held: carried, thrown, knocked, put below it, through {moves} dances and {actions} action(s); off, and how high, are read from the settings file");
+            }),
             new(0.545, "action on screen", () =>
             {
                 var mate = app.Mates[1];
@@ -634,6 +763,10 @@ public static class SmokeTest
                 var settings = app.Settings;
                 void Fail(string why) => throw new InvalidOperationException("Settings window: " + why);
                 bool Setting(string name) => (bool)typeof(Settings).GetProperty(name)!.GetValue(settings)!;
+
+                // The floor is not something the user is shown: neither of its settings has a switch here.
+                if (window.Switches.Keys.Any(name => name.Contains("Floor", StringComparison.OrdinalIgnoreCase)))
+                    Fail("there should be no switch for the floor");
 
                 // It shows the settings as they are. (This test switched wandering off at the start.)
                 foreach (var (name, box) in window.Switches)
@@ -762,6 +895,28 @@ public static class SmokeTest
                 Snap(app.Mates[1], "4-action-on");
                 b.EndDrag();
             }, WaitingFor: ClipNotInMemory),
+            // The floor's height, in the real app: raised in the settings, the mate is
+            // standing that much higher at once, window and all, and put back, it drops.
+            new(0.76, "raise the floor", () =>
+            {
+                lowFloor = First().Brain.Floor;
+                lowWindow = First().Position.Y;
+                app.Settings.FloorHeight = 90;
+            }, WaitingFor: () => NotOnTheFloor(First()) is { } where ? "the thrown mate did not land: " + where : null),
+            new(0.80, "floor raised", () =>
+            {
+                var b = First().Brain;
+                var area = MainScreen()!.WorkingArea;
+                double rise = lowFloor - b.Floor, expected = app.Settings.FloorRise(First().RenderScaling, area.Height, b.H);
+                if (expected < 1 || Math.Abs(rise - expected) > 0.5)
+                    throw new InvalidOperationException($"a floor height of 90 should raise the floor {expected:0.#}, and it rose {rise:0.#}");
+                Note($"with a floor height of 90 the mate stands {rise:0} pixels higher, and its window moved up {lowWindow - First().Position.Y}");
+                Snap(First(), "4-floor-raised");
+                app.Settings.FloorHeight = 0;
+            }, WaitingFor: () => First().Brain.Floor > lowFloor - 1 ? "the floor has not been raised"
+                : NotOnTheFloor(First()) is { } where ? "the mate is not standing on the raised floor: " + where
+                : Math.Abs(lowWindow - First().Position.Y - (lowFloor - First().Brain.Floor)) > 3 ? $"the mate's window moved up {lowWindow - First().Position.Y}, not {lowFloor - First().Brain.Floor:0}"
+                : null),
             new(0.86, "sit, swap character", () =>
             {
                 First().Brain.Sit();
