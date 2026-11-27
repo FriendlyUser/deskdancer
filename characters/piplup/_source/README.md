@@ -1,12 +1,15 @@
 # How Piplup was made
 
-Piplup is drawn by a script. It started from one picture of Piplup, a bold cartoon with
-thick black lines, flat colours and one hard-edged shadow on each part, and the script
-redraws it that way: its measurements were taken from the picture, and nudged until the
-standing pose drawn here lay on top of it. No part of the picture itself is in the pack, so
-every frame of every clip is drawn fresh, which is why Piplup can turn round, sit down and
-lie on its belly. The app never reads this folder (its name starts with `_`); it is here so
-the animations can be changed and rebuilt.
+Piplup is drawn by a script. Its shape started from one picture of Piplup: its
+measurements were taken from the picture, and nudged until the standing pose drawn here
+lay on top of it. It is painted the way Piplup looks as a soft toy lit in 3D, after
+pictures of it drawn that way: there is no line round anything, each part is one smooth
+colour that goes darker and cooler where it turns away from the light, a band of pale
+light runs along the top of its head, and one part lying over another throws a soft
+shadow on it. Nothing is modelled in 3D and no picture is in the pack, so every frame of
+every clip is drawn fresh, which is why Piplup can turn round, sit down and lie on its
+belly. The app never reads this folder (its name starts with `_`); it is here so the
+animations can be changed and rebuilt.
 
 Piplup is a Pokémon and belongs to Nintendo, Creatures and Game Freak, who had no part in
 this pack.
@@ -22,7 +25,7 @@ pip install numpy pillow
 python3 make_frames.py
 ```
 
-It takes a minute or two and overwrites the clips and `character.json` in the folder above.
+It takes a few minutes and overwrites the clips and `character.json` in the folder above.
 Then right-click the mate and choose **Character > Reload characters**.
 `python3 make_frames.py --sheet` also saves `sheet.png` with every frame on one page, and
 `python3 make_frames.py dance_bubbles walk` rebuilds only the clips named. Running it twice
@@ -42,11 +45,12 @@ of sight behind the edge as it should. The face is tipped a little inside the he
 in the picture, and we look down slightly on the chest.
 
 **The face.** The white is three ovals drawn as one shape: one round each eye and one for
-the chin. The eyes are tall ovals that stand upright in the tipped face, dark blue with a
-paler crescent along the bottom, a pupil and a white shine. They blink, widen, shut in sleep
-(curving down), smile (`^ ^`) and screw up (`> <`), and the pupils can look about. The
-beak is a dome on the front of the head, cut in two by the mouth; open, the lower half
-swings down on a hinge and shows the mouth and a tongue.
+the chin. The eyes are tall ovals that stand upright in the tipped face, dark and glossy,
+with the light caught softly low down in them, a pupil and a white shine. They blink,
+widen, shut in sleep (curving down), smile (an arch, `^ ^`) and screw up (`> <`), and the
+pupils can look about. Shut, an eye is a dark line, thickest in the middle and thinner
+towards its round ends. The beak is a dome on the front of the head, cut in two by the
+mouth; open, the lower half swings down on a hinge and shows the mouth and a tongue.
 
 **The cape.** The dark blue round its shoulders is one line round the body: two scallops on
 the chest with a notch between them, up over each shoulder, and well down its back.
@@ -65,11 +69,20 @@ and down the side away from the light. Above each foot the top of the leg is a r
 low on the body, and where the nearer one sticks out, the body's own edge runs on a little
 way under it as a fold.
 
-**Lines and light.** Every part has a black line round it of the same weight as in the
-picture. The light comes from up and to the left: each part is one flat colour with one
-darker shape for its shadow, and a paler one where the light catches it. Everything is
-drawn hard-edged at four times the saved size and averaged down, which is where the smooth
-edges come from.
+**Light.** There are no lines. The light comes from up, to the left and in front. Each
+pixel of a ball is lit by which way the ball faces there, worked out from where the pixel
+is inside the ball's outline; the flat parts, the beak, the flippers, the tail and the
+feet, are rounded off at their edges like cushions and lit the same way. Every colour is a
+pair: what it is in full light, and what it goes as it turns away, which is darker and
+cooler, so the white of the face goes lavender. Close to the outline it goes darker still,
+more so on the side away from the light. Where the top of the head turns up, it catches a
+band of pale light with a sharp edge, and the edges of the beak, the flippers and the tail
+catch a little of it too. One part lying over another throws a soft shadow on it: the cape on the
+body, the head on the cape, the beak on the face, the flippers on the body and the long
+leaf of the tail on the short one. The line of the mouth, the fold over the nearer leg and
+the lines between the toes are soft shadows too, and each button sits in a fine groove.
+Everything is drawn hard-edged at four times the saved size and averaged down, which is
+where the smooth edges come from.
 
 **Liberties.** Seen three-quarters on, as it stands, a cartoon cheats: the shoulders and
 feet are turned out a little further than they really are, the tail peeps out from behind,
@@ -89,7 +102,7 @@ side.
 | `dance.webp` | During all 15 built-in dance moves, which add their own body motion: eyes shut in a smile, beak open in song, flippers flapping to the beat, feet tapping. Also listed as **Happy Flap**. |
 | `dance_bubbles.webp` | **Bubbles**, four beats: a deep breath, chest out; a stream of bubbles from its beak that drift up and away; then they burst one after another and it hops for joy. |
 | `dance_pirouette.webp` | **Pirouette**, four beats: it winds up, spins twice round on one foot with its flippers flung out, and lands with them in the air in a shower of sparkles. |
-| `dance_belly_slide.webp` | **Belly Slide**, four beats: a little jump, down on its belly, and it slides one way and back with its feet kicking in the air, then pushes itself upright. |
+| `dance_belly_slide.webp` | **Belly Slide**, four beats: a hop back for a run-up, turning side on, then a dive over onto its belly, and it slides off head first, head up, flippers swept back and feet fluttering behind, slowing until it is back over the spot it started from. There it pushes itself up, hops for joy and turns to face us. |
 | `action_take_a_bow.webp` | **Take a Bow**, an action, played once through in four seconds: it puffs out its chest, sweeps a flipper across itself and bows low, and straightens up with a hop. |
 | `drag.webp` | Being carried: eyes wide, beak open, flippers beating, feet pedalling, a nervous drop of sweat. |
 | `fall.webp` | Dropping through the air: flippers up, eyes screwed shut, feet trailing. |
@@ -99,12 +112,13 @@ usual 120 BPM the three dances loop in two seconds and Happy Flap in one.
 
 The app keeps every frame of a clip it is showing unpacked in memory. `make_frames.py`
 prints the total when it finishes: about 200 MB for every clip but the action at once, but
-standing about, Piplup holds only its idle clip, 32 MB, and each of the others is read when
+standing about, Piplup holds only its idle clip, 31 MB, and each of the others is read when
 it is needed and dropped a minute after it was last shown. The action is never unpacked at
 all: the app reads its frames from the file as it shows them. A frame is held for as long
 as nothing has moved, and each clip is cropped to what it uses. The walk, the dances and the
 bow are drawn at 30 frames a second, standing and sitting at 20 and the nap at 12. On disk
-the pack is under 5 MB.
+the pack is under 10 MB: smooth shading does not pack down as tightly as flat colour does,
+but every frame is still saved without loss.
 
 ## Changing things
 
@@ -144,6 +158,6 @@ If the walk is changed, keep `STRIDE` and `STEP` in step with each other: a foot
 floor travels `4 * STRIDE / STEP` units a second, which has to be the 163 or so that the app
 moves a walking mate (0.55 of its height).
 
-The sizes of the balls, where everything on them is, the flippers, the feet and the colours
-are the constants at the top of the script, each with a note beside it. `OUT` sets how
-large the frames are saved.
+The sizes of the balls, where everything on them is, the flippers, the feet, the colours
+and the light are the constants at the top of the script, each with a note beside it.
+`OUT` sets how large the frames are saved.

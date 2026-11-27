@@ -51,16 +51,18 @@ from the same shapes and the same clips by a different painter:
 
 ![Piplup in seven poses](docs/piplup.png)
 
-**Piplup** is drawn by a script as well, after one picture of it: thick black lines, flat
-colours and one hard-edged shadow on each part. Its head and body are two balls, with the
-face, the cape and the buttons placed on them as on a globe, so it can look about, nod and
-turn right round. Standing, it blinks, glances round at you, shakes a flipper, wags its
-tail and puffs out its chest. It waddles on webbed feet that stay where they are put on
-the floor, sits with its feet out in front, and naps with a bubble at its beak. It has
-three dances of its own: **Bubbles**, when it blows a stream of bubbles and hops as they
-burst; **Pirouette**, twice round on one foot; and **Belly Slide**, down on its front and
-off across the floor. It also has an action, **Take a Bow**. Pick it under **Character**,
-or start with `--character piplup`. How it is drawn, and how to change it, is in
+**Piplup** is drawn by a script as well, shaped after one picture of it and painted as it
+looks as a soft toy lit in 3D: no lines round it, smooth colours that go darker and cooler
+where they turn from the light, a band of pale light along the top of its head, and soft
+shadows where one part lies over another. Its head and body are two balls, with the face,
+the cape and the buttons placed on them as on a globe, so it can look about, nod and turn
+right round. Standing, it blinks, glances round at you, shakes a flipper, wags its tail and
+puffs out its chest. It waddles on webbed feet that stay where they are put on the floor,
+sits with its feet out in front, and naps with a bubble at its beak. It has three dances of
+its own: **Bubbles**, when it blows a stream of bubbles and hops as they burst;
+**Pirouette**, twice round on one foot; and **Belly Slide**, down on its front and off
+across the floor. It also has an action, **Take a Bow**. Pick it under **Character**, or
+start with `--character piplup`. How it is drawn, and how to change it, is in
 [characters/piplup/_source](characters/piplup/_source/README.md). Piplup is a Pokémon and
 belongs to Nintendo, Creatures and Game Freak, who had no part in this pack.
 
