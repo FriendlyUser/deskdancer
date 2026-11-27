@@ -1,26 +1,25 @@
 #!/usr/bin/env python3
-"""Draws Pebble, a baby penguin, and builds every animation in the pack.
+"""Draws Piplup and builds every animation in the pack.
 
     python3 make_frames.py            # writes the clips and character.json into the pack
     python3 make_frames.py --sheet    # also saves sheet.png, every frame on one page
     python3 make_frames.py walk drag  # rebuilds only the clips named
 
-No picture is read here: Pebble is drawn by this script, a soft cartoon with thick dark
-lines, flat colours and one hard-edged shadow on each part. It is a chick still in its
-down: a big round head with a dark cap, a tuft on top and a cream face, large shiny eyes,
-pink cheeks and a little peach beak; a round grey body with a cream tummy, a coral
-knitted scarf, short flippers and stubby feet.
+No picture is read here. Piplup is drawn by this script, after one picture of it and in
+that picture's manner, a bold cartoon: thick black lines, flat colours, and one hard-edged
+shadow on each part. The measurements below were taken from the picture, so that Piplup
+standing still, as drawn here, lies on top of it.
 
-The head and the body are two balls. Everything painted on them, the face, the cheeks,
-the eyes, the tummy and the scarf, is laid out in degrees round the ball, as places are
-on a globe, and the ball is turned before it is drawn. So Pebble can look about, nod,
-and turn right round on the spot, and what is painted on it slides round the ball and
-goes out of sight behind it as it should. The beak, the tuft, the flippers, the tail and
-the feet stick out of the balls and turn with them.
+The head and the body are two balls. Everything painted on them, the white face, the
+crown between the eyes, the eyes themselves, the cape and the two white buttons, is laid
+out in degrees round the ball, as places are on a globe, and the ball is turned before it
+is drawn. So Piplup can look about, nod, and turn right round on the spot, and what is
+painted on it slides round the ball and goes out of sight behind it as it should. The
+beak, the flippers, the tail and the feet stick out of the balls and turn with them.
 
 Each clip is a small function of time that returns a pose. The flippers are not posed by
 hand beyond that: a spring carries them, pushed about by how the shoulders move, so they
-lag behind a hop and flap when Pebble lands.
+lag behind a hop and flap when Piplup lands.
 
 Needs numpy and pillow. This folder starts with "_", so the app does not load anything
 from it.
@@ -38,32 +37,33 @@ HERE = Path(__file__).resolve().parent
 PACK = HERE.parent
 
 # ---------------------------------------------------------------- sizes
-# Positions are in units. x = 0 is between Pebble's feet and y = 0 is the floor, with y
-# growing downwards as it does on screen. Standing, Pebble is about 300 units tall.
-#
+# Positions are in units. x = 0 is between Piplup's feet and y = 0 is the floor, with y
+# growing downwards as it does on screen. Standing, Piplup is about 300 units tall.
+
 # Both of these can be set from outside for a quick look at a change, which is rougher but
-# several times faster: PEBBLE_SS=2 python3 make_frames.py walk. Build without it to keep.
-OUT = float(os.environ.get("PEBBLE_OUT", 1.3))            # saved pixels per unit
-SS = int(os.environ.get("PEBBLE_SS", 4))                  # drawn this many times larger and averaged down, for smooth edges
-X0, Y0, X1, Y1 = -280, -440, 280, 40     # the canvas: room to hop, spin, lie down and blow bubbles
+# several times faster: PIPLUP_SS=2 python3 make_frames.py walk. Build without it to keep.
+OUT = float(os.environ.get("PIPLUP_OUT", 1.1))            # saved pixels per unit
+SS = int(os.environ.get("PIPLUP_SS", 4))                  # drawn this many times larger and averaged down, for smooth edges
+X0, Y0, X1, Y1 = -280, -430, 280, 40     # the canvas: room to hop, spin, lie down and blow bubbles
 W, H = round((X1 - X0) * OUT), round((Y1 - Y0) * OUT)
 
-# The two balls. A chick is mostly head: the head is wide and round, and the body under
-# it is a plump ball whose top is hidden behind the head. Both are a little fuller below
-# the middle than a true oval: the pair of numbers says how square each is, above the
-# middle and below it (2 is a plain oval, and larger is squarer).
-HEAD_RX, HEAD_RY, HEAD_SQUARE = 100.0, 91.0, (2.0, 2.35)
-BODY_RX, BODY_RY, BODY_SQUARE = 70.0, 66.0, (2.3, 2.6)
-BODY_X, BODY_Y = 2.0, -84.0              # the middle of the body: a little ahead of the feet, and above the floor
-HEAD_AT = (-3.0, -110.0)                 # the middle of the head, from the middle of the body, whose top it hides
-SEAT = 12.0                              # how far the body comes down to sit
+# The two balls. Neither is quite round. The head is wider than it is tall; the body is a
+# little taller than it is wide, and its top is hidden behind the head. Both are fuller
+# below the middle than a true oval, which is what gives them their weight: the pair of
+# numbers says how square each is, above the middle and below it (2 is a plain oval, and
+# larger is squarer).
+HEAD_RX, HEAD_RY, HEAD_SQUARE = 93.0, 81.7, (1.97, 2.56)
+BODY_RX, BODY_RY, BODY_SQUARE = 64.7, 70.8, (2.6, 2.7)
+BODY_X, BODY_Y = 2.0, -91.0              # the middle of the body: a little ahead of the feet, and above the floor
+HEAD_AT = (-4.3, -119.3)                 # the middle of the head, from the middle of the body, whose top it hides
+SEAT = 14.0                              # how far the body comes down to sit
 
 # Which way it faces standing still, in degrees: 0 is straight at us, 90 is side on,
 # facing right. The head is turned a little less than the body and tipped to one side.
-YAW = 24.0
-HEAD_YAW = 18.0
-HEAD_TILT = -7.0                         # the face is tipped; the shape of the head is not
-BODY_ABOVE = 14.0                        # we look down a little on its chest, so what is on the far side of it sits higher
+YAW = 26.0
+HEAD_YAW = 21.0
+HEAD_TILT = -10.8                        # the face is tipped; the shape of the head is not
+BODY_ABOVE = 15.7                        # we look down a little on its chest, so what is on the far side of it sits higher
 
 # Seen three-quarters on, as it stands, some parts are drawn a little further round than
 # they really are, so that they show: the shoulders and the feet are turned out to the
@@ -71,73 +71,72 @@ BODY_ABOVE = 14.0                        # we look down a little on its chest, s
 # beak. Each of these is so many degrees at its most, which is half way between facing us
 # and side on, and nothing when it faces us squarely or stands side on, so that it is the
 # same seen from either side.
-SHOULDER_ROUND, FEET_ROUND, TAIL_ROUND, EYE_ROUND = 14.0, 20.0, 62.0, -4.0
+SHOULDER_ROUND, FEET_ROUND, TAIL_ROUND, EYE_ROUND = 14.4, 22.4, 65.8, -4.0
 
 # The face. Places on a ball are (degrees round from the front, degrees down from the
 # middle), and sizes are degrees too.
-FACE = (0.0, 25.0, 64.0, 39.0)           # the cream face: one wide oval, under the dark cap
-CAP_DIP = 7.0                            # the cap comes down a little in the middle, between the eyes
-CHEEK = (49.0, 34.0, 11.5, 7.5)          # a pink cheek, right of the beak; the left is its mirror image
-TUFT = ((-24.0, 26.0, 7.5, 0.20), (2.0, 36.0, 9.0, 0.32), (27.0, 23.0, 7.0, 0.22))   # the down on top: each wisp's
-                                         # direction from straight up, length, width and curl
-EYE = (32.0, 12.0)
-EYE_A, EYE_B = 12.5, 15.5                # half as wide, half as tall
-EYE_LEAN = 3.0                           # the eyes stand nearly upright in the tipped face, and so does the beak
-EYE_FAR = 0.30                           # how much shorter the eye further from us is drawn
-BEAK = (0.0, 30.0)
-BEAK_POINTS = 14.0                       # degrees down from level that it points
-BEAK_W, BEAK_H, BEAK_OUT = 0.165, 0.150, 0.175  # in head radii: half as wide, half as tall, how far it sticks out
+FACE = ((56.3, 24.3, 38.5, 55.0),        # the white round the right eye; the left is its mirror image
+        (0.0, 64.2, 50.0, 40.8))         # and the white chin that joins the two
+CROWN = ((-26.9, -13.7), (-10.1, -3.8), (4.0, -17.2), (14.7, -3.7), (25.2, -10.9))    # the top of the pale blue crown
+EYE = (39.4, 15.2)
+EYE_A, EYE_B = 8.3, 18.5                 # half as wide, half as tall
+EYE_LEAN = 7.6                           # the eyes stand nearly upright in the tipped face, and so does the beak
+EYE_FAR = 0.36                           # how much shorter the eye further from us is drawn
+BEAK = (0.0, 26.9)
+BEAK_POINTS = 10.5                       # degrees down from level that it points
+BEAK_W, BEAK_H, BEAK_OUT = 0.226, 0.258, 0.258  # in head radii: half as wide, half as tall, how far it sticks out
 BEAK_JAW = 1.15                          # how much deeper the lower half is than the dome it is cut from
 BEAK_GAPE = 38.0                         # degrees the lower half drops when the beak is wide open
 
 # The body.
-BELLY = (0.0, 24.0, 52.0, 56.0)          # the cream tummy
-SCARF_HEM, SCARF_WIDE = -3.0, 12.0       # where the bottom of the scarf is, degrees down, and how far up it goes
-SCARF_TAIL = (32.0, 8.0, 30.0)           # the end that hangs down the chest: degrees round, half as wide, how long
-SHOULDER = (86.0, -14.0)                 # under the scarf
-FLIPPER, FLIPPER_W = 76.0, 33.0          # shoulder to tip, and across at the widest
-FLIPPER_NEAR = 0.22                      # how much longer the one nearer to us is drawn
-FLIPPER_WIDER, FLIPPER_NARROWER = 0.20, 0.26      # how much wider it is, and how much narrower the further one
-TAIL = (180.0, 10.0)
-HIP, HIP_BACK = 37.0, 22.0               # the feet: either side of the middle, and behind it
-THIGH = (11.0, 33.0, 1.0)                # the top of a leg, a round lump low on the body over each foot: how big it is,
+BUTTON = (29.7, -1.3)
+BUTTON_A, BUTTON_B = 13.8, 14.8
+# The hem of the cape, all the way round: two scallops on the chest with a notch between
+# them, up over each shoulder, and well down its back, above the tail. The notch is
+# at CAPE_NOTCH, and each scallop is CAPE_DROP deep below it and CAPE_LOBE to either side
+# of its lowest point; after them, the hem is at these (degrees round, degrees down).
+CAPE_NOTCH, CAPE_DROP, CAPE_LOBE = -36.5, 17.2, 24.6
+CAPE_HEM = ((40, -17.5), (55, -20), (70, -25), (92, -44), (104, -40), (116, -20), (130, 0), (145, 14), (162, 23), (180, 26))
+SHOULDER = (88.85, -38.8)                # high up, under the head
+FLIPPER, FLIPPER_W = 98.0, 33.4          # shoulder to tip, and across at the widest
+FLIPPER_NEAR = 0.26                      # how much longer the one nearer to us is drawn
+FLIPPER_WIDER, FLIPPER_NARROWER = 0.23, 0.29      # how much wider it is, and how much narrower the further one
+TAIL = (180.0, -3.5)
+HIP, HIP_BACK = 43.1, 25.4               # the feet: either side of the middle, and behind it
+THIGH = (11.5, 39.5, 1.0)                # the top of a leg, a round lump low on the body over each foot: how big it is,
                                          # how far above the floor, and how far out from the hip
-SPLAY = 38.0                             # how far each foot turns out
-FOOT_LONG, FOOT_HEEL, FOOT_HALF = 38.0, 6.5, 15.0     # a foot: heel to toe, half across the heel, and half across the toes
-FOOT_FAN = 0.58                          # how far along it is at its widest: from there on, its front is round
-FOOT_HIGH, FOOT_THIN, ANKLE = 12.0, 3.6, 6.0          # how thick it is over the heel and at the toes, and the ankle above that
-FOOT_TOES = 0.45                         # where the lines between its three toes run, as a share of half its width
-FOOT_SEEN = 0.36                         # how much of the top of a foot we see: we look down on them a little
+SPLAY = 42.8                             # how far each foot turns out
+FOOT_LONG, FOOT_HEEL, FOOT_HALF = 44.5, 5.8, 14.4     # a foot: heel to toe, half across the heel, and half across the toes
+FOOT_FAN = 0.61                          # how far along it is at its widest: from there on, its front is round
+FOOT_HIGH, FOOT_THIN, ANKLE = 12.2, 3.0, 6.0          # how thick it is over the heel and at the toes, and the ankle above that
+FOOT_TOES = 0.42                         # where the lines between its three toes run, as a share of half its width
+FOOT_SEEN = 0.34                         # how much of the top of a foot we see: we look down on them a little
 
 # ---------------------------------------------------------------- colours
 
-INK = (44, 36, 56)                       # the lines: a soft dark plum rather than black
-HEAD = (70, 84, 112)                     # the cap, the back, the flippers and the tail: dark slate
-HEAD_DARK = (52, 62, 88)
-HEAD_LIGHT = (104, 120, 152)
-HEAD_SHINE = (156, 172, 202)
+INK = (5, 5, 6)
+HEAD = (64, 129, 184)
+HEAD_DARK = (55, 90, 152)
+HEAD_LIGHT = (134, 176, 208)
+HEAD_SHINE = (198, 219, 235)
 WHITE = (255, 255, 255)
-CREAM = (255, 249, 236)                  # the face and the tummy
-CREAM_SHADE = (234, 221, 208)
-DOWN = (190, 199, 216)                   # the grey down of the body
-DOWN_SHADE = (152, 163, 186)
-CHEEK_PINK = (250, 166, 178)
-SCARF = (242, 112, 104)
-SCARF_SHADE = (204, 80, 82)
-SCARF_LIGHT = (255, 214, 196)            # the knitted stripe
-PEACH = (252, 176, 98)                   # the beak and the feet
-PEACH_LIGHT = (255, 214, 160)
-PEACH_SHADE = (226, 132, 76)
-EYE_DARK = (40, 30, 48)
-EYE_GLINT = (98, 76, 106)
-PUPIL = (16, 12, 22)
+WHITE_SHADE = (194, 205, 227)
+PALE = (169, 230, 243)                   # the crown, the body and the flippers
+PALE_SHADE = (110, 181, 212)
+PALE_LIGHT = (203, 239, 247)
+YELLOW = (251, 213, 56)
+YELLOW_LIGHT = (251, 229, 124)
+ORANGE = (215, 149, 66)
+EYE_BLUE = (26, 47, 80)
+EYE_GLINT = (41, 74, 133)
+PUPIL = (13, 29, 51)
 MOUTH = (150, 48, 62)
 TONGUE = (240, 128, 140)
 BUBBLE = (120, 196, 240)
 SPARK = (255, 244, 170)
 SPARK_EDGE = (226, 150, 40)
 
-LINE = 3.4                               # the line round each part, in units
+LINE = 3.3                               # the black line round each part, in units
 FINE = 2.0
 
 
@@ -441,7 +440,7 @@ def whole(pose):
     return np.concatenate([m, [[pose["dx"]], [pose["dy"]]]], 1)
 
 
-class Pebble:
+class Piplup:
     """A pose worked out: where the two balls are and how they are turned."""
 
     def __init__(self, pose):
@@ -507,94 +506,71 @@ def beak_points(p):
 
 def draw_beak(c, p):
     upper, lower, inside, tongue, place = beak_points(p)
-    c.part([lower], PEACH_SHADE)
+    c.part([lower], ORANGE)
     if inside is not None:
         c.paint(both(c.mask([inside], grow=FINE / 2), c.mask([lower, upper], grow=LINE)), INK)
         throat = c.mask([inside])
         c.paint(throat, MOUTH)
         c.paint(both(c.mask([tongue]), throat), TONGUE)
-    top = c.part([upper], PEACH)
+    top = c.part([upper], YELLOW)
     # The light comes from up and to the left whichever way the beak points: orange down
     # the side away from it, and a paler patch where it catches the dome.
     lo, hi = upper.min(0), upper.max(0)
     size = hi - lo
-    c.paint(less(top, c.mask([upper + size * (-0.21, 0.07)])), PEACH_SHADE)
+    c.paint(less(top, c.mask([upper + size * (-0.21, 0.07)])), ORANGE)
     t = np.linspace(0, 2 * math.pi, 28, endpoint=False)
     r = 1.0 + 0.16 * np.cos(3 * t + 0.5)                   # a rounded three-cornered patch
     shine = lo + size * (0.37, 0.47) + np.stack([0.18 * size[0] * r * np.cos(t), 0.27 * size[1] * r * np.sin(t)], 1)
-    c.paint(both(c.mask([shine]), top), PEACH_LIGHT)
-
-
-def tuft_shapes(p):
-    """The tuft of down on top of the head: a few soft wisps that stand up from the crown
-    and curl over at the tips. Each is a run of round blobs, thinning to a point."""
-    h = p.head
-    root = h.flat(globe(0.0, -72.0), wrap=False, limb=True)[0][0]
-    up = h.lin @ np.array([0.0, -1.0])
-    up = up / max(float(np.hypot(*up)), 1e-9)
-    wisps = []
-    for angle, length, width, curl in TUFT:
-        a = math.radians(angle)
-        way = np.array([up[0] * math.cos(a) - up[1] * math.sin(a), up[0] * math.sin(a) + up[1] * math.cos(a)])
-        side = np.array([-way[1], way[0]]) * (1 if angle >= 0 else -1)
-        t = np.linspace(0.0, 1.0, 9)
-        centres = root + np.outer(t, way) * length + np.outer(t * t, side) * length * curl
-        radii = width * (1.0 - 0.82 * t ** 1.4)
-        blobs = [oval(*c, r) for c, r in zip(centres, radii)]
-        wisps += [hull(np.concatenate([a, b])) for a, b in zip(blobs[:-1], blobs[1:])]
-    return wisps
+    c.paint(both(c.mask([shine]), top), YELLOW_LIGHT)
 
 
 def draw_head(sheet, p):
     h = p.head
     rim = h.outline()
-    c = sheet.window(rim, 0.6 * HEAD_RX)
+    c = sheet.window(rim, 0.5 * HEAD_RX)
     inside = c.mask([rim])
     beak_towards_us = h.spin(globe(*BEAK))[2] > 0
     if not beak_towards_us:
         draw_beak(c, p)
-    tuft = tuft_shapes(p)
-    down = c.part(tuft, HEAD)                              # behind the head, which covers where it grows from
-    c.paint(less(down, c.mask([w + (2.5, 2.0) for w in tuft])), HEAD_LIGHT)
     c.paint(c.mask([rim], grow=LINE), INK)
     c.paint(inside, HEAD)
-    c.paint(less(inside, c.mask([h.outline(1.0, (-5.5, 4.5))])), HEAD_DARK)       # a dark sliver on the far side of the cap
+    c.paint(less(inside, c.mask([h.outline(1.0, (-5.5, 4.5))])), HEAD_DARK)       # a dark sliver on the far side of the crown
     c.paint(less(inside, c.mask([h.outline(1.0, (2.3, 0.3))])), HEAD_LIGHT)       # and light down the near side
-    c.paint(both(c.strokes([h.rim(160, 200, 3.2)], 1.2), inside), HEAD_SHINE)
+    c.paint(both(c.strokes([h.rim(158, 196, 3.0)], 1.0), inside), HEAD_SHINE)
 
-    # The face: one wide cream oval, whose top edge dips a little between the eyes. It is
-    # painted in narrow upright strips: a patch of a ball that is partly round the back is
-    # cut off at the ball's edge, which works for a narrow one but not for one this wide.
-    lam0, phi0, a, b = FACE
-    t = np.linspace(0, 2 * math.pi, 128, endpoint=False)
-    el, ep = lam0 + a * np.sin(t), phi0 - b * np.cos(t)
-    dip = lambda lam: CAP_DIP * np.exp(-(np.asarray(lam, float) / 16.0) ** 2)
-    ep = ep + dip(el) * (np.cos(t) > 0)
-    pts, z = h.flat(globe(el, ep))
-    strips = []
-    for l0 in np.arange(-a, a, 8.0):
-        lam = np.linspace(l0, min(l0 + 8.6, a), 6)
-        half = b * np.sqrt(np.clip(1 - ((lam - lam0) / a) ** 2, 0.0, 1.0))
-        edge = np.concatenate([np.stack([lam, phi0 - half + dip(lam)], 1), np.stack([lam, phi0 + half], 1)[::-1]])
-        sp, sz = h.flat(globe(edge[:, 0], edge[:, 1]))
-        if (sz > 0).any():
-            strips.append(sp)
-    if strips and (z > 0).sum() >= 4:
-        under_beak = ((el - BEAK[0]) / 14.0) ** 2 + ((ep - BEAK[1] - 3.0) / 16.0) ** 2 > 1.0
-        white = both(c.mask(strips), inside)
-        c.paint(white, CREAM)
+    # The crown: a patch of pale blue from the beak up to three points on the forehead.
+    top = trace(CROWN)
+    edge = trace(list(CROWN) + [(CROWN[-1][0], 48), (CROWN[0][0], 48)], closed=True)
+    pts, z = h.flat(globe(edge[:, 0], edge[:, 1]))
+    if (z > 0).sum() > 3:
+        c.paint(both(c.mask([pts]), inside), PALE)
+        line, z = h.flat(globe(top[:, 0], top[:, 1]))
+        c.paint(both(c.strokes(runs(line, z > 0, closed=False), LINE), inside), INK)
+
+    # The white of the face: an oval round each eye and the chin, as one shape.
+    spots = [(-FACE[0][0], *FACE[0][1:]), FACE[0], FACE[1]]
+    shapes, lines = [], []
+    for i, (lam, phi, a, b) in enumerate(spots):
+        el, ep = spot(lam, phi, a, b, 96)
+        pts, z = h.flat(globe(el, ep))
+        if (z > 0).sum() < 4:
+            continue
+        outside = np.ones(len(el), bool)                # of the other two, so no line is drawn where they join
+        for j, (l2, p2, a2, b2) in enumerate(spots + [(BEAK[0], BEAK[1] + 3.0, 15.0, 20.0)]):      # nor under the beak
+            if j != i:
+                outside &= ((el - l2) / a2) ** 2 + ((ep - p2) / b2) ** 2 > 1.0
+        shapes.append(pts)
+        lines += runs(pts, (z > 0) & outside)
+    if shapes:
+        white = both(c.mask(shapes), inside)
+        c.paint(white, WHITE)
         shade = less(inside, c.mask([h.outline(0.975, (-13.0, -2.0))]))            # shade round the far side and under the chin
         if beak_towards_us:                                # and the shadow the beak throws on the face
             upper, lower, *_ = beak_points(p)
-            throw = h.lin @ np.array([6.0, 8.0])
+            throw = h.lin @ np.array([8.0, 11.0])
             shade = either(shade, c.mask([hull(np.concatenate([upper, lower])) + throw]))
-        c.paint(both(white, shade), CREAM_SHADE)
-        for side in (-1, 1):                               # rosy cheeks, soft and without a line
-            cl, cp = spot(side * CHEEK[0] + p.eyes_at, CHEEK[1], CHEEK[2], CHEEK[3], 40)
-            cheek, cz = h.flat(globe(cl, cp))
-            if (cz > 0).all():
-                c.paint(both(c.mask([cheek]), white), CHEEK_PINK)
-        c.paint(both(c.strokes(runs(pts, (z > 0) & under_beak), LINE), inside), INK)
+        c.paint(both(white, shade), WHITE_SHADE)
+        c.paint(both(c.strokes(lines, LINE), inside), INK)
 
     for side, state in zip((-1, 1), p.pose["eyes"]):
         draw_eye(c, p, inside, side, state)
@@ -623,7 +599,7 @@ def draw_eye(c, p, inside, side, state):
         pts, z = h.flat(globe(*upright(lam, phi)))
         c.paint(both(c.strokes(runs(pts, z > 0, closed=False), LINE * 1.1), inside), INK)
         return
-    a, b = (EYE_A * 1.08, EYE_B * 1.10) if state == "wide" else (EYE_A, EYE_B)
+    a, b = (EYE_A * 1.06, EYE_B * 1.08) if state == "wide" else (EYE_A, EYE_B)
     b *= min(max(1 - EYE_FAR * (0.885 - float(h.spin(globe(lam0, phi0))[2])), 0.8), 1.04)
     shut = float(state) if not isinstance(state, str) else 0.0
     lam, phi = upright(*spot(lam0, phi0, a, b))
@@ -632,35 +608,45 @@ def draw_eye(c, p, inside, side, state):
     if (z > 0).sum() < 4:
         return
     eye = both(c.mask([pts]), inside)
-    c.paint(eye, EYE_DARK)
-    glint, _ = h.flat(globe(lam - 0.18 * a, phi - 0.30 * b))      # a warmer crescent along the bottom
+    c.paint(eye, EYE_BLUE)
+    glint, _ = h.flat(globe(lam - 0.22 * a, phi - 0.34 * b))      # a paler crescent along the bottom and the far side
     c.paint(less(eye, c.mask([glint])), EYE_GLINT)
     small = 0.8 if state == "wide" else 1.0
-    pl, pp = upright(*spot(lam0, phi0 + 0.06 * b, 0.55 * a * small, 0.62 * b * small, 32))
+    pl, pp = upright(*spot(lam0, phi0 + 0.04 * b, 0.40 * a * small, 0.58 * b * small, 32))
     pupil, pz = h.flat(globe(pl + lx, np.maximum(pp + ly, lid)))
+    c.paint(both(c.mask([pupil], grow=FINE * 0.55), eye), INK)
     c.paint(both(c.mask([pupil]), eye), PUPIL)
     c.paint(both(c.strokes(runs(pts, z > 0), LINE), inside), INK)
-    for dl, dp, r in ((-0.36, -0.42, 0.44), (0.34, 0.36, 0.20)):      # a big shine, up and to the left, and a little one
-        if phi0 + dp * b - r * a <= lid:
-            continue
-        sl, sp = upright(*spot(lam0 + dl * a, phi0 + dp * b, r * a, r * a * 1.08, 24))
+    if phi0 - 0.5 * b > lid:                              # the shine
+        sl, sp = upright(*spot(lam0 - 0.40 * a, phi0 - 0.50 * b, 0.40 * a, 0.40 * a * 1.05, 24))
         shine, sz = h.flat(globe(sl + 0.4 * lx, np.maximum(sp + 0.4 * ly, lid)))
         if (sz > 0).all():
-            c.paint(both(c.mask([shine]), eye), WHITE)
+            c.paint(both(c.mask([shine]), inside), WHITE)
 
 
-def scarf_hem(lam):
-    """How far down the scarf comes, at so many degrees round from the front: a little lower
-    in front, where it is knotted, than at the back."""
-    lam = np.asarray(lam, float)
-    return SCARF_HEM + 3.0 * np.cos(np.radians(lam))
+def _hem():
+    lam = np.arange(0.0, 181.0)
+    front = CAPE_NOTCH + CAPE_DROP * np.sin(np.radians(90.0 * np.minimum(lam, CAPE_LOBE) / CAPE_LOBE)) ** 0.72
+    rest = np.interp(lam, [CAPE_LOBE] + [l for l, _ in CAPE_HEM], [CAPE_NOTCH + CAPE_DROP] + [p for _, p in CAPE_HEM])
+    for _ in range(3):                                    # round off the corners of the part that is given as places
+        rest[1:-1] = (rest[:-2] + 2 * rest[1:-1] + rest[2:]) / 4
+    return np.where(lam <= CAPE_LOBE, front, rest)
 
 
-def scarf_shape(b):
-    """The part of the scarf that shows: the shape it makes with the edge of the body over
-    the top, and its bottom edge where it faces us, as a line."""
+HEM = _hem()
+
+
+def cape_hem(lam):
+    """How far down the cape comes, at so many degrees round from the front."""
+    lam = np.abs((np.asarray(lam, float) + 180.0) % 360.0 - 180.0)
+    return np.interp(lam, np.arange(0.0, 181.0), HEM)
+
+
+def cape_shape(b):
+    """The part of the cape that shows: the shape it makes with the edge of the body over
+    the top, and the hem where it faces us, as a line."""
     lam = np.linspace(-180.0, 180.0, 361)[:-1]
-    places = globe(lam, scarf_hem(lam))
+    places = globe(lam, cape_hem(lam))
     turned = b.spin(places)
     seen = turned[:, 2] > 0
     if seen.all() or not seen.any():
@@ -673,33 +659,6 @@ def scarf_shape(b):
         start -= 2 * math.pi
     over = np.linspace(end, start, 48)                    # back from its right end, over the top, to its left
     return np.concatenate([hem, b.disc(np.stack([np.cos(over), np.sin(over)], 1))]), hem
-
-
-def scarf_stripe(b):
-    """The knitted stripe round the scarf, as runs of line that face us."""
-    lam = np.linspace(-180.0, 180.0, 241)
-    pts, z = b.flat(globe(lam, scarf_hem(lam) - 0.45 * SCARF_WIDE), wrap=False)
-    return runs(pts, z > 0.05, closed=False)
-
-
-def scarf_end(b):
-    """The end of the scarf that hangs down the chest, on the near side of the knot: a
-    strip painted on the body, a little wider at the bottom, and its fringe."""
-    lam0, half, long = SCARF_TAIL
-    top = scarf_hem(lam0) - 4.0
-    t = np.linspace(0.0, 1.0, 12)
-    wide = half * (1.0 + 0.25 * t)
-    left, right = np.stack([lam0 - wide, top + long * t], 1), np.stack([lam0 + wide, top + long * t], 1)[::-1]
-    edge = np.concatenate([left, right])
-    pts, z = b.flat(globe(edge[:, 0], edge[:, 1]), wrap=False)
-    fringe = []
-    for k in (-0.6, 0.0, 0.6):
-        l = lam0 + k * wide[-1]
-        f, fz = b.flat(globe([l, l + 1.0], [top + long, top + long + 7.0]), wrap=False)
-        if (fz > 0).all():
-            fringe.append(f)
-    stripe, sz = b.flat(globe(np.linspace(lam0 - 1.1 * half, lam0 + 1.1 * half, 8), top + 0.55 * long), wrap=False)
-    return pts, z, fringe, (stripe if (sz > 0).all() else None)
 
 
 def thighs(p):
@@ -718,8 +677,9 @@ def thighs(p):
 
 
 def draw_body(sheet, p, shadows=()):
-    """The body, the tops of its legs and its cream tummy, with the shadows thrown on it by
-    whatever lies across it. The scarf goes on afterwards, over the tops of the flippers."""
+    """The body, the tops of its legs and its two white buttons, with the shadows thrown
+    on it by whatever lies across it. The cape goes on afterwards, over the tops of the
+    flippers."""
     b = p.body
     rim = b.outline()
     lumps = thighs(p)
@@ -727,21 +687,11 @@ def draw_body(sheet, p, shadows=()):
     inside = c.mask([rim] + [shape for _, shape, _ in lumps])
     lit = c.mask([b.outline(0.92, (-8.0, -7.1))])         # the light comes from up and to the left
     c.paint(spread(inside, LINE * OUT * SS) if lumps else c.mask([rim], grow=LINE), INK)
-    c.paint(inside, DOWN_SHADE)
-    c.paint(both(inside, lit), DOWN)
-    # The tummy, painted on the ball so that it turns with it.
-    pts, bz = b.flat(globe(*spot(BELLY[0], BELLY[1], BELLY[2], BELLY[3], 96)))
-    tummy = None
-    if (bz > 0).sum() >= 4:
-        tummy = both(c.mask([pts]), inside)
-        c.paint(tummy, CREAM_SHADE)
-        c.paint(both(tummy, c.mask([b.outline(0.86, (-9.0, -7.0))])), CREAM)
-    cape, hem = scarf_shape(b)
+    c.paint(inside, PALE_SHADE)
+    c.paint(both(inside, lit), PALE)
+    cape, hem = cape_shape(b)
     throw = b.lin @ np.array([2.0, 5.0])
-    c.paint(both(c.mask([cape + throw] + [s + b.lin @ np.array([6.5, 2.5]) for s in shadows]), inside), DOWN_SHADE)
-    if tummy is not None:
-        c.paint(both(both(c.mask([cape + throw] + [s + b.lin @ np.array([6.5, 2.5]) for s in shadows]), tummy), inside), CREAM_SHADE)
-        c.paint(both(c.strokes(runs(pts, bz > 0), LINE * 0.8), inside), INK)
+    c.paint(both(c.mask([cape + throw] + [s + b.lin @ np.array([6.5, 2.5]) for s in shadows]), inside), PALE_SHADE)
     for middle, shape, nearness in lumps[-1:]:
         # Where the nearer leg sticks out of the body, the body's own edge runs on a little
         # way under it, as a fold: from where the two meet above the leg, curling inwards.
@@ -758,30 +708,29 @@ def draw_body(sheet, p, shadows=()):
         fold = np.concatenate([b.rim(a, a, i, 1) for a, i in zip(angles[top] + way * (-3.0 + 17.0 * t), 5.0 * t ** 1.6)])
         c.paint(both(c.strokes([fold], LINE * 0.72), inside), INK)
 
+    for side in (-1, 1):                                  # the two white buttons
+        pts, bz = b.flat(globe(*spot(side * BUTTON[0], BUTTON[1], BUTTON_A, BUTTON_B)))
+        if (bz > 0).sum() < 4:
+            continue
+        button = both(c.mask([pts]), inside)
+        c.paint(button, WHITE_SHADE)
+        c.paint(both(button, c.mask([b.outline(0.80, (-12.0, -6.0))])), WHITE)
+        c.paint(both(c.strokes(runs(pts, bz > 0), LINE), inside), INK)
     c.onto(sheet)
 
 
-def draw_scarf(sheet, p):
+def draw_cape(sheet, p):
     b = p.body
     rim = b.outline()
-    c = sheet.window(rim, 6 * LINE)
+    c = sheet.window(rim, 3 * LINE)
     inside = c.mask([rim])
-    band, hem = scarf_shape(b)
-    cloth = both(c.mask([band]), inside)
-    c.paint(cloth, SCARF_SHADE)
-    lit = both(c.mask([band - b.lin @ np.array([0.5, 5.0])]), c.mask([b.outline(0.86, tuple(b.lin @ np.array([-34.0, 0.0])))]))    # dark along the hem and on the far side
+    cape, hem = cape_shape(b)
+    cloth = both(c.mask([cape]), inside)
+    c.paint(cloth, HEAD_DARK)
+    lit = both(c.mask([cape - b.lin @ np.array([0.5, 5.0])]), c.mask([b.outline(0.86, tuple(b.lin @ np.array([-34.0, 0.0])))]))    # dark along the hem and on the far side
     lit = less(lit, c.mask([p.head.outline(1.0, tuple(p.head.lin @ np.array([4.0, 11.0])))]))               # and in the head's shadow
-    c.paint(both(cloth, lit), SCARF)
-    c.paint(both(c.strokes(scarf_stripe(b), 3.2), cloth), SCARF_LIGHT)
+    c.paint(both(cloth, lit), HEAD)
     c.paint(both(c.strokes([hem], LINE), inside), INK)
-    end, z, fringe, stripe = scarf_end(b)
-    if (z > 0).all():
-        strip = c.part([end], SCARF)
-        c.paint(less(strip, c.mask([end + (3.0, 0.0)])), SCARF_SHADE)
-        if stripe is not None:
-            c.paint(both(c.strokes([stripe], 3.0), strip), SCARF_LIGHT)
-        c.paint(c.strokes(fringe, 4.6 + 2 * LINE), INK)
-        c.paint(c.strokes(fringe, 4.6), SCARF)
     c.onto(sheet)
 
 
@@ -827,17 +776,25 @@ def draw_flipper(sheet, p, f, near):
     middle, half, across = f["middle"], f["half"][:, None], f["across"]
     s = (f["s"] - 0.07) / 0.93                             # measured from where the flipper comes out from under the head
     c = sheet.window(f["shape"], 3 * LINE)
-    inside = c.part([f["shape"]], HEAD_LIGHT if near else HEAD_DARK)
+    inside = c.part([f["shape"]], PALE_LIGHT if near else PALE_SHADE)
     inner, outer, k = middle - across * half, middle + across * half, f["near"]
     if near:
         # Three bands running down it: light, then plain, then shade along the edge next to the body.
         ramp = lambda a, b: (lambda v: v * v * (3 - 2 * v))(np.clip((s - a) / (b - a), 0, 1))[:, None]
         plain = 10.0 * k * ramp(0.12, 0.55)
         shade = 7.5 * k * ramp(0.30, 0.75)
-        c.paint(both(c.mask([np.concatenate([inner - across * 3.0, (inner + across * (plain + shade))[::-1]])]), inside), HEAD)
-        c.paint(both(c.mask([np.concatenate([inner - across * 3.0, (inner + across * shade)[::-1]])]), inside), HEAD_DARK)
+        c.paint(both(c.mask([np.concatenate([inner - across * 3.0, (inner + across * (plain + shade))[::-1]])]), inside), PALE)
+        c.paint(both(c.mask([np.concatenate([inner - across * 3.0, (inner + across * shade)[::-1]])]), inside), PALE_SHADE)
     else:
-        c.paint(both(c.strokes([(outer - across * 2.6 * k)[(s > 0.35) & (s < 0.92)]], 1.6 * k), inside), HEAD)
+        c.paint(both(c.strokes([(outer - across * 2.6 * k)[(s > 0.35) & (s < 0.92)]], 1.6 * k), inside), PALE_LIGHT)
+    # Its dark back: a wedge from the shoulder that narrows to nothing half way down the outer edge.
+    top = s <= 0.46
+    edge = (middle + across * np.maximum(half - (12.0 * k * np.clip((0.46 - s) / 0.2, 0.0, 1.0))[:, None], -half))[top]
+    back = both(c.mask([np.concatenate([(outer + across * 3.0)[top], edge[::-1]])]), inside)
+    c.paint(back, HEAD if near else HEAD_DARK)
+    if near:
+        c.paint(both(c.strokes([(outer - across * 3.4 * k)[(s > 0.02) & (s < 0.34)]], 2.2 * k), back), HEAD_LIGHT)
+    c.paint(both(c.strokes([edge], LINE * 0.85), inside), INK)
     c.onto(sheet)
 
 
@@ -949,10 +906,10 @@ def foot(p, side):
 
 def draw_foot(sheet, p, f):
     c = sheet.window(np.concatenate(f["shapes"]), 3 * LINE)
-    inside = c.part(f["shapes"], PEACH)
-    c.paint(both(c.mask(f["light"]), inside), PEACH_LIGHT)
+    inside = c.part(f["shapes"], YELLOW)
+    c.paint(both(c.mask(f["light"]), inside), YELLOW_LIGHT)
     if p.pose["seated"] < 0.5:                             # sat down, the feet are out in the light
-        c.paint(both(c.mask(f["shade"]), inside), PEACH_SHADE)
+        c.paint(both(c.mask(f["shade"]), inside), ORANGE)
     c.paint(both(c.strokes(f["lines"], FINE * 1.15), inside), INK)
     c.onto(sheet)
 
@@ -983,13 +940,13 @@ def draw_fx(sheet, fx):
             c.paint(c.mask([drop(x, y, size, extra)]), BUBBLE)
             c.paint(c.mask([oval(x - size * 0.3, y - size * 0.1, size * 0.22)]), WHITE)
         elif kind == "dash":                              # a speed line: extra is its length
-            c.paint(c.strokes([np.array([(x, y), (x + extra, y)])], size), DOWN_SHADE)
+            c.paint(c.strokes([np.array([(x, y), (x + extra, y)])], size), PALE_SHADE)
         c.onto(sheet)
 
 
 def render(pose):
     """The pose, drawn, from the back of the picture to the front."""
-    p = Pebble(pose)
+    p = Piplup(pose)
     c = Canvas()
     draw_fx(c, [f for f in p.pose["fx"] if f[0] == "dash"])
     tail_behind = p.body.spin(globe(p.tail_at, TAIL[1]), limb=True)[2] < 0.25
@@ -1012,14 +969,14 @@ def render(pose):
             draw_foot(c, p, f)
     for f in before:
         draw_flipper(c, p, f, near=True)
-    draw_scarf(c, p)
+    draw_cape(c, p)
     draw_head(c, p)
     draw_fx(c, [f for f in p.pose["fx"] if f[0] != "dash"])
     return c.finish()
 
 
 def _measure_floor():
-    p = Pebble({})
+    p = Piplup({})
     return max(float(shape[:, 1].max()) for side in (-1, 1) for shape in foot(p, side)["shapes"]) + LINE
 
 
@@ -1028,13 +985,13 @@ FLOOR = _measure_floor()                                  # so that the line rou
 
 def beak_tip(pose, beyond=0.10):
     """Where the tip of the beak is in a pose, in units: bubbles come from there."""
-    h = Pebble(pose).head
+    h = Piplup(pose).head
     return h.flat(globe(*BEAK) + globe(BEAK[0], BEAK_POINTS) * (BEAK_OUT + beyond), wrap=False)[0][0]
 
 
 def lowest(pose):
     """How far below the floor a pose would reach, in units, line and all."""
-    p = Pebble(pose)
+    p = Piplup(pose)
     parts = [p.body.outline(), p.head.outline()] + [flipper_shape(p, side)["shape"] for side in (-1, 1)]
     parts += [shape for side in (-1, 1) for shape in foot(p, side)["shapes"]]
     return max(float(part[:, 1].max()) for part in parts) + LINE
@@ -1162,8 +1119,8 @@ def idle(t):
 
 
 STEP = 0.6                              # seconds it takes two steps in
-STRIDE = 26.5                           # how far a foot goes forward and back. The app moves a walking mate 0.55 of its
-                                        # height a second, 176 units, and a foot on the floor has to keep up with that.
+STRIDE = 24.5                           # how far a foot goes forward and back. The app moves a walking mate 0.55 of its
+                                        # height a second, 163 units, and a foot on the floor has to keep up with that.
 
 
 def foot_step(turn_of_walk):
@@ -1298,7 +1255,7 @@ def carried(t):
                 flippers=(104 + 30 * math.sin(2 * u), 104 - 30 * math.sin(2 * u)),
                 feet=((0.0, q(3 + 4 * math.sin(u), 0.5), 0.0, q(-22 + 16 * math.sin(u), 1)),
                       (0.0, q(3 - 4 * math.sin(u), 0.5), 0.0, q(-22 - 16 * math.sin(u), 1))),
-                tail=q(10 * math.sin(u), 1), fx=(("drop", -118.0, -262.0, 8.0, -28.0),))
+                tail=q(10 * math.sin(u), 1), fx=(("drop", -108.0, -270.0, 8.0, -28.0),))
 
 
 def falling(t):
@@ -1363,7 +1320,7 @@ CLIPS = {
     "fall": ("fall.webp", None, falling, FALL, 30, False),
 }
 
-HEIGHT = 150                             # how tall Pebble stands on screen at 100%, in pixels
+HEIGHT = 150                             # how tall Piplup stands on screen at 100%, in pixels
 
 
 def build(key, pool):
@@ -1382,7 +1339,7 @@ def build(key, pool):
 
 def main():
     import multiprocessing
-    manifest = {"name": "Pebble", "height": HEIGHT, "facing": "right", "removeBackground": False, "clips": {}}
+    manifest = {"name": "Piplup", "height": HEIGHT, "facing": "right", "removeBackground": False, "clips": {}}
     standing = render({})[..., 3].any(axis=1).sum()            # how tall the mate is standing still, in saved pixels
     rows, pixels = [], 0
     only = [a for a in sys.argv[1:] if not a.startswith("--")]

@@ -26,17 +26,6 @@ public static class CharacterIds
     /// program. A mate whose saved settings name another character keeps that one.
     /// </summary>
     public const string Default = "mochi";
-
-    /// <summary>
-    /// Characters that came with the program once and have been replaced, and what replaced
-    /// them: a mate saved as one of these is the other now. Piplup made way for Pebble, an
-    /// original penguin of DeskDancer's own.
-    /// </summary>
-    public static readonly IReadOnlyDictionary<string, string> Replaced =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["piplup"] = "pebble" };
-
-    /// <summary>The character an id stands for now: itself, or what replaced it.</summary>
-    public static string Current(string id) => Replaced.TryGetValue(id, out var now) ? now : id;
 }
 
 /// <summary>Everything the app remembers between runs.</summary>
@@ -222,16 +211,7 @@ public sealed class Settings
                     if (Moves.All.All(m => !loaded.MoveEnabled(m.Id)))
                         loaded.DisabledMoves.RemoveAll(k => Moves.All.Any(m => m.Id.Equals(k, StringComparison.OrdinalIgnoreCase)));
                     if (loaded.Mates.Count == 0) loaded.Mates.Add(new MateSettings());
-                    foreach (var m in loaded.Mates)
-                    {
-                        m.Scale = Math.Clamp(m.Scale, 0.25, 4);
-                        m.Character = CharacterIds.Current(m.Character ?? CharacterIds.Default);
-                    }
-                    // A move switched off for a character that has been replaced stays off for
-                    // the one that replaced it ("piplup/dance_bubbles" is "pebble/dance_bubbles").
-                    loaded.DisabledMoves = loaded.DisabledMoves
-                        .Select(k => k.IndexOf('/') is var at and > 0 ? CharacterIds.Current(k[..at]) + k[at..] : k)
-                        .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                    foreach (var m in loaded.Mates) m.Scale = Math.Clamp(m.Scale, 0.25, 4);
                     return loaded;
                 }
             }

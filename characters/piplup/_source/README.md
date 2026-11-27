@@ -1,14 +1,19 @@
-# How Pebble is made
+# How Piplup was made
 
-Pebble is a baby penguin, an original character of DeskDancer's own, and it is drawn by a
-script: a soft cartoon with thick dark lines, flat colours and one hard-edged shadow on
-each part. No picture is read, so every frame of every clip is drawn fresh, which is why
-Pebble can turn round, sit down and lie on its belly. The app never reads this folder (its
-name starts with `_`); it is here so the animations can be changed and rebuilt.
+Piplup is drawn by a script. It started from one picture of Piplup, a bold cartoon with
+thick black lines, flat colours and one hard-edged shadow on each part, and the script
+redraws it that way: its measurements were taken from the picture, and nudged until the
+standing pose drawn here lay on top of it. No part of the picture itself is in the pack, so
+every frame of every clip is drawn fresh, which is why Piplup can turn round, sit down and
+lie on its belly. The app never reads this folder (its name starts with `_`); it is here so
+the animations can be changed and rebuilt.
+
+Piplup is a Pokémon and belongs to Nintendo, Creatures and Game Freak, who had no part in
+this pack.
 
 | File | What it is |
 | --- | --- |
-| `make_frames.py` | Draws Pebble, and builds every animation and `character.json`. |
+| `make_frames.py` | Draws Piplup, and builds every animation and `character.json`. |
 
 ## Rebuilding the animations
 
@@ -17,51 +22,61 @@ pip install numpy pillow
 python3 make_frames.py
 ```
 
-It takes a few minutes and overwrites the clips and `character.json` in the folder above.
+It takes a minute or two and overwrites the clips and `character.json` in the folder above.
 Then right-click the mate and choose **Character > Reload characters**.
 `python3 make_frames.py --sheet` also saves `sheet.png` with every frame on one page, and
 `python3 make_frames.py dance_bubbles walk` rebuilds only the clips named. Running it twice
-gives the same files, byte for byte. To look at a change quickly, `PEBBLE_SS=2 python3
+gives the same files, byte for byte. To look at a change quickly, `PIPLUP_SS=2 python3
 make_frames.py walk` draws rougher edges several times faster; build without it before
 keeping the result.
 
 ## How it works
 
-**Two balls.** A chick is mostly head: the head is a wide round ball, and the body under
-it a plump one whose top is hidden behind the head. Everything painted on them is laid out
-in degrees round the ball, as places are on a globe: the cream face, the pink cheeks, the
-eyes, the tummy and the scarf. The ball is turned before it is drawn, so when Pebble looks
-round, nods or spins, what is painted on it slides round and goes out of sight behind the
-edge as it should. The face is wide, so it is painted in narrow upright strips: a patch
-that is partly round the back is cut off at the ball's edge, which only works for a
-narrow one.
+**Two balls.** The head and the body are two balls, each fuller below its middle than a true
+oval: the head wider than it is tall, the body a little taller than it is wide, with its top
+hidden behind the head. Everything painted on them is laid out in degrees
+round the ball, as places are on a globe: the white of the face, the pale crown between the
+eyes, the eyes, the cape and the two white buttons. The ball is turned before it is drawn,
+so when Piplup looks round, nods or spins, what is painted on it slides round and goes out
+of sight behind the edge as it should. The face is tipped a little inside the head, as it is
+in the picture, and we look down slightly on the chest.
 
-**The face.** A dark slate cap comes down to a cream face whose top edge dips a little
-between the eyes. The eyes are big, dark and glossy, with a warmer crescent along the
-bottom, a large shine and a small one. They blink, widen, shut in sleep (curving down),
-smile (`^ ^`) and screw up (`> <`), and the pupils can look about. Below them are two pink
-cheeks, soft and without a line. The beak is a small peach dome cut in two by the mouth;
-open, the lower half swings down on a hinge and shows the mouth and a tongue. On top of the
-head is a tuft of down: three wisps that stand up from the crown and curl over.
+**The face.** The white is three ovals drawn as one shape: one round each eye and one for
+the chin. The eyes are tall ovals that stand upright in the tipped face, dark blue with a
+paler crescent along the bottom, a pupil and a white shine. They blink, widen, shut in sleep
+(curving down), smile (`^ ^`) and screw up (`> <`), and the pupils can look about. The
+beak is a dome on the front of the head, cut in two by the mouth; open, the lower half
+swings down on a hinge and shows the mouth and a tongue.
 
-**The scarf.** A coral knitted scarf goes round the neck, a little lower in front than at
-the back, with a pale stripe round it. One end hangs down the chest on the near side, with
-a fringe.
+**The cape.** The dark blue round its shoulders is one line round the body: two scallops on
+the chest with a notch between them, up over each shoulder, and well down its back.
 
-**Flippers.** Short and slate, each hangs from a shoulder under the scarf and turns with
-the body, so one that points at us looks shorter. They are not posed frame by frame: a clip
-says where they should be, and a spring carries them there, pushed about by how the body
-moves, so they lag behind a hop and flap when it lands.
+**Flippers.** Each hangs from a shoulder high up under the head and turns with the body, so
+one that points at us looks shorter. The near one is drawn larger and lit, with its dark
+back showing along the top of its outer edge; the far one is smaller and in shade. They are
+not posed frame by frame: a clip says where they should be, and a spring carries them
+there, pushed about by how the body moves, so they lag behind a hop and flap when it lands.
 
-**Feet.** A foot is a stubby webbed fan, worked out as a solid thing, slice by slice from
-heel to toe, so it looks right seen from the front, the side or behind, lifted or with its
-toes tipped up. Above each foot the top of the leg is a round lump low on the body.
+**Feet.** A foot is a webbed fan, narrow and thick at the ankle, wide and thin at the toes,
+with two lines running to the front edge between its three toes. It is worked out as a
+solid thing, slice by slice from heel to toe, so it looks right seen from the front, the
+side or behind, lifted or with its toes tipped up. The body's shadow lies across the ankle
+and down the side away from the light. Above each foot the top of the leg is a round lump
+low on the body, and where the nearer one sticks out, the body's own edge runs on a little
+way under it as a fold.
 
-**Lines and light.** Every part has a line round it in a soft dark plum rather than black.
-The light comes from up and to the left: each part is one flat colour with one darker
-shape for its shadow, and a paler one where the light catches it. Everything is drawn
-hard-edged at four times the saved size and averaged down, which is where the smooth edges
-come from.
+**Lines and light.** Every part has a black line round it of the same weight as in the
+picture. The light comes from up and to the left: each part is one flat colour with one
+darker shape for its shadow, and a paler one where the light catches it. Everything is
+drawn hard-edged at four times the saved size and averaged down, which is where the smooth
+edges come from.
+
+**Liberties.** Seen three-quarters on, as it stands, a cartoon cheats: the shoulders and
+feet are turned out a little further than they really are, the tail peeps out from behind,
+the near flipper is larger than the far one and the eyes sit towards the near side of the
+beak. The script takes the same liberties, each one strongest half way between facing us
+and side on and gone when Piplup faces us squarely, so that it looks the same from either
+side.
 
 ## The clips
 
@@ -83,14 +98,13 @@ Clip dances get no motion from the app, so the hops, spins and slides are drawn 
 usual 120 BPM the three dances loop in two seconds and Happy Flap in one.
 
 The app keeps every frame of a clip it is showing unpacked in memory. `make_frames.py`
-prints the total when it finishes: about 290 MB for every clip but the action at once, but
-standing about, Pebble holds only its idle clip, about 50 MB, and each of the others is read
-when it is needed and dropped a minute after it was last shown. The action is never
-unpacked at all: the app reads its frames from the file as it shows them. A frame is held
-for as long as nothing has moved, and each clip is cropped to what it uses. The frames are
-drawn about 430 pixels tall, so Pebble stays sharp up to 300% on the Settings window's size
-list. The walk, the dances and the bow are drawn at 30 frames a second, standing and
-sitting at 20 and the nap at 12. On disk the pack is about 5.5 MB.
+prints the total when it finishes: about 200 MB for every clip but the action at once, but
+standing about, Piplup holds only its idle clip, 32 MB, and each of the others is read when
+it is needed and dropped a minute after it was last shown. The action is never unpacked at
+all: the app reads its frames from the file as it shows them. A frame is held for as long
+as nothing has moved, and each clip is cropped to what it uses. The walk, the dances and the
+bow are drawn at 30 frames a second, standing and sitting at 20 and the nap at 12. On disk
+the pack is under 5 MB.
 
 ## Changing things
 
@@ -120,14 +134,14 @@ Each clip is a short function near the end of `make_frames.py` (`idle`, `walk`, 
 - `squash` (positive is shorter and wider), `lean` (degrees, positive tips right), and `dx`,
   `dy` for the whole mate (negative `dy` is up)
 
-Distances are in units: standing, Pebble is about 320 tall, and y = 0 is the floor. `CLIPS`
+Distances are in units: standing, Piplup is about 300 tall, and y = 0 is the floor. `CLIPS`
 lists each clip's length, how many frames a second to sample it at, and whether it is a
 calm one. A clip that loops must end as it began. To add a dance, write another function
 and add a line to `CLIPS`; a key starting with `dance_` appears under **Dance move**, and
 one starting with `action_` under **Actions**.
 
 If the walk is changed, keep `STRIDE` and `STEP` in step with each other: a foot on the
-floor travels `4 * STRIDE / STEP` units a second, which has to be the 176 or so that the app
+floor travels `4 * STRIDE / STEP` units a second, which has to be the 163 or so that the app
 moves a walking mate (0.55 of its height).
 
 The sizes of the balls, where everything on them is, the flippers, the feet and the colours

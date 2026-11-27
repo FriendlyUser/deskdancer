@@ -856,14 +856,6 @@ public static class SmokeTest
                     Fail("settings did not come back from the file as they were saved");
                 if (kept.Unsaved || !kept.Save() || !kept.Unsaved) Fail("with saving as you go switched off, a change should only be noted as not saved yet");
                 if (!Settings.LoadFrom(Path.Combine(outDir, "no-such-file.json")).AutoSave) Fail("a new copy should save as it goes");
-                // A mate saved as a character that has since been replaced comes back as the one
-                // that replaced it, and a move switched off for it stays off.
-                var older = new Settings { Mates = [new MateSettings { Character = "piplup" }] };
-                older.SetMoveEnabled("piplup/dance_bubbles", false);
-                if (!older.SaveTo(file)) Fail("could not write " + file);
-                var moved = Settings.LoadFrom(file);
-                if (moved.Mates is not [{ Character: "pebble" }] || moved.MoveEnabled("pebble/dance_bubbles"))
-                    Fail("a mate saved as Piplup should come back as Pebble, with the same moves switched off");
 
                 // Reset to defaults puts the tempo and every switch back, and keeps the mates.
                 settings.SetMoveEnabled(Moves.Backflip.Id, false);
