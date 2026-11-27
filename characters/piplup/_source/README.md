@@ -102,7 +102,7 @@ side.
 | `dance.webp` | During all 15 built-in dance moves, which add their own body motion: eyes shut in a smile, beak open in song, flippers flapping to the beat, feet tapping. Also listed as **Happy Flap**. |
 | `dance_bubbles.webp` | **Bubbles**, four beats: a deep breath, chest out; a stream of bubbles from its beak that drift up and away; then they burst one after another and it hops for joy. |
 | `dance_pirouette.webp` | **Pirouette**, four beats: it winds up, spins twice round on one foot with its flippers flung out, and lands with them in the air in a shower of sparkles. |
-| `dance_belly_slide.webp` | **Belly Slide**, four beats: a little jump, down on its belly, and it slides one way and back with its feet kicking in the air, then pushes itself upright. |
+| `dance_belly_slide.webp` | **Belly Slide**, four beats: a hop back for a run-up, turning side on, then a dive over onto its belly, and it slides off head first, head up, flippers swept back and feet fluttering behind, slowing until it is back over the spot it started from. There it pushes itself up, hops for joy and turns to face us. |
 | `action_take_a_bow.webp` | **Take a Bow**, an action, played once through in four seconds: it puffs out its chest, sweeps a flipper across itself and bows low, and straightens up with a hop. |
 | `drag.webp` | Being carried: eyes wide, beak open, flippers beating, feet pedalling, a nervous drop of sweat. |
 | `fall.webp` | Dropping through the air: flippers up, eyes screwed shut, feet trailing. |

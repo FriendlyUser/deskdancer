@@ -1231,6 +1231,18 @@ def swing(t, start, length, past=1.1):
     return 1 + (past + 1) * u ** 3 + past * u ** 2
 
 
+def arc(t, start, length):
+    """0, rising to 1 half way through `length` and back to 0 at its end: one hop."""
+    return math.sin(math.pi * (t - start) / length) if start < t < start + length else 0.0
+
+
+def about_middle(lean):
+    """How far to move the whole mate, right and down, in units, so that leaning it over by so
+    many degrees turns it about the middle of its body instead of about its feet."""
+    centre = np.array([BODY_X, BODY_Y])
+    return centre - turn(lean) @ centre
+
+
 def blink(t, at):
     """The eyes for a blink that starts at `at`: quick to shut, a little slower to open."""
     for until, lids in ((0.05, 0.55), (0.15, "closed"), (0.20, 0.6)):
@@ -1389,26 +1401,37 @@ def pirouette(t):
 
 
 def belly_slide(t):
-    """Four beats. A little jump, down on its belly, and off it slides, one way and back,
-    flippers trailing and feet in the air, as penguins do; then it pushes itself upright."""
-    down = ease(t, 0.22, 0.5) * (1 - ease(t, 1.5, 1.84))  # 0 standing, 1 flat out
-    jump = math.sin(math.pi * min(t / 0.34, 1.0)) + 0.45 * math.sin(math.pi * min(max((t - 1.5) / 0.34, 0.0), 1.0))
-    slide = math.sin(2 * math.pi * min(max((t - 0.5) / 1.0, 0.0), 1.0))
-    going = math.cos(2 * math.pi * min(max((t - 0.5) / 1.0, 0.0), 1.0)) if 0.5 < t < 1.5 else 0.0
-    kick = math.sin(2 * math.pi * 5 * t) * down
-    pose = dict(lean=q(76 * down, 0.5), tilt=q(-62 * down, 0.5), turn=q(-12 * down, 0.5), nod=q(-6 * down, 0.5),
-                bob=(q(-4 * down, 0.25), q(8 * down, 0.25)),
-                eyes=HAPPY if 0.3 < t < 1.7 else OPEN, beak=q(0.6 * down, 0.05),
-                flippers=flap(26 * down + 55 * jump * (1 - down) + 12 * kick, -10 * down + 55 * jump * (1 - down)),
-                sweep=(q(-20 * down, 1), q(-10 * down, 1)),
-                feet=((0.0, 0.0, 0.0, q(25 * down + 22 * kick, 1)), (0.0, 0.0, 0.0, q(25 * down - 22 * kick, 1))),
-                tail=q(12 * kick, 2), squash=q(0.07 * bump(t, 0.46, 0.05, 0.0, 0.14) + 0.07 * bump(t, 1.84, 0.04, 0.0, 0.08), 0.005),
-                dx=q(-140 * down + 30 * slide * down, 0.5))
-    pose["dy"] = q(-max(0.0, lowest({**DEFAULT, **pose, "fx": ()})) - 26 * jump * (1 - down), 0.5)
-    if abs(going) > 0.25:                                 # lines of speed behind it
-        way = 1 if going > 0 else -1
-        x = pose["dx"] + (-60 if way > 0 else 300)        # just clear of its feet, or of its head
-        pose["fx"] = tuple(("dash", q(x - way * (6 + 12 * k), 1), -30.0 - 40 * k, 3.6, q(-way * (18 + 8 * abs(going) - 4 * k), 1)) for k in range(2))
+    """Four beats. It hops back for a run-up, turning side on, and dives: up, over and down on
+    its belly, head up and looking where it is going. Off it slides, flippers swept back and
+    feet fluttering behind, slowing all the way, until it is back over the spot it started
+    from; there it pushes itself up, hops for joy and turns to face us again."""
+    side = ease(t, 0.02, 0.30) * (1 - ease(t, 1.42, 1.70))           # 0 three-quarters on, 1 side on
+    flat = ease(t, 0.38, 0.64) * (1 - ease(t, 1.32, 1.56))           # 0 upright, 1 flat on its belly
+    back, dive, joy = arc(t, 0.06, 0.26), arc(t, 0.36, 0.30), arc(t, 1.50, 0.22)      # its three hops
+    crouch = bump(t, 0.0, 0.06, 0.0, 0.06) + bump(t, 0.30, 0.04, 0.0, 0.08)            # before the first two
+    # Along the floor: the hop back for a run-up, a lunge into the dive, and a slide that slows
+    # all the way and ends where it started, over its shadow.
+    sliding = min(max((t - 0.64) / 0.70, 0.0), 1.0)
+    along = -100 * ease(t, 0.06, 0.32) + 40 * ease(t, 0.36, 0.64) + 60 * (1 - (1 - sliding) ** 2)
+    speed = (1 - sliding) * (0.64 <= t < 1.34)                        # 0..1 of its top speed
+    kick = math.sin(2 * math.pi * 5 * t) * flat
+    lean = 86 * flat                                                   # side on, leaning right over is lying on its front
+    mx, my = about_middle(lean)
+    pose = dict(yaw=q(64 * side, 0.5), twist=q(34 * flat, 0.5), lean=q(lean - 5 * crouch, 0.5),
+                tilt=q(-1.06 * lean, 0.5), turn=q(-48 * flat - 10 * side * (1 - flat), 0.5), bob=(q(-16 * flat, 0.25), 0.0),
+                eyes=HAPPY if 0.10 < t < 1.64 else OPEN, beak=q(0.6 * flat + 0.5 * joy, 0.05),
+                flippers=flap(8 * flat + 20 * crouch + 30 * back + 40 * joy + 6 * kick, 4 * flat + 20 * crouch + 30 * back + 40 * joy - 6 * kick),
+                sweep=(q(-35 * flat + 15 * crouch, 1), q(-35 * flat + 15 * crouch, 1)),
+                feet=tuple((0.0, q(6 * (back + dive + joy), 0.5), 0.0, q(75 * flat + way * 18 * kick, 1)) for way in (1, -1)),
+                tail=q(14 * math.sin(2 * math.pi * 3 * t) * flat, 1),
+                squash=q(0.08 * crouch - 0.07 * bump(t, 0.62, 0.04, 0.0, 0.12) + 0.07 * bump(t, 1.72, 0.03, 0.0, 0.1), 0.005),
+                dx=q(mx + along, 0.5), dy=my)
+    # Down on the floor, whatever part of it is lowest, and lifted from there by the hops.
+    pose["dy"] = q(my - lowest({**DEFAULT, **pose, "fx": ()}) - 22 * back - 30 * dive - 22 * joy, 0.5)
+    if speed > 0.2:                                       # lines of speed behind it
+        p = Piplup(pose)
+        rear = min(float(s[:, 0].min()) for s in [p.body.outline()] + [s for which in (-1, 1) for s in foot(p, which)["shapes"]])
+        pose["fx"] = tuple(("dash", q(rear - 10 - 12 * k, 1), -24.0 - 36 * k, 3.6, q(-(16 + 26 * speed - 6 * k), 1)) for k in range(2))
     return pose
 
 
