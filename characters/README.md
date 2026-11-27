@@ -66,7 +66,7 @@ once through at its own speed, as long as the animation is, with no notes and no
 and then the mate goes back to standing about. It is also done now and then unasked. Start
 and end an action standing as in your idle picture, so the mate goes into it and comes out
 of it without a jump. `domo` has three: `action_bubble_tea`, `action_fart` and
-`action_apple_tree`; `piplup` has one, `action_take_a_bow`.
+`action_apple_tree`; `pebble` has one, `action_take_a_bow`.
 
 An action can take the mate across the screen. Draw the character running on the spot, in
 the middle of the picture, and say in `character.json` how far it has really got at each
@@ -136,11 +136,11 @@ built along a line that bows and curls, so it bends without creasing, with sprin
 it trail and flop. It also shows how to turn a flat character round to its back, and how to
 change its colours from one clip to the next.
 
-`piplup` is drawn by a script after a picture, and is the one to copy if you have one
-drawing of a character and want it to turn round: its head and body are balls, with the
-face and markings placed on them as on a globe, and its measurements were taken from the
-picture. Its walk is also the one to copy for feet that do not slide: a foot on the floor
-goes back exactly as fast as the app moves the mate forward.
+`pebble` is drawn by a script too, and is the one to copy for a round character that
+should turn right round: its head and body are balls, with the face, the tummy and the
+scarf placed on them as on a globe, so they slide out of sight round the back as it turns.
+Its walk is also the one to copy for feet that do not slide: a foot on the floor goes back
+exactly as fast as the app moves the mate forward.
 
 ## character.json (optional)
 
