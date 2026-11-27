@@ -139,8 +139,10 @@ change its colours from one clip to the next.
 `piplup` is drawn by a script after a picture, and is the one to copy if you have one
 drawing of a character and want it to turn round: its head and body are balls, with the
 face and markings placed on them as on a globe, and its measurements were taken from the
-picture. Its walk is also the one to copy for feet that do not slide: a foot on the floor
-goes back exactly as fast as the app moves the mate forward.
+picture. It is also the one to copy for the look of a soft toy lit in 3D without modelling
+anything in 3D: each pixel is lit by which way the part it is on faces there. Its walk is
+the one to copy for feet that do not slide: a foot on the floor goes back exactly as fast
+as the app moves the mate forward.
 
 ## character.json (optional)
 

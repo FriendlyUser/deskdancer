@@ -5,17 +5,21 @@
     python3 make_frames.py --sheet    # also saves sheet.png, every frame on one page
     python3 make_frames.py walk drag  # rebuilds only the clips named
 
-No picture is read here. Piplup is drawn by this script, after one picture of it and in
-that picture's manner, a bold cartoon: thick black lines, flat colours, and one hard-edged
-shadow on each part. The measurements below were taken from the picture, so that Piplup
-standing still, as drawn here, lies on top of it.
+No picture is read here. Piplup is drawn by this script. Its measurements below were
+taken from one picture of it, so that Piplup standing still, as drawn here, lies on top of
+that picture. It is painted the way it looks as a soft toy lit in 3D, after pictures of
+Piplup drawn that way: no line round anything, each part one smooth colour that goes
+darker and cooler where it turns away from the light, a band of pale light along the top
+of the head, and soft shadows where one part lies over another.
 
 The head and the body are two balls. Everything painted on them, the white face, the
 crown between the eyes, the eyes themselves, the cape and the two white buttons, is laid
 out in degrees round the ball, as places are on a globe, and the ball is turned before it
 is drawn. So Piplup can look about, nod, and turn right round on the spot, and what is
 painted on it slides round the ball and goes out of sight behind it as it should. The
-beak, the flippers, the tail and the feet stick out of the balls and turn with them.
+beak, the flippers, the tail and the feet stick out of the balls and turn with them. Each
+pixel of a ball is lit by which way the ball faces there; the flat parts are rounded off
+at their edges like cushions, and lit the same way.
 
 Each clip is a small function of time that returns a pose. The flippers are not posed by
 hand beyond that: a spring carries them, pushed about by how the shoulders move, so they
@@ -82,6 +86,9 @@ EYE = (39.4, 15.2)
 EYE_A, EYE_B = 8.3, 18.5                 # half as wide, half as tall
 EYE_LEAN = 7.6                           # the eyes stand nearly upright in the tipped face, and so does the beak
 EYE_FAR = 0.36                           # how much shorter the eye further from us is drawn
+SHUT_WIDE, SHUT_THIN = 5.0, 3.1          # the dark line an eye makes shut, in units: across its middle, and at its ends
+SMILE = (11.0, 8.5, -4.0, 100.0)         # an eye shut in a smile is an arch: half as wide and as high as it is, where its
+                                         # top is from the middle of the eye, and how far round its legs run, in degrees
 BEAK = (0.0, 26.9)
 BEAK_POINTS = 10.5                       # degrees down from level that it points
 BEAK_W, BEAK_H, BEAK_OUT = 0.226, 0.258, 0.258  # in head radii: half as wide, half as tall, how far it sticks out
@@ -91,6 +98,7 @@ BEAK_GAPE = 38.0                         # degrees the lower half drops when the
 # The body.
 BUTTON = (29.7, -1.3)
 BUTTON_A, BUTTON_B = 13.8, 14.8
+GROOVE = 1.5                             # how wide the groove round each button is, in units
 # The hem of the cape, all the way round: two scallops on the chest with a notch between
 # them, up over each shoulder, and well down its back, above the tail. The notch is
 # at CAPE_NOTCH, and each scallop is CAPE_DROP deep below it and CAPE_LOBE to either side
@@ -113,31 +121,47 @@ FOOT_TOES = 0.42                         # where the lines between its three toe
 FOOT_SEEN = 0.34                         # how much of the top of a foot we see: we look down on them a little
 
 # ---------------------------------------------------------------- colours
+# Piplup is painted as a soft toy looks lit in 3D: no line round anything, each part one
+# smooth colour that goes darker and cooler where it turns away from the light, a band of
+# pale light along the top of the head, and a soft shadow wherever one part lies over
+# another. Each colour is a pair, 0..1: what it is where the light falls full on it, and
+# what it goes where it turns away. They were taken from pictures of Piplup drawn that
+# way, in the cool light of an evening, and lightened a little.
 
-INK = (5, 5, 6)
-HEAD = (64, 129, 184)
-HEAD_DARK = (55, 90, 152)
-HEAD_LIGHT = (134, 176, 208)
-HEAD_SHINE = (198, 219, 235)
-WHITE = (255, 255, 255)
-WHITE_SHADE = (194, 205, 227)
-PALE = (169, 230, 243)                   # the crown, the body and the flippers
-PALE_SHADE = (110, 181, 212)
-PALE_LIGHT = (203, 239, 247)
-YELLOW = (251, 213, 56)
-YELLOW_LIGHT = (251, 229, 124)
-ORANGE = (215, 149, 66)
-EYE_BLUE = (26, 47, 80)
-EYE_GLINT = (41, 74, 133)
-PUPIL = (13, 29, 51)
-MOUTH = (150, 48, 62)
-TONGUE = (240, 128, 140)
-BUBBLE = (120, 196, 240)
-SPARK = (255, 244, 170)
-SPARK_EDGE = (226, 150, 40)
+def rgb(r, g, b):
+    return np.array([r, g, b], np.float32) / 255
 
-LINE = 3.3                               # the black line round each part, in units
-FINE = 2.0
+
+BLUE = (rgb(6, 80, 224), rgb(0, 54, 182))            # the head, the cape, the tail and the backs of the flippers
+WHITE = (rgb(214, 210, 244), rgb(152, 152, 208))     # the face and the buttons, with a little lavender in the white
+PALE = (rgb(120, 178, 236), rgb(82, 130, 206))       # the crown between the eyes
+BODY = (rgb(112, 178, 244), rgb(76, 126, 202))
+FIN = (rgb(128, 192, 250), rgb(86, 140, 214))        # the fronts of the flippers, a little lighter than the body
+ORANGE = (rgb(236, 178, 86), rgb(182, 118, 72))      # the beak and the feet
+UNDER = (rgb(218, 156, 78), rgb(166, 102, 68))       # the lower half of the beak
+RING = (rgb(84, 116, 166), rgb(62, 88, 140))         # the groove round each button
+EYE_DARK = rgb(10, 10, 38)                           # the eyes, and the lines they make shut
+EYE_LOW = rgb(46, 74, 160)                           # the light caught low down in an open eye
+PUPIL = rgb(2, 2, 16)
+SHINE = rgb(255, 255, 255)
+MOUTH = (rgb(128, 40, 66), rgb(92, 26, 54))
+TONGUE = (rgb(238, 122, 148), rgb(188, 86, 122))
+HOLLOW = (0.60, 0.64, 0.80)                          # what is left of the light in a crease, or under something
+SHEEN = (0.58, 0.48, 0.78)                           # the band of pale light along the top, laid over a colour as a screen
+BUBBLE = rgb(156, 214, 252)
+DROP_EDGE = rgb(70, 140, 222)
+SPARK = rgb(252, 204, 18)
+SPARK_LIGHT = rgb(255, 236, 112)
+DASH = rgb(168, 212, 248)
+
+# The light comes from up, to the left and in front. The sheen lies along the top of a
+# part, a little towards the light, from where the surface has turned SHEEN_FROM of the
+# way from facing us to facing up, and it has a sharp edge, SHEEN_SOFT wide.
+LIGHT = tuple(float(v) for v in np.array([-0.45, -0.62, 0.64]) / np.linalg.norm([-0.45, -0.62, 0.64]))
+UP = tuple(float(v) for v in np.array([-0.20, -0.98]) / np.hypot(-0.20, -0.98))
+SHEEN_FROM, SHEEN_SOFT = 0.43, 0.05
+
+ROOM = 12.0                              # room left round each part as it is drawn, in units, for its soft edges and shadows
 
 
 # ---------------------------------------------------------------- shapes
@@ -165,20 +189,6 @@ def squarer(points, above, below):
     t = np.clip((p[:, 1] / r + 0.4) / 0.8, 0.0, 1.0)
     n = above + (below - above) * t * t * (3 - 2 * t)
     return p * ((c ** n + s ** n) ** (-1.0 / n))[:, None]
-
-
-def swell(points, by):
-    """The same shape, `by` larger all the way round, corners and all."""
-    p = np.asarray(points, float)
-
-    def square_to(v):
-        return np.stack([v[:, 1], -v[:, 0]], 1) / np.maximum(np.hypot(v[:, 0], v[:, 1]), 1e-9)[:, None]
-
-    before, after = square_to(p - np.roll(p, 1, 0)), square_to(np.roll(p, -1, 0) - p)
-    out = (before + after) / np.maximum(1 + np.sum(before * after, 1), 0.62)[:, None]      # further out at a corner, up to a point
-    x, y = p[:, 0], p[:, 1]
-    clockwise = np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y) > 0
-    return p + out * (by if clockwise else -by)
 
 
 def hull(points):
@@ -234,6 +244,28 @@ def runs(points, keep, closed=True):
     if len(run) > 1:
         out.append(np.array(run))
     return out
+
+
+def stretches(keep):
+    """Where a row of yeses and noes says yes for two or more in a row, as slices."""
+    out, start = [], None
+    for i, yes in enumerate(list(np.asarray(keep, bool)) + [False]):
+        if yes and start is None:
+            start = i
+        elif not yes and start is not None:
+            if i - start > 1:
+                out.append(slice(start, i))
+            start = None
+    return out
+
+
+def ribbon(points, widths):
+    """A line so wide at each of its points, with round ends, as shapes."""
+    p, w = np.asarray(points, float), np.asarray(widths, float)
+    d = np.gradient(p, axis=0)
+    d /= np.maximum(np.hypot(d[:, 0], d[:, 1]), 1e-9)[:, None]
+    out = np.stack([-d[:, 1], d[:, 0]], 1) * (w / 2)[:, None]
+    return [np.concatenate([p + out, (p - out)[::-1]]), oval(*p[0], w[0] / 2), oval(*p[-1], w[-1] / 2)]
 
 
 # ---------------------------------------------------------------- balls
@@ -319,30 +351,121 @@ def both(a, b):
     return ImageChops.multiply(a, b)
 
 
-def either(a, b):
-    return ImageChops.lighter(a, b)
-
-
 def less(a, b):
     return ImageChops.subtract(a, b)
 
 
-def spread(mask, by):
-    """A stencil grown by so many of its own pixels all the way round: everything within
-    that distance of it. This is the exact line round a part made of several shapes."""
-    r = int(math.ceil(by))
-    yy, xx = np.mgrid[-r:r + 1, -r:r + 1]
-    disc = (xx * xx + yy * yy <= by * by).astype(np.float32)
-    solid = (np.asarray(mask, np.float32) > 127).astype(np.float32)
-    size = (solid.shape[0] + 2 * r, solid.shape[1] + 2 * r)
-    near = np.fft.irfft2(np.fft.rfft2(solid, size) * np.fft.rfft2(disc, size), size)[r:r + solid.shape[0], r:r + solid.shape[1]]
-    return Image.fromarray(((near > 0.5) * 255).astype(np.uint8), "L")
+def amount(mask):
+    """A stencil as amounts from 0 to 1."""
+    return np.asarray(mask, np.float32) * np.float32(1 / 255)
+
+
+def glide(a):
+    """0 below 0, 1 above 1, gliding between, for a whole picture at once."""
+    a = np.clip(a, 0.0, 1.0)
+    return a * a * (3 - 2 * a)
+
+
+def blur(a, by):
+    """A picture of amounts, smoothed over about `by` pixels: three box blurs each way,
+    which is as near a bell curve as makes no difference, with nothing coming in from
+    beyond its edges."""
+    a = np.asarray(a, np.float32)
+    r = int(round((math.sqrt(4 * by * by + 1) - 1) / 2))
+    if r < 1:
+        return a
+    for axis in (0, 1):
+        n = a.shape[axis]
+        pad = [(r + 1, r) if i == axis else (0, 0) for i in range(2)]
+        for _ in range(3):
+            total = np.cumsum(np.pad(a, pad), axis=axis, dtype=np.float64)
+            if axis == 0:
+                a = ((total[2 * r + 1:2 * r + 1 + n] - total[:n]) / (2 * r + 1)).astype(np.float32)
+            else:
+                a = ((total[:, 2 * r + 1:2 * r + 1 + n] - total[:, :n]) / (2 * r + 1)).astype(np.float32)
+    return a
+
+
+def unit(x, y, z):
+    """Directions, each made one long, as one picture of them."""
+    k = 1 / np.sqrt(np.maximum(x * x + y * y + z * z, 1e-12))
+    return np.stack([x * k, y * k, z * k], -1).astype(np.float32)
+
+
+def facing(c, centre, A, square=(2.0, 2.0), box=None):
+    """Which way the surface of a ball faces at each pixel of a sheet, or of a box on it,
+    as directions one long: x to the right, y down and z towards us. The ball is a round
+    one squared off as `squarer` squares an outline, then stretched and turned into the
+    picture by A, and it is as deep as it is wide."""
+    xs, ys = c.grid(box)
+    inv = [[float(v) for v in row] for row in np.linalg.inv(A)]
+    dx, dy = xs - np.float32(centre[0]), ys - np.float32(centre[1])
+    u, v = inv[0][0] * dx + inv[0][1] * dy, inv[1][0] * dx + inv[1][1] * dy
+    r = np.maximum(np.hypot(u, v), np.float32(1e-6))
+    n = square[0] + (square[1] - square[0]) * glide((v / r + 0.4) / 0.8)
+    across = np.maximum(np.abs(u) / r, np.float32(1e-6)) ** n + np.maximum(np.abs(v) / r, np.float32(1e-6)) ** n
+    reach = across ** (-1.0 / n)                          # how far out the outline is, this way from the middle
+    u, v = u / reach, v / reach
+    z = np.sqrt(np.clip(1 - u * u - v * v, 0.0, 1.0))
+    deep = math.sqrt(abs(float(np.linalg.det(A))))
+    return unit(deep * (inv[0][0] * u + inv[1][0] * v), deep * (inv[0][1] * u + inv[1][1] * v), z)
+
+
+def puffed(solid, soft, steep=3.0, tip=0.0):
+    """Which way the surface faces on a flat part rounded off all round its edge like a
+    cushion, over about `soft` pixels: flat in the middle and turning away towards the
+    edge, by about `steep` (how far it goes sideways for each step it comes towards us)
+    at the very edge. `tip` tips the whole of it back by so many degrees, so that its
+    middle faces up more than it faces us."""
+    height = blur(solid, soft)
+    gy, gx = np.gradient(height)
+    k = np.float32(2.5 * steep * soft)
+    x, y, z = -k * gx, -k * gy, np.ones_like(height)
+    if tip:
+        a = math.radians(tip)
+        y, z = y * np.float32(math.cos(a)) - z * np.float32(math.sin(a)), y * np.float32(math.sin(a)) + z * np.float32(math.cos(a))
+    return unit(x, y, z)
+
+
+class Coat:
+    """What a part is painted with, pixel by pixel: the colour each pixel would be in full
+    light, and in shade."""
+
+    def __init__(self, c):
+        w, h = c.img.size
+        self.lit = np.zeros((h, w, 3), np.float32)
+        self.dark = np.zeros((h, w, 3), np.float32)
+
+    def fill(self, mask, colours):
+        where = np.asarray(mask) > 127
+        self.lit[where], self.dark[where] = colours
+
+
+def lit(coat, n, hollow=None, sheen=0.0):
+    """The colours of a part, as the light falls on it. Each pixel goes from its colour in
+    shade to its colour in full light as it turns to the light, and darker still close to
+    the outline, more so on the side away from the light. `hollow`, from 0 to 1, is how far
+    each pixel is shut away from the light by something lying over it, and `sheen` how
+    strongly the band of pale light along the top shows."""
+    x, y, z = n[..., 0], n[..., 1], np.clip(n[..., 2], 0.0, 1.0)
+    towards = x * LIGHT[0] + y * LIGHT[1] + z * LIGHT[2]
+    edge = (1 - z) ** 3
+    t = (0.55 + 0.45 * glide((towards + 0.5) / 1.2)) * (1 - 0.85 * edge * (1 - 0.6 * np.clip(towards, 0.0, 1.0)))
+    out = coat.dark + (coat.lit - coat.dark) * t[..., None]
+    if hollow is not None:
+        out *= 1 - (1 - np.array(HOLLOW, np.float32)) * np.clip(hollow, 0.0, 1.0)[..., None]
+    if sheen:
+        rim = (1 - z) * (0.1 + 0.9 * np.clip(x * UP[0] + y * UP[1], 0.0, 1.0) ** 1.3)
+        s = np.float32(sheen) * glide((rim - SHEEN_FROM) / SHEEN_SOFT)
+        out = 1 - (1 - out) * (1 - np.array(SHEEN, np.float32) * s[..., None])
+    return out
 
 
 class Canvas:
     """A sheet to draw on. Everything is drawn hard-edged at SS times the saved size and
     averaged down at the end, which is where the smooth edges come from. Parts are cut
-    out as stencils first, so that one can be kept inside another."""
+    out as stencils first, so that one can be kept inside another, and coloured pixel by
+    pixel as the light falls on them."""
 
     def __init__(self, corner=(0, 0), size=None):
         self.corner = corner                               # of this sheet on the whole one, in drawn pixels
@@ -363,13 +486,30 @@ class Canvas:
     def px(self, points):
         return [tuple(p) for p in (np.rint((np.asarray(points, float) - (X0, Y0)) * (OUT * SS)).astype(int) - self.corner).tolist()]
 
-    def mask(self, shapes, grow=0.0):
-        """A stencil of these shapes, each one `grow` larger all the way round."""
+    def grid(self, box=None):
+        """Where each pixel of this sheet, or of a box on it, is in units: a row of the x of
+        each column and a column of the y of each row."""
+        k = OUT * SS
+        x0, y0, x1, y1 = box or (0, 0) + self.img.size
+        return ((X0 + (self.corner[0] + np.arange(x0, x1, dtype=np.float32)) / k)[None, :],
+                (Y0 + (self.corner[1] + np.arange(y0, y1, dtype=np.float32)) / k)[:, None])
+
+    def box(self, points, margin):
+        """The pixels of this sheet round some points and a margin, as left, top, right
+        and bottom."""
+        k = OUT * SS
+        lo = np.floor((np.min(points, 0) - margin - (X0, Y0)) * k).astype(int) - self.corner
+        hi = np.ceil((np.max(points, 0) + margin - (X0, Y0)) * k).astype(int) - self.corner
+        lo, hi = np.maximum(lo, 0), np.minimum(hi, self.img.size)
+        return int(lo[0]), int(lo[1]), max(int(hi[0]), int(lo[0]) + 1), max(int(hi[1]), int(lo[1]) + 1)
+
+    def mask(self, shapes):
+        """A stencil of these shapes."""
         m = Image.new("L", self.img.size, 0)
         pen = ImageDraw.Draw(m)
         for s in shapes:
             if len(s) >= 3:
-                pen.polygon(self.px(swell(s, grow) if grow else s), fill=255)
+                pen.polygon(self.px(s), fill=255)
         return m
 
     def strokes(self, lines, width):
@@ -385,15 +525,19 @@ class Canvas:
         return m
 
     def paint(self, mask, colour):
-        self.img.paste(tuple(colour) + (255,), (0, 0), mask)
+        """One colour, 0..1, painted through a stencil."""
+        self.img.paste(tuple(int(round(float(v) * 255)) for v in colour) + (255,), (0, 0), mask)
 
-    def part(self, shapes, colour, line=LINE):
-        """Shapes that belong together, drawn as one: a black line round the lot and none
-        where they overlap. Returns the stencil of the coloured inside."""
-        inside = self.mask(shapes)
-        self.paint(self.mask(shapes, grow=line) if len(shapes) == 1 else spread(inside, line * OUT * SS), INK)
-        self.paint(inside, colour)
-        return inside
+    def lay(self, mask, colours, at=(0, 0)):
+        """A picture of colours, 0..1, painted through a stencil the same size as it, with
+        its top left corner `at` that pixel of this sheet."""
+        rgb = Image.fromarray((np.clip(colours, 0.0, 1.0) * 255 + 0.5).astype(np.uint8), "RGB")
+        self.img.paste(rgb, at, mask if isinstance(mask, Image.Image) else Image.fromarray(np.asarray(mask, np.uint8), "L"))
+
+    def glaze(self, colours, solid):
+        """A picture of colours laid over what is there, each pixel `solid` (0..1) of the way."""
+        layer = np.dstack([np.clip(colours, 0.0, 1.0), np.clip(solid, 0.0, 1.0)])
+        self.img.alpha_composite(Image.fromarray((layer * 255 + 0.5).astype(np.uint8), "RGBA"))
 
     def finish(self):
         """The drawing at its saved size."""
@@ -504,82 +648,79 @@ def beak_points(p):
     return upper, lower, inside, tongue, place
 
 
-def draw_beak(c, p):
+def draw_beak(sheet, p):
+    """The beak: a dome in two halves, rounded off at its edges and lit as the head is.
+    Shut, the line of the mouth is the soft shadow the upper half throws on the lower;
+    open, the inside of the mouth and the tongue show between them, in shadow under the
+    upper half."""
     upper, lower, inside, tongue, place = beak_points(p)
-    c.part([lower], ORANGE)
+    shapes = [upper, lower] + ([inside] if inside is not None else [])
+    c = sheet.window(np.concatenate(shapes), ROOM)
+    k = OUT * SS
+    solid = c.mask(shapes)
+    top = c.mask([upper])
+    coat = Coat(c)
+    coat.fill(solid, UNDER)
     if inside is not None:
-        c.paint(both(c.mask([inside], grow=FINE / 2), c.mask([lower, upper], grow=LINE)), INK)
-        throat = c.mask([inside])
-        c.paint(throat, MOUTH)
-        c.paint(both(c.mask([tongue]), throat), TONGUE)
-    top = c.part([upper], YELLOW)
-    # The light comes from up and to the left whichever way the beak points: orange down
-    # the side away from it, and a paler patch where it catches the dome.
-    lo, hi = upper.min(0), upper.max(0)
-    size = hi - lo
-    c.paint(less(top, c.mask([upper + size * (-0.21, 0.07)])), ORANGE)
-    t = np.linspace(0, 2 * math.pi, 28, endpoint=False)
-    r = 1.0 + 0.16 * np.cos(3 * t + 0.5)                   # a rounded three-cornered patch
-    shine = lo + size * (0.37, 0.47) + np.stack([0.18 * size[0] * r * np.cos(t), 0.27 * size[1] * r * np.sin(t)], 1)
-    c.paint(both(c.mask([shine]), top), YELLOW_LIGHT)
-
-
-def draw_head(sheet, p):
-    h = p.head
-    rim = h.outline()
-    c = sheet.window(rim, 0.5 * HEAD_RX)
-    inside = c.mask([rim])
-    beak_towards_us = h.spin(globe(*BEAK))[2] > 0
-    if not beak_towards_us:
-        draw_beak(c, p)
-    c.paint(c.mask([rim], grow=LINE), INK)
-    c.paint(inside, HEAD)
-    c.paint(less(inside, c.mask([h.outline(1.0, (-5.5, 4.5))])), HEAD_DARK)       # a dark sliver on the far side of the crown
-    c.paint(less(inside, c.mask([h.outline(1.0, (2.3, 0.3))])), HEAD_LIGHT)       # and light down the near side
-    c.paint(both(c.strokes([h.rim(158, 196, 3.0)], 1.0), inside), HEAD_SHINE)
-
-    # The crown: a patch of pale blue from the beak up to three points on the forehead.
-    top = trace(CROWN)
-    edge = trace(list(CROWN) + [(CROWN[-1][0], 48), (CROWN[0][0], 48)], closed=True)
-    pts, z = h.flat(globe(edge[:, 0], edge[:, 1]))
-    if (z > 0).sum() > 3:
-        c.paint(both(c.mask([pts]), inside), PALE)
-        line, z = h.flat(globe(top[:, 0], top[:, 1]))
-        c.paint(both(c.strokes(runs(line, z > 0, closed=False), LINE), inside), INK)
-
-    # The white of the face: an oval round each eye and the chin, as one shape.
-    spots = [(-FACE[0][0], *FACE[0][1:]), FACE[0], FACE[1]]
-    shapes, lines = [], []
-    for i, (lam, phi, a, b) in enumerate(spots):
-        el, ep = spot(lam, phi, a, b, 96)
-        pts, z = h.flat(globe(el, ep))
-        if (z > 0).sum() < 4:
-            continue
-        outside = np.ones(len(el), bool)                # of the other two, so no line is drawn where they join
-        for j, (l2, p2, a2, b2) in enumerate(spots + [(BEAK[0], BEAK[1] + 3.0, 15.0, 20.0)]):      # nor under the beak
-            if j != i:
-                outside &= ((el - l2) / a2) ** 2 + ((ep - p2) / b2) ** 2 > 1.0
-        shapes.append(pts)
-        lines += runs(pts, (z > 0) & outside)
-    if shapes:
-        white = both(c.mask(shapes), inside)
-        c.paint(white, WHITE)
-        shade = less(inside, c.mask([h.outline(0.975, (-13.0, -2.0))]))            # shade round the far side and under the chin
-        if beak_towards_us:                                # and the shadow the beak throws on the face
-            upper, lower, *_ = beak_points(p)
-            throw = h.lin @ np.array([8.0, 11.0])
-            shade = either(shade, c.mask([hull(np.concatenate([upper, lower])) + throw]))
-        c.paint(both(white, shade), WHITE_SHADE)
-        c.paint(both(c.strokes(lines, LINE), inside), INK)
-
-    for side, state in zip((-1, 1), p.pose["eyes"]):
-        draw_eye(c, p, inside, side, state)
-    if beak_towards_us:
-        draw_beak(c, p)
+        throat = less(c.mask([inside]), top)
+        coat.fill(throat, MOUTH)
+        coat.fill(both(c.mask([tongue]), throat), TONGUE)
+    coat.fill(top, ORANGE)
+    upper_half = amount(top)
+    hollow = np.clip(2.2 * blur(upper_half, 1.3 * k), 0.0, 1.0) * (1 - upper_half) * 0.5
+    size = float(np.max(np.ptp(np.concatenate([upper, lower]), axis=0)))      # across the beak at its widest, in units
+    c.lay(solid, lit(coat, puffed(amount(solid), 0.3 * size * k, steep=2.4), hollow, sheen=0.2))
     c.onto(sheet)
 
 
+def draw_head(sheet, p):
+    """The head, lit as a ball: blue, with the pale crown and the white face painted on it
+    where they have been turned to, the beak's soft shadow on the face, and the band of
+    pale light along its top. Then the eyes, and the beak behind the head or in front."""
+    h = p.head
+    rim = h.outline()
+    beak_towards_us = h.spin(globe(*BEAK))[2] > 0
+    if not beak_towards_us:
+        draw_beak(sheet, p)
+    c = sheet.window(rim, ROOM)
+    k = OUT * SS
+    inside = c.mask([rim])
+    coat = Coat(c)
+    coat.fill(inside, BLUE)
+
+    # The crown: a patch of pale blue from the beak up to three points on the forehead.
+    edge = trace(list(CROWN) + [(CROWN[-1][0], 48), (CROWN[0][0], 48)], closed=True)
+    pts, z = h.flat(globe(edge[:, 0], edge[:, 1]))
+    if (z > 0).sum() > 3:
+        coat.fill(both(c.mask([pts]), inside), PALE)
+
+    # The white of the face: an oval round each eye and the chin, as one shape.
+    shapes = []
+    for lam, phi, a, b in [(-FACE[0][0], *FACE[0][1:]), FACE[0], FACE[1]]:
+        pts, z = h.flat(globe(*spot(lam, phi, a, b, 96)))
+        if (z > 0).sum() >= 4:
+            shapes.append(pts)
+    if shapes:
+        coat.fill(both(c.mask(shapes), inside), WHITE)
+
+    hollow = None
+    if beak_towards_us:                                    # the soft shadow the beak throws on the face
+        upper, lower, *_ = beak_points(p)
+        throw = hull(np.concatenate([upper, lower])) + h.lin @ np.array([4.0, 7.0])
+        hollow = 0.55 * blur(amount(c.mask([throw])), 3.5 * k)
+    c.lay(inside, lit(coat, facing(c, h.c, h.A, h.square), hollow, sheen=1.0))
+    for side, state in zip((-1, 1), p.pose["eyes"]):
+        draw_eye(c, p, inside, side, state)
+    c.onto(sheet)
+    if beak_towards_us:
+        draw_beak(sheet, p)
+
+
 def draw_eye(c, p, inside, side, state):
+    """An eye. Open, it is dark and glossy, with the light caught in it low down, a pupil
+    that looks about and a white shine. Shut, it is a dark line, thickest in the middle
+    and thinner to its round ends: an arch when it smiles, a curve down when it sleeps,
+    and > or < when it is screwed up."""
     h = p.head
     lam0, phi0 = side * EYE[0] + p.eyes_at, EYE[1]
     lx, ly = p.pose["look"]
@@ -590,14 +731,27 @@ def draw_eye(c, p, inside, side, state):
         return lam0 + d[..., 0], phi0 + d[..., 1]
 
     if state in ("closed", "happy", "squint"):
-        t = np.linspace(-1, 1, 17)
-        if state == "squint":                             # > or <, pointing at the beak
-            lam, phi = lam0 - side * EYE_A * (1 - 2 * np.abs(t)) * 0.9, phi0 + 2 + EYE_B * 0.5 * t
-        else:                                             # a lid shut in sleep curves down, a smiling one up
-            way = 1 if state == "closed" else -1
-            lam, phi = lam0 + EYE_A * 1.25 * t, phi0 + 3 + EYE_B * 0.36 * way * (0.5 - t * t)
-        pts, z = h.flat(globe(*upright(lam, phi)))
-        c.paint(both(c.strokes(runs(pts, z > 0, closed=False), LINE * 1.1), inside), INK)
+        if state == "happy":                              # an arch, its legs running down at each side
+            a = np.radians(np.linspace(-SMILE[3], SMILE[3], 41))
+            lines = [(lam0 + SMILE[0] * np.sin(a), phi0 + SMILE[2] + SMILE[1] * (1 - np.cos(a)))]
+        elif state == "closed":                           # the lid shut in sleep curves down
+            t = np.linspace(-1, 1, 33)
+            lines = [(lam0 + EYE_A * 1.25 * t, phi0 + 3 + EYE_B * 0.36 * (0.5 - t * t))]
+        else:                                             # two strokes from a point by the beak
+            t = np.linspace(0, 1, 13)
+            lines = [(lam0 - side * EYE_A * 0.9 * (1 - 2 * t), phi0 + 2 + way * EYE_B * 0.5 * t) for way in (-1, 1)]
+        shapes = []
+        for lam, phi in lines:
+            pts, z = h.flat(globe(*upright(lam, phi)))
+            along = np.linspace(0.0, 1.0, len(pts))
+            if state == "squint":
+                wide = SHUT_WIDE + (SHUT_THIN - SHUT_WIDE) * along
+            else:
+                wide = SHUT_THIN + (SHUT_WIDE - SHUT_THIN) * np.sin(math.pi * along) ** 0.7
+            for run in stretches(z > 0):
+                shapes += ribbon(pts[run], wide[run])
+        if shapes:
+            c.paint(both(c.mask(shapes), inside), EYE_DARK)
         return
     a, b = (EYE_A * 1.06, EYE_B * 1.08) if state == "wide" else (EYE_A, EYE_B)
     b *= min(max(1 - EYE_FAR * (0.885 - float(h.spin(globe(lam0, phi0))[2])), 0.8), 1.04)
@@ -608,20 +762,19 @@ def draw_eye(c, p, inside, side, state):
     if (z > 0).sum() < 4:
         return
     eye = both(c.mask([pts]), inside)
-    c.paint(eye, EYE_BLUE)
-    glint, _ = h.flat(globe(lam - 0.22 * a, phi - 0.34 * b))      # a paler crescent along the bottom and the far side
-    c.paint(less(eye, c.mask([glint])), EYE_GLINT)
+    x0, y0, x1, y1 = c.box(pts, 3.0)
+    glint, _ = h.flat(globe(lam - 0.22 * a, phi - 0.34 * b))      # the light caught along the bottom and the far side
+    low = np.clip(1.6 * blur(amount(less(eye, c.mask([glint])))[y0:y1, x0:x1], 1.4 * OUT * SS), 0.0, 1.0)
+    c.lay(eye.crop((x0, y0, x1, y1)), EYE_DARK + (EYE_LOW - EYE_DARK) * low[..., None], (x0, y0))
     small = 0.8 if state == "wide" else 1.0
     pl, pp = upright(*spot(lam0, phi0 + 0.04 * b, 0.40 * a * small, 0.58 * b * small, 32))
     pupil, pz = h.flat(globe(pl + lx, np.maximum(pp + ly, lid)))
-    c.paint(both(c.mask([pupil], grow=FINE * 0.55), eye), INK)
     c.paint(both(c.mask([pupil]), eye), PUPIL)
-    c.paint(both(c.strokes(runs(pts, z > 0), LINE), inside), INK)
     if phi0 - 0.5 * b > lid:                              # the shine
         sl, sp = upright(*spot(lam0 - 0.40 * a, phi0 - 0.50 * b, 0.40 * a, 0.40 * a * 1.05, 24))
         shine, sz = h.flat(globe(sl + 0.4 * lx, np.maximum(sp + 0.4 * ly, lid)))
         if (sz > 0).all():
-            c.paint(both(c.mask([shine]), inside), WHITE)
+            c.paint(both(c.mask([shine]), inside), SHINE)
 
 
 def _hem():
@@ -677,24 +830,31 @@ def thighs(p):
 
 
 def draw_body(sheet, p, shadows=()):
-    """The body, the tops of its legs and its two white buttons, with the shadows thrown
-    on it by whatever lies across it. The cape goes on afterwards, over the tops of the
-    flippers."""
+    """The body, lit as a ball, the tops of its legs and its two white buttons, with the
+    soft shadows thrown on it by whatever lies across it. The cape goes on afterwards,
+    over the tops of the flippers."""
     b = p.body
     rim = b.outline()
     lumps = thighs(p)
-    c = sheet.window(np.concatenate([rim] + [shape for _, shape, _ in lumps]), 3 * LINE)
+    c = sheet.window(np.concatenate([rim] + [shape for _, shape, _ in lumps]), ROOM)
+    k = OUT * SS
+    ball = c.mask([rim])
     inside = c.mask([rim] + [shape for _, shape, _ in lumps])
-    lit = c.mask([b.outline(0.92, (-8.0, -7.1))])         # the light comes from up and to the left
-    c.paint(spread(inside, LINE * OUT * SS) if lumps else c.mask([rim], grow=LINE), INK)
-    c.paint(inside, PALE_SHADE)
-    c.paint(both(inside, lit), PALE)
+    n = facing(c, b.c, b.A, b.square)
+    for middle, shape, nearness in lumps:                 # where a leg sticks out of the body, it is a small ball of its own
+        x0, y0, x1, y1 = c.box(shape, 1.0)
+        out = np.asarray(less(c.mask([shape]), ball))[y0:y1, x0:x1] > 127
+        if out.any():
+            n[y0:y1, x0:x1][out] = facing(c, middle, b.lin * THIGH[0], box=(x0, y0, x1, y1))[out]
+    coat = Coat(c)
+    coat.fill(inside, BODY)
     cape, hem = cape_shape(b)
-    throw = b.lin @ np.array([2.0, 5.0])
-    c.paint(both(c.mask([cape + throw] + [s + b.lin @ np.array([6.5, 2.5]) for s in shadows]), inside), PALE_SHADE)
+    hollow = 0.55 * blur(amount(c.mask([cape + b.lin @ np.array([1.0, 3.0])])), 2.5 * k)      # just under the hem of the cape
+    for s in shadows:                                     # and under the flippers in front of it
+        hollow = np.maximum(hollow, 0.5 * blur(amount(c.mask([s + b.lin @ np.array([5.0, 3.0])])), 3.0 * k))
     for middle, shape, nearness in lumps[-1:]:
         # Where the nearer leg sticks out of the body, the body's own edge runs on a little
-        # way under it, as a fold: from where the two meet above the leg, curling inwards.
+        # way under it, as a soft crease: from where the two meet above the leg, curling in.
         if nearness < 4.0:                                 # seen from the front or the back, neither leg is the nearer
             continue
         angles = np.linspace(0.0, 360.0, 361)
@@ -706,31 +866,31 @@ def draw_body(sheet, p, shadows=()):
         way = 1 if under[(top + 1) % 360] else -1
         t = np.linspace(0.0, 1.0, 10)
         fold = np.concatenate([b.rim(a, a, i, 1) for a, i in zip(angles[top] + way * (-3.0 + 17.0 * t), 5.0 * t ** 1.6)])
-        c.paint(both(c.strokes([fold], LINE * 0.72), inside), INK)
+        hollow = np.maximum(hollow, 0.8 * blur(amount(c.strokes([fold], 1.6)), 0.8 * k))
 
-    for side in (-1, 1):                                  # the two white buttons
+    for side in (-1, 1):                                  # the two white buttons, each in a fine groove
         pts, bz = b.flat(globe(*spot(side * BUTTON[0], BUTTON[1], BUTTON_A, BUTTON_B)))
         if (bz > 0).sum() < 4:
             continue
-        button = both(c.mask([pts]), inside)
-        c.paint(button, WHITE_SHADE)
-        c.paint(both(button, c.mask([b.outline(0.80, (-12.0, -6.0))])), WHITE)
-        c.paint(both(c.strokes(runs(pts, bz > 0), LINE), inside), INK)
+        coat.fill(both(c.mask([pts]), inside), WHITE)
+        coat.fill(both(c.strokes(runs(pts, bz > 0), GROOVE), inside), RING)
+    c.lay(inside, lit(coat, n, hollow))
     c.onto(sheet)
 
 
 def draw_cape(sheet, p):
+    """The cape, lit as the body is, and in the soft shadow of the head just under it."""
     b = p.body
     rim = b.outline()
-    c = sheet.window(rim, 3 * LINE)
+    c = sheet.window(rim, ROOM)
+    k = OUT * SS
     inside = c.mask([rim])
     cape, hem = cape_shape(b)
     cloth = both(c.mask([cape]), inside)
-    c.paint(cloth, HEAD_DARK)
-    lit = both(c.mask([cape - b.lin @ np.array([0.5, 5.0])]), c.mask([b.outline(0.86, tuple(b.lin @ np.array([-34.0, 0.0])))]))    # dark along the hem and on the far side
-    lit = less(lit, c.mask([p.head.outline(1.0, tuple(p.head.lin @ np.array([4.0, 11.0])))]))               # and in the head's shadow
-    c.paint(both(cloth, lit), HEAD)
-    c.paint(both(c.strokes([hem], LINE), inside), INK)
+    coat = Coat(c)
+    coat.fill(cloth, BLUE)
+    shadow = p.head.outline(1.0, tuple(p.head.lin @ np.array([2.0, 6.0])))
+    c.lay(cloth, lit(coat, facing(c, b.c, b.A, b.square), 0.4 * blur(amount(c.mask([shadow])), 4.0 * k)))
     c.onto(sheet)
 
 
@@ -771,30 +931,23 @@ def flipper_shape(p, side):
 
 
 def draw_flipper(sheet, p, f, near):
-    """A flipper. The near one is pale and lit, with its dark back showing along the top
-    of its outer edge; the far one is in shade."""
+    """A flipper, rounded off at its edges: pale in front, with its dark back showing along
+    the top of its outer edge. The far one is in the shade of the body."""
     middle, half, across = f["middle"], f["half"][:, None], f["across"]
     s = (f["s"] - 0.07) / 0.93                             # measured from where the flipper comes out from under the head
-    c = sheet.window(f["shape"], 3 * LINE)
-    inside = c.part([f["shape"]], PALE_LIGHT if near else PALE_SHADE)
-    inner, outer, k = middle - across * half, middle + across * half, f["near"]
-    if near:
-        # Three bands running down it: light, then plain, then shade along the edge next to the body.
-        ramp = lambda a, b: (lambda v: v * v * (3 - 2 * v))(np.clip((s - a) / (b - a), 0, 1))[:, None]
-        plain = 10.0 * k * ramp(0.12, 0.55)
-        shade = 7.5 * k * ramp(0.30, 0.75)
-        c.paint(both(c.mask([np.concatenate([inner - across * 3.0, (inner + across * (plain + shade))[::-1]])]), inside), PALE)
-        c.paint(both(c.mask([np.concatenate([inner - across * 3.0, (inner + across * shade)[::-1]])]), inside), PALE_SHADE)
-    else:
-        c.paint(both(c.strokes([(outer - across * 2.6 * k)[(s > 0.35) & (s < 0.92)]], 1.6 * k), inside), PALE_LIGHT)
+    c = sheet.window(f["shape"], ROOM)
+    k = OUT * SS
+    solid = c.mask([f["shape"]])
+    coat = Coat(c)
+    coat.fill(solid, FIN)
     # Its dark back: a wedge from the shoulder that narrows to nothing half way down the outer edge.
+    outer, near_by = middle + across * half, f["near"]
     top = s <= 0.46
-    edge = (middle + across * np.maximum(half - (12.0 * k * np.clip((0.46 - s) / 0.2, 0.0, 1.0))[:, None], -half))[top]
-    back = both(c.mask([np.concatenate([(outer + across * 3.0)[top], edge[::-1]])]), inside)
-    c.paint(back, HEAD if near else HEAD_DARK)
-    if near:
-        c.paint(both(c.strokes([(outer - across * 3.4 * k)[(s > 0.02) & (s < 0.34)]], 2.2 * k), back), HEAD_LIGHT)
-    c.paint(both(c.strokes([edge], LINE * 0.85), inside), INK)
+    edge = (middle + across * np.maximum(half - (12.0 * near_by * np.clip((0.46 - s) / 0.2, 0.0, 1.0))[:, None], -half))[top]
+    coat.fill(both(c.mask([np.concatenate([(outer + across * 3.0)[top], edge[::-1]])]), solid), BLUE)
+    hollow = None if near else np.full(solid.size[::-1], 0.45, np.float32)
+    n = puffed(amount(solid), 0.28 * FLIPPER_W * near_by * k, steep=2.6)
+    c.lay(solid, lit(coat, n, hollow, sheen=0.8))
     c.onto(sheet)
 
 
@@ -812,12 +965,17 @@ def tail_shapes(p):
 
 
 def draw_tail(sheet, p):
+    """The tail: two blue leaves, rounded off, the long one over the short one and
+    throwing a soft shadow on it."""
     short, long = tail_shapes(p)
-    c = sheet.window(np.concatenate([short, long]), 3 * LINE)
-    inside = c.part([short], HEAD_LIGHT)
-    c.paint(less(inside, c.mask([short + (-2.0, -3.5)])), HEAD)
-    inside = c.part([long], HEAD)
-    c.paint(less(inside, c.mask([long + (2.2, 3.2)])), HEAD_LIGHT)
+    c = sheet.window(np.concatenate([short, long]), ROOM)
+    k = OUT * SS
+    for shape, over in ((short, long), (long, None)):
+        solid = c.mask([shape])
+        coat = Coat(c)
+        coat.fill(solid, BLUE)
+        hollow = None if over is None else 0.5 * blur(amount(c.mask([over + np.array([1.5, 2.5])])), 2.0 * k)
+        c.lay(solid, lit(coat, puffed(amount(solid), 3.2 * k, steep=2.4), hollow, sheen=0.9))
     c.onto(sheet)
 
 
@@ -853,8 +1011,7 @@ def foot(p, side):
     """A foot on the floor: a webbed fan, narrow and thick at the ankle, wide and thin at
     the toes. It is worked out as a solid thing, slice by slice from heel to toe, so it
     looks right from any side and tipped any way. Returns the shapes that make it up,
-    those of them in shadow, those along its lit edge, and the two lines between its
-    three toes."""
+    those of them in shadow, and the two lines between its three toes."""
     along, lifted, more, tipped = p.pose["feet"][0 if side < 0 else 1]
     seated = p.pose["seated"]
     yaw = math.radians(p.body_yaw)
@@ -871,76 +1028,83 @@ def foot(p, side):
         flat = np.stack([x, -lifted - up + towards_us * FOOT_SEEN - FLOOR], -1)
         return flat @ p.feet_whole[:, :2].T + p.feet_whole[:, 2]
 
-    def across(f, lo, hi, floor=True):
+    def across(f, lo, hi):
         """A slice across the foot at `f`, from `lo` to `hi` of the way out to its edges:
         points on its top, and on the floor under them."""
         out = np.linspace(lo, hi, 7)
-        top = place(f, out * foot_wide(f), foot_high(f, out))
-        return np.concatenate([top, place(f, out * foot_wide(f), 0.0)]) if floor else top
+        return np.concatenate([place(f, out * foot_wide(f), foot_high(f, out)), place(f, out * foot_wide(f), 0.0)])
 
-    def solid(lo, hi, start, end, floor=True):
+    def solid(lo, hi, start, end):
         """The foot from `start` to `end` along it, and from `lo` to `hi` across it, which
         may each be a number or change along the foot."""
         at = np.unique(np.concatenate([[start, end], FOOT_AT[(FOOT_AT > start) & (FOOT_AT < end)]]))
-        slices = [across(f, lo(f) if callable(lo) else lo, hi(f) if callable(hi) else hi, floor) for f in at]
+        slices = [across(f, lo(f) if callable(lo) else lo, hi(f) if callable(hi) else hi) for f in at]
         return [hull(np.concatenate([a, b])) for a, b in zip(slices[:-1], slices[1:])]
 
     # The light comes from the left, so the body's shadow lies across the ankle and runs
-    # on down the side of the foot away from the light, and the edge towards it is lit.
-    lee = 1.0 if math.cos(aim) >= 0 else -1.0
+    # on down the side of the foot away from the light.
     edge = lambda f: float(np.clip((f / FOOT_LONG - 0.12) / 0.27 - 1.0, -1.0, 1.0))        # the edge of the shadow, across the foot
-    if lee > 0:
+    if math.cos(aim) >= 0:
         shade = solid(edge, 1.0, -FOOT_HEEL, 0.66 * FOOT_LONG)
-        light = solid(-0.97, -0.78, 0.2 * FOOT_LONG, 0.96 * FOOT_LONG, floor=False)
     else:
         shade = solid(-1.0, lambda f: -edge(f), -FOOT_HEEL, 0.66 * FOOT_LONG)
-        light = solid(0.78, 0.97, 0.2 * FOOT_LONG, 0.96 * FOOT_LONG, floor=False)
     lines = []
     begin = FOOT_LONG * (0.16 + 0.30 * abs(math.sin(aim)))   # seen from the side, only the toes are marked
     for k in (-1, 1):                                     # the lines between the toes run to the front edge, spreading as they go
         f = np.linspace(begin, FOOT_LONG, 16)
         across_it = k * (2.6 + (FOOT_TOES * FOOT_HALF - 2.6) * (f / FOOT_LONG) ** 1.15)
         lines.append(place(f, across_it, foot_high(f, np.clip(np.abs(across_it) / np.maximum(foot_wide(f), 1e-6), 0.0, 1.0))))
-    return dict(shapes=solid(-1.0, 1.0, -FOOT_HEEL, FOOT_LONG), shade=shade, light=light, lines=lines)
+    return dict(shapes=solid(-1.0, 1.0, -FOOT_HEEL, FOOT_LONG), shade=shade, lines=lines)
 
 
 def draw_foot(sheet, p, f):
-    c = sheet.window(np.concatenate(f["shapes"]), 3 * LINE)
-    inside = c.part(f["shapes"], YELLOW)
-    c.paint(both(c.mask(f["light"]), inside), YELLOW_LIGHT)
+    """A foot, rounded off at its edges and with its top facing up into the light, soft
+    creases between its three toes and, standing, the body's soft shadow across the ankle
+    and down the side away from the light."""
+    c = sheet.window(np.concatenate(f["shapes"]), ROOM)
+    k = OUT * SS
+    solid = c.mask(f["shapes"])
+    coat = Coat(c)
+    coat.fill(solid, ORANGE)
+    hollow = 0.6 * blur(amount(c.strokes(f["lines"], 1.2)), 0.6 * k)
     if p.pose["seated"] < 0.5:                             # sat down, the feet are out in the light
-        c.paint(both(c.mask(f["shade"]), inside), ORANGE)
-    c.paint(both(c.strokes(f["lines"], FINE * 1.15), inside), INK)
+        hollow = np.maximum(hollow, 0.5 * blur(amount(c.mask(f["shade"])), 1.8 * k))
+    c.lay(solid, lit(coat, puffed(amount(solid), 2.6 * k, steep=2.2, tip=35.0), hollow))
     c.onto(sheet)
 
 
 def draw_fx(sheet, fx):
+    """Bubbles, sparkles, drops and lines of speed, soft and bright, with no line round them."""
+    k = OUT * SS
     for kind, x, y, size, extra in fx:
         if size <= 0.3:
             continue
         c = sheet.window([(x - abs(extra) - 2.6 * size, y - 2.6 * size), (x + abs(extra) + 2.6 * size, y + 2.6 * size)]
-                         if kind in ("dash", "pop") else [(x - 1.8 * size, y - 1.8 * size), (x + 1.8 * size, y + 1.8 * size)], 2 * LINE)
-        if kind == "bubble":                              # extra: how solid, 0..1
-            ring = oval(x, y, size)
-            c.paint(c.mask([ring], grow=FINE * 0.75), BUBBLE)
-            c.img.paste((214, 242, 255, 135), (0, 0), c.mask([ring]))       # see-through inside
-            c.paint(c.mask([oval(x - size * 0.36, y - size * 0.38, size * 0.26, size * 0.17, -40)]), WHITE)
-            if extra < 1:
-                c.img.putalpha(c.img.getchannel("A").point(lambda v: int(v * extra)))
+                         if kind in ("dash", "pop") else [(x - 1.8 * size, y - 1.8 * size), (x + 1.8 * size, y + 1.8 * size)], ROOM / 2)
+        if kind == "bubble":                              # see-through, more coloured towards its edge; extra: how solid, 0..1
+            xs, ys = c.grid()
+            edge = glide((np.hypot(xs - np.float32(x), ys - np.float32(y)) / np.float32(size) - 0.45) / 0.55)
+            disc = amount(c.mask([oval(x, y, size)]))
+            shine = np.maximum(amount(c.mask([oval(x - size * 0.36, y - size * 0.38, size * 0.26, size * 0.17, -40)])),
+                               0.7 * amount(c.mask([oval(x + size * 0.40, y + size * 0.36, size * 0.09)]))) * disc
+            colours = BUBBLE + (SHINE - BUBBLE) * (0.3 * edge)[..., None]
+            colours = colours + (SHINE - colours) * shine[..., None]
+            c.glaze(colours, np.maximum(disc * (0.2 + 0.6 * edge), shine) * extra)
         elif kind == "pop":                               # a bubble that has just burst: extra is how far the bits have flown
             lines = [np.array([(x + math.cos(a) * (size * 0.9 + extra), y + math.sin(a) * (size * 0.9 + extra)),
                                (x + math.cos(a) * (size * 1.3 + extra), y + math.sin(a) * (size * 1.3 + extra))])
                      for a in np.arange(6) * math.pi / 3 + 0.3]
-            c.paint(c.strokes(lines, FINE * 1.1), BUBBLE)
+            c.paint(c.strokes(lines, 2.2), BUBBLE)
         elif kind == "spark":                             # extra: turned, degrees
-            c.paint(c.mask([star(x, y, size, extra)], grow=FINE * 0.55), SPARK_EDGE)
             c.paint(c.mask([star(x, y, size, extra)]), SPARK)
+            c.paint(c.mask([star(x, y, size * 0.55, extra, thin=0.3)]), SPARK_LIGHT)
         elif kind == "drop":                              # extra: turned, degrees
-            c.paint(c.mask([drop(x, y, size, extra)], grow=FINE * 0.55), (40, 110, 190))
-            c.paint(c.mask([drop(x, y, size, extra)]), BUBBLE)
-            c.paint(c.mask([oval(x - size * 0.3, y - size * 0.1, size * 0.22)]), WHITE)
-        elif kind == "dash":                              # a speed line: extra is its length
-            c.paint(c.strokes([np.array([(x, y), (x + extra, y)])], size), PALE_SHADE)
+            solid = c.mask([drop(x, y, size, extra)])
+            edge = np.clip(2 * (1 - blur(amount(solid), 1.2 * k)), 0.0, 1.0)
+            c.lay(solid, BUBBLE + (DROP_EDGE - BUBBLE) * (0.8 * edge)[..., None])
+            c.paint(c.mask([oval(x - size * 0.3, y - size * 0.1, size * 0.22)]), SHINE)
+        elif kind == "dash":                              # a line of speed: extra is its length
+            c.paint(c.strokes([np.array([(x, y), (x + extra, y)])], size), DASH)
         c.onto(sheet)
 
 
@@ -977,10 +1141,10 @@ def render(pose):
 
 def _measure_floor():
     p = Piplup({})
-    return max(float(shape[:, 1].max()) for side in (-1, 1) for shape in foot(p, side)["shapes"]) + LINE
+    return max(float(shape[:, 1].max()) for side in (-1, 1) for shape in foot(p, side)["shapes"])
 
 
-FLOOR = _measure_floor()                                  # so that the line round the lowest toe stands on y = 0
+FLOOR = _measure_floor()                                  # so that the lowest toe stands on y = 0
 
 
 def beak_tip(pose, beyond=0.10):
@@ -990,11 +1154,11 @@ def beak_tip(pose, beyond=0.10):
 
 
 def lowest(pose):
-    """How far below the floor a pose would reach, in units, line and all."""
+    """How far below the floor a pose would reach, in units."""
     p = Piplup(pose)
     parts = [p.body.outline(), p.head.outline()] + [flipper_shape(p, side)["shape"] for side in (-1, 1)]
     parts += [shape for side in (-1, 1) for shape in foot(p, side)["shapes"]]
-    return max(float(part[:, 1].max()) for part in parts) + LINE
+    return max(float(part[:, 1].max()) for part in parts)
 
 
 # ---------------------------------------------------------------- movement
