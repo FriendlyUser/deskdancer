@@ -61,8 +61,8 @@ right round. Standing, it blinks, glances round at you, shakes a flipper, wags i
 puffs out its chest. It waddles on webbed feet that stay where they are put on the floor,
 sits with its feet out in front, and naps with a bubble at its beak. It has three dances of
 its own: **Bubbles**, when it blows a stream of bubbles and hops as they burst;
-**Pirouette**, twice round on one foot; and **Belly Slide**, down on its front and off
-across the floor. It also has an action, **Take a Bow**. Pick it under **Character**, or
+**Pirouette**, twice round on one foot; and **Belly Slide**, down on its front with a
+splash and off across the floor through the water. It also has an action, **Take a Bow**. Pick it under **Character**, or
 start with `--character piplup`. How it is drawn, and how to change it, is in
 [characters/piplup/_source](characters/piplup/_source/README.md). Piplup is a Pokémon and
 belongs to Nintendo, Creatures and Game Freak, who had no part in this pack.
@@ -332,7 +332,7 @@ image characters are bounced, leaned, spun and flipped as a whole.
 ### Actions
 
 Some characters can do things that are not dances: Domo and Plush Domo can have a bubble
-tea (about 8½ seconds), fart (about 7) and be chased by an apple (about 17), and Piplup can
+tea (about 8½ seconds), fart (about 7) and be chased by an apple (about 23), and Piplup can
 take a bow (4). An action is played once through at its own speed, with no music notes and
 no dance floor under the mate, and then the mate goes back to standing about. Pick one from
 **Actions** in the right-click menu; a mate also does one of its actions now and then on

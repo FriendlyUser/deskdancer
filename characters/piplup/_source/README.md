@@ -67,7 +67,9 @@ solid thing, slice by slice from heel to toe, so it looks right seen from the fr
 side or behind, lifted or with its toes tipped up. The body's shadow lies across the ankle
 and down the side away from the light. Above each foot the top of the leg is a round lump
 low on the body, and where the nearer one sticks out, the body's own edge runs on a little
-way under it as a fold.
+way under it as a fold. Between the two, a short blue leg tapers from that lump down into
+the ankle. Standing still, the body and the foot hide it; it shows when a foot is put out
+further than that, striding or with the body leaning away, and keeps the foot joined on.
 
 **Light.** There are no lines. The light comes from up, to the left and in front. Each
 pixel of a ball is lit by which way the ball faces there, worked out from where the pixel
@@ -102,8 +104,8 @@ side.
 | `dance.webp` | During all 15 built-in dance moves, which add their own body motion: eyes shut in a smile, beak open in song, flippers flapping to the beat, feet tapping. Also listed as **Happy Flap**. |
 | `dance_bubbles.webp` | **Bubbles**, four beats: a deep breath, chest out; a stream of bubbles from its beak that drift up and away; then they burst one after another and it hops for joy. |
 | `dance_pirouette.webp` | **Pirouette**, four beats: it winds up, spins twice round on one foot with its flippers flung out, and lands with them in the air in a shower of sparkles. |
-| `dance_belly_slide.webp` | **Belly Slide**, four beats: a hop back for a run-up, turning side on, then a dive over onto its belly, and it slides off head first, head up, flippers swept back and feet fluttering behind, slowing until it is back over the spot it started from. There it pushes itself up, hops for joy and turns to face us. |
-| `action_take_a_bow.webp` | **Take a Bow**, an action, played once through in four seconds: it puffs out its chest, sweeps a flipper across itself and bows low, and straightens up with a hop. |
+| `dance_belly_slide.webp` | **Belly Slide**, four beats: a hop back for a run-up, turning side on, then a dive over onto its belly with a splash, and it slides off head first through the water, head up, flippers swept back and feet fluttering behind, water piling up and spraying off its chest, slowing until it is back over the spot it started from. There it pushes itself up, dripping, hops for joy with a last splash and turns to face us, and the water dries up. |
+| `action_take_a_bow.webp` | **Take a Bow**, an action, played once through in four seconds: it puffs out its chest, sweeps a flipper across itself and bows low, bending at the hips with its feet planted, and straightens up with a hop. |
 | `drag.webp` | Being carried: eyes wide, beak open, flippers beating, feet pedalling, a nervous drop of sweat. |
 | `fall.webp` | Dropping through the air: flippers up, eyes screwed shut, feet trailing. |
 
@@ -140,11 +142,17 @@ Each clip is a short function near the end of `make_frames.py` (`idle`, `walk`, 
 - `feet`: for each foot, right and then left, how far it is moved along the floor, how high
   it is lifted, how much further it is turned out, and how far its toes are tipped up
 - `hips`: the body moved over its feet, right and down, in units, while the feet stay
-  where they are put; `seated`: 1 to sit it down
+  where they are put (`about_hips(lean)` is how far to move it so that a lean bends it at
+  the hips, over its feet); `seated`: 1 to sit it down
 - `tail`: degrees it is wagged
 - `fx`: bubbles `("bubble", x, y, radius, how solid)`, a bubble bursting `("pop", x, y,
   radius, how far its bits have flown)`, sparkles `("spark", x, y, size, angle)`, a drop
-  `("drop", x, y, size, angle)` and lines of speed `("dash", x, y, width, length)`, in units
+  `("drop", x, y, size, angle)` (or `"far drop"`, on the far side of Piplup and behind it),
+  lines of speed `("dash", x, y, width, length)`, a sheet of water on the floor
+  `("water", x, y, half its width, how much is left)`, a ring spreading across it
+  `("ripple", x, y, how far, how strong)` and water piling up in front of something sliding
+  `("wave", x, y, half its width, how high)`, in units. `flung` makes a drop that flies and
+  falls, and `slide_water` is all the water of the Belly Slide
 - `squash` (positive is shorter and wider), `lean` (degrees, positive tips right), and `dx`,
   `dy` for the whole mate (negative `dy` is up)
 
