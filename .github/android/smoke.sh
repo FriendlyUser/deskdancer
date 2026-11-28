@@ -131,7 +131,8 @@ adb shell am start -W -n $pkg/.MainActivity --es command act --es action action_
 # The tree is up after two seconds, and stays until six.
 sleep 3.5
 shot 4-tree
-# Then he runs off one way and back the other, for seventeen seconds in all, and stands about.
+# Then he runs off one way and back the other, faints and gets up, for twenty-three
+# seconds in all, and stands about.
 wait_until_done action_apple_tree 120
 
 log "still running?"

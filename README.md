@@ -36,7 +36,8 @@ Stomp. He also has three actions, things he does now and then that are not dance
 Tea, where he brings out a cup, shakes it and drinks it through a straw down to the last
 pearl; Fart; and Apple Tree, where an apple tree comes up out of thin air beside him,
 grows one apple and drops it at his feet, and he runs for it, one way across the screen
-and back the other, with the apple rolling after him until it lands in his mouth.
+and back the other, with the apple rolling after him until it lands in his mouth. He
+swallows it, and faints.
 How he is drawn, and how to change him, is in
 [characters/domo/_source](characters/domo/_source/README.md). Domo is NHK's mascot; this
 is a fan drawing, and NHK had no part in it.
@@ -514,8 +515,8 @@ together. Each of its other animations is read the first time the mate needs it,
 dropped again after a minute out of use. A mate that mostly stands about holds little
 more than its idle frames. A long action is not unpacked at all: it is shown once from
 start to finish, so its frames are read from the file one at a time as they are shown,
-and Domo's seventeen seconds of Apple Tree cost a few megabytes where unpacked they would
-be 500. Being read like that, it can also be as long as it likes; a clip that is unpacked
+and Domo's twenty-three seconds of Apple Tree cost a few megabytes where unpacked they would
+be 800. Being read like that, it can also be as long as it likes; a clip that is unpacked
 is cut off at 400 frames.
 
 The GitHub Actions workflow builds for Windows, Linux and both kinds of Mac, and runs

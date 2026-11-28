@@ -330,7 +330,7 @@ class Canvas:
 
 # ---------------------------------------------------------------- the rig
 
-DEFAULT = dict(eyes=("open", "open"),                        # each: "open", "wide", "happy", "closed", or 0..1 for how far shut
+DEFAULT = dict(eyes=("open", "open"),                        # each: "open", "wide", "happy", "closed", ("dizzy", degrees turned), or 0..1 for how far shut
                look=(0.0, 0.0),                              # the face moved right and down, in units
                mouth=1.0,                                    # 0 teeth together, 1 as he usually has it, more is a roar
                arms=(24.0, 24.0), bend=(-14.0, -14.0),       # degrees each arm is lifted from hanging straight down, and curled
@@ -413,8 +413,15 @@ def arm_shapes(side, lift, bend, start):
 
 
 def eye_line(cx, cy, state):
-    """The shape of an eye that is drawn as a line, "closed" or "happy"; None for any other."""
+    """The shape of an eye that is drawn as a line, "closed", "happy" or dizzy; None for any other."""
     r = EYE_R
+    if isinstance(state, tuple):                            # ("dizzy", degrees): a spiral, turned that far
+        hand = 1 if cx >= 0 else -1                         # the left one is the mirror image of the right
+        us = np.linspace(0, 1, 64)
+        a = math.radians(state[1]) + 2 * math.pi * 2.1 * us
+        far = r * (0.10 + 1.12 * us)
+        line = np.stack([cx + hand * far * np.cos(a), cy + far * np.sin(a)], 1)
+        return ribbon(line, 1.5 + 2.3 * np.sqrt(us))
     us = np.linspace(-1, 1, 25)
     if state == "closed":                                   # asleep: a line curving down
         line = [(cx + u * r * 1.1, cy + r * (0.05 + 0.42 * (1 - u * u))) for u in us]
@@ -1155,6 +1162,14 @@ RUN_BACK = TURN + 0.28                     # so he bolts the other way
 BUMP = RUN_BACK + 3.62                     # the apple hits something and is thrown up in the air
 CATCH = BUMP + 0.60                        # and comes down in his mouth
 GULP = CATCH + 0.90                        # which, after a moment, he shuts
+WOOZY = GULP + 0.72                        # it disagrees with him: a hiccup, and his eyes go round and round
+KEEL = WOOZY + 1.46                        # he goes stiff and keels over
+THUD = KEEL + 0.60                         # and hits the floor, and lies there seeing stars
+WAKE = THUD + 1.90                         # he comes round
+RISE = WAKE + 0.56                         # and bounces back up onto his feet
+LANDED = RISE + 0.40
+DONE = LANDED + 1.30                       # shakes his head, and is himself again
+TOTTER = 92.0                              # how far he totters to the right first, so that lying down he is still in the window
 
 RUN_SPEED = 310.0                          # units a second, flat out
 STRIDE = 0.30                              # seconds for two steps, flat out
@@ -1352,10 +1367,12 @@ def apple_tree(t):
     to a stop. He watches it. It rocks, and starts back towards him, so he bolts the way he
     came, and it bounds after him in bigger and bigger hops, until it hits something, sails
     over his shoulder and lands in his open mouth. He skids to a stop with it stuck there,
-    blinks, and swallows it.
+    blinks, and swallows it. It disagrees with him, and he faints (see fainting).
 
     The running is done on the spot. apple_tree_travel says how far he has really gone, and
     the app moves him by that."""
+    if t >= WOOZY:
+        return fainting(t)
     way = -1 if t < RUN_BACK else 1                           # which way he is running: -1 is to the left
     run = abs(his_speed(t)) / RUN_SPEED                       # how fast, from 0 to 1
     pace = run ** 0.6                                         # his legs stay busy as he slows
@@ -1516,6 +1533,176 @@ def apple_tree(t):
     return pose
 
 
+# ---- fainting, at the end of Apple Tree
+
+# What of him can touch the floor: his body, his legs as he stands, and his shoulders,
+# which stand out a little from his sides.
+_SOLID = np.concatenate([BODY] + [move(shift(side * HIP[0], HIP[1]), LEG) for side in (-1, 1)]
+                        + [oval(side * SHOULDER[0], SHOULDER[1], ARM_R) for side in (-1, 1)])
+
+
+def _tipping():
+    """Where he has to be moved to as he tips over to his left, every tenth of a degree from
+    standing to lying on his side, so that he rolls over the edge of his foot and then down
+    onto his side the way something solid does, and does not slide or sink into the floor."""
+    o, out = np.zeros(2), [(0.0, 0.0)]
+    for k in range(900):
+        w = move(shift(*o) @ turn(-k / 10), _SOLID)
+        low = np.flatnonzero(w[:, 1] >= w[:, 1].max() - 1e-6)
+        p = w[low[np.argmin(w[low, 0])]]                     # what he is resting on, the leftmost if there are two
+        o = p + move(turn(-0.1), [o - p])[0]                 # tipped a little further about it
+        o[1] -= move(shift(*o) @ turn(-(k + 1) / 10), _SOLID)[:, 1].max()
+        out.append((float(o[0]), float(o[1])))
+    return np.array(out)
+
+
+_TIPPED = _tipping()
+
+
+def tipped(lean):
+    """dx and dy for a lean either way, up to lying on his side, that put him down on the
+    floor where he has rolled to."""
+    k = min(abs(lean), 90.0) * 10
+    i = min(int(k), 899)
+    x, y = _TIPPED[i] + (_TIPPED[i + 1] - _TIPPED[i]) * (k - i)
+    return (float(x) if lean <= 0 else -float(x)), float(y)
+
+
+def off_floor(pose):
+    """How far below the floor the lowest part of him is, in a pose; 0 if none of him is."""
+    return max(0.0, float(move(whole({**DEFAULT, **pose}), _SOLID)[:, 1].max()))
+
+
+_LIES = (TOTTER + tipped(-90)[0], tipped(-90)[1])         # dx and dy lying on his side
+_HEAD = move(shift(*_LIES) @ turn(-90), [(0.0, -240.0)])[0]   # and where his head is then
+
+
+def fainting(t):
+    """The end of Apple Tree: the apple disagrees with him. He hiccups, his eyes go round
+    and round and he totters two steps to the right, swaying, with his arms hanging. He
+    teeters, goes stiff and keels over to the left like a felled tree, rolling over the
+    edge of his foot, and hits the floor with a bounce and a cloud of dust. He lies there on
+    his side with his mouth hanging open and stars going round over his head, and one foot
+    twitches. Then he comes round: his eyes flutter open, he bounces back up onto his feet
+    where he started, shakes his head, blinks, and is himself again."""
+    s = t - WOOZY
+    dizzy = ("dizzy", round(-500 * s) % 360)
+
+    def mixed(value, towards, by):
+        return value + (towards - value) * by
+
+    # ---- what he is doing, each from 0 to 1
+    hic = bump(t, WOOZY, 0.05, 0.04, 0.14)
+    woozy = ease(t, WOOZY + 0.08, WOOZY + 0.40) * (1 - ease(t, KEEL - 0.26, KEEL - 0.04))
+    step1, step2 = ease(t, WOOZY + 0.44, WOOZY + 0.70), ease(t, WOOZY + 0.86, WOOZY + 1.10)
+    lift1, lift2 = bump(t, WOOZY + 0.40, 0.12, 0.06, 0.12), bump(t, WOOZY + 0.82, 0.12, 0.06, 0.12)
+    stiff = ease(t, KEEL - 0.26, KEEL - 0.04) * (1 - ease(t, THUD - 0.02, THUD + 0.04))     # going stiff, teetering
+    down = ease(t, KEEL, THUD)                                # going over
+    lying = ease(t, THUD - 0.02, THUD + 0.04) * (1 - ease(t, RISE + 0.06, RISE + 0.16))   # arms and all, till he is off the floor
+    out = lying * (1 - ease(t, WAKE, WAKE + 0.30))            # out cold
+    twitch = bump(t, THUD + 1.02, 0.05, 0.03, 0.08) + bump(t, THUD + 1.20, 0.05, 0.03, 0.10)
+    up = ease(t, RISE - 0.04, RISE + 0.06) * (1 - ease(t, LANDED - 0.04, LANDED + 0.08))   # bouncing up
+    flung = ease(t, RISE + 0.06, RISE + 0.16) * (1 - ease(t, LANDED - 0.04, LANDED + 0.08))
+    shaking = bump(t, LANDED + 0.22, 0.06, 0.40, 0.10)        # shakes his head
+    landed = max(0.0, t - LANDED)
+
+    # ---- his eyes
+    if t < WOOZY + 0.10:
+        eyes = WIDE
+    elif t < WAKE:
+        eyes = (dizzy, dizzy)
+    elif t < WAKE + 0.20:
+        eyes = CLOSED
+    elif t < WAKE + 0.36:
+        eyes = (0.55, 0.55)                                  # bleary
+    elif t < RISE:
+        eyes = blink(t, WAKE + 0.36) or OPEN
+    elif t < LANDED + 0.16:
+        eyes = WIDE
+    elif t < LANDED + 0.78:
+        eyes = CLOSED if shaking > 0.3 else OPEN
+    else:
+        eyes = blink(t, LANDED + 0.94) or OPEN
+
+    # ---- his mouth
+    mouth = 1.0 - 0.80 * hic
+    mouth = mixed(mouth, 0.70 + 0.10 * math.sin(2 * math.pi * s / 0.9), woozy)       # "uhh"
+    mouth = mixed(mouth, 0.96, stiff * (1 - out))
+    mouth = mixed(mouth, 1.18, out)                           # hanging open
+    mouth = mixed(mouth, 1.30, up)
+    mouth = mixed(mouth, 0.50 + (0.22 if int(t / 0.05) % 2 else -0.18), shaking)       # brrr
+
+    # ---- where he is looking: his eyes roll, and he looks round as he comes to
+    look = (6 * math.cos(2 * math.pi * s / 0.8) * woozy, (3 * math.sin(2 * math.pi * s / 0.8) - 2) * woozy)
+    look = (look[0] + 9 * math.sin(2 * math.pi * (t - LANDED - 0.22) / 0.20) * shaking, look[1])
+
+    # ---- his body: how far over he is, and where that puts him
+    sway = (7.0 * math.sin(2 * math.pi * (s - 0.30) / 1.0) + 7 * (lift1 + lift2)) * woozy
+    lean = mixed(sway, 4.0, stiff)                            # teetering, he tips a little to the right
+    lean = mixed(lean, 4.0 - 94.0 * ((t - KEEL) / (THUD - KEEL)) ** 2.4 if KEEL <= t < THUD else -90.0, down)
+    bounce = abs(math.sin(2 * math.pi * 2.3 * (t - THUD))) * math.exp(-6.0 * (t - THUD)) if t >= THUD else 0.0
+    lean += 8 * bounce * (1 - up)
+    rising = ease(t, RISE, LANDED)
+    if t >= RISE:                                             # springs back up, a little too far, and settles
+        lean = -90 * (1 - spring(t - RISE, 1.5, 8.0)) + 2.5 * math.sin(2 * math.pi * (t - LANDED - 0.22) / 0.20) * shaking
+    ox, oy = tipped(lean)
+    dx = TOTTER * (0.55 * step1 + 0.45 * step2) + ox
+    dy = oy
+    if t >= RISE:                                             # from where he lay to where he started, with a hop
+        dx = mixed(_LIES[0], 0.0, rising)
+        dy = mixed(_LIES[1], 0.0, rising) - 70 * arc(t, RISE, LANDED - RISE)
+    squash = (-0.05 * hic - 0.012 * woozy * math.cos(2 * math.pi * s / 0.5)
+              - 0.03 * stiff * (1 - down)
+              - (0.03 * math.exp(-(t - THUD) * 11) if t >= THUD else 0.0) * (1 - up)
+              - 0.05 * flung + (0.11 * math.exp(-landed * 9) * math.cos(landed * 16) if t >= LANDED else 0.0))
+    dy -= 7 * arc(t, WOOZY, 0.14)                             # the hiccup
+
+    # ---- his arms and legs
+    arms, bend = (24.0, 24.0), (-14.0, -14.0)
+
+    def to(lift, curl, by):
+        nonlocal arms, bend
+        arms = tuple(mixed(a, b, by) for a, b in zip(arms, lift))
+        bend = tuple(mixed(a, b, by) for a, b in zip(bend, curl))
+
+    to((12, 12), (-2, -2), woozy)                             # hanging
+    to((-6, -6), (-10, -10), stiff)                           # stiff, pressed to his sides
+    to((-10, 40), (-20, -30), lying)                          # flopped: one under him, the one on top over his side
+    to((128, 128), (30, 30), flung)                           # flung up as he bounces
+    to((34, 34), (-24, -24), shaking)
+
+    legs = [[-4 * lift2, 15 * lift2], [6 * lift1, 17 * lift1]]          # tottering
+    legs[1] = [legs[1][0] + 10 * twitch, legs[1][1] + 6 * twitch]       # the foot on top
+    legs = [[a + 6 * up, b + 16 * up] for a, b in legs]                 # tucked up as he bounces
+
+    pose = dict(eyes=eyes, look=(round(look[0], 1), round(look[1], 1)), mouth=round(mouth, 2),
+                lean=round(lean, 2), dx=round(dx, 1), squash=round(squash, 4),
+                arms=(round(arms[0], 1), round(arms[1], 1)), bend=(round(bend[0], 1), round(bend[1], 1)),
+                loose=(round(1 - ease(t, KEEL + 0.20, THUD - 0.06) * (1 - ease(t, RISE + 0.06, RISE + 0.16)), 3), 1.0),   # the one he lands on stays put
+                legs=tuple((round(a, 1), round(b, 1)) for a, b in legs), fx=faint_fx(t))
+    pose["dy"] = round(dy - off_floor({**pose, "dy": dy}), 1)
+    return pose
+
+
+def faint_fx(t):
+    """The stars he sees while he is out cold, and the dust he raises going down and getting up."""
+    fx = []
+    on = ease(t, THUD + 0.10, THUD + 0.30) * (1 - ease(t, WAKE - 0.04, WAKE + 0.06))
+    if on > 0.05:
+        for k in range(3):                                    # going round over his head
+            a = 2 * math.pi * (1.1 * (t - THUD) + k / 3)
+            fx.append(("spark", round(_HEAD[0] + 24 + 58 * math.cos(a), 1), round(-236 + 12 * math.sin(a), 1),
+                       round((11 + 3 * math.sin(a)) * on, 1), round(90 * (t - THUD) + 30 * k, 1), 1.0))
+    fx += twinkle(t, WAKE - 0.04, _HEAD[0] + 24, -236, 14, 0.30)                     # and gone
+    x = _LIES[0]
+    for at, px, small, big, drift in ((THUD, x - 250, 9, 22, -30), (THUD + 0.02, x - 140, 10, 24, 0),
+                                      (THUD + 0.04, x - 30, 8, 20, 30)):            # he hits the floor
+        fx += puff(t, at, px, -8, small, big, 0.44, (drift, -4))
+    fx += puff(t, RISE + 0.02, x - 120, -7, 8, 18, 0.36, (0, -3))                  # bounces up
+    fx += puff(t, LANDED, 0, -6, 9, 20, 0.36, (0, -2))                              # and lands
+    return tuple(fx)
+
+
 CLIPS = {
     # key: file, name in the Dance move or Actions menu, the clip, its length, frames a second, calm
     "idle": ("idle.webp", None, idle, 10.0, 20, True),
@@ -1528,7 +1715,7 @@ CLIPS = {
     # Actions: played once through, off the beat, so they begin and end standing at rest.
     "action_bubble_tea": ("action_bubble_tea.webp", "Bubble Tea", bubble_tea, 8.6, 12.5, True),
     "action_fart": ("action_fart.webp", "Fart", fart, 7.32, 50 / 3, True),
-    "action_apple_tree": ("action_apple_tree.webp", "Apple Tree", apple_tree, 16.8, 25, True),
+    "action_apple_tree": ("action_apple_tree.webp", "Apple Tree", apple_tree, DONE, 25, True),
     "drag": ("drag.webp", None, carried, 0.40, 25, False),
     "fall": ("fall.webp", None, falling, 0.24, 25, False),
 }
@@ -1536,7 +1723,7 @@ CLIPS = {
 # Clips that need a bigger canvas than the rest, as its left, top, right and bottom. The
 # app's window for a mate reaches a height either side of his feet and 1.8 heights above
 # them (300 and 540 units), and nothing that goes further than that will be seen.
-ROOM = {"action_apple_tree": (-240, -530, 300, 20)}
+ROOM = {"action_apple_tree": (-300, -530, 300, 20)}
 
 # Clips to save with other settings than the rest of a pack, where the pack is not saved
 # exactly: a long clip of a big picture is a lot of megabytes otherwise.
