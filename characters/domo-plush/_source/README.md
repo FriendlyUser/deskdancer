@@ -58,7 +58,7 @@ the cup.
 under its top edge. The teeth are thick cream felt, a little rounded, with their own
 shadow on the red. Each eye is a glossy bead sunk into the pile: black, with a soft
 shine, a spark, and the room reflected low down. Shut or smiling, an eye is a line of
-dark stitching.
+dark stitching, and dizzy, a spiral of it.
 
 **The cup and the cloud.** The cup is clear plastic, so what is behind it shows through
 above the tea; it is round, so it is darker towards its sides, with a gleam down it. The
@@ -81,9 +81,9 @@ The app keeps the idle clip unpacked in memory the whole time, and each other cl
 the actions while it is being shown and for a minute afterwards. `make_frames.py` prints
 the total for those when it finishes (about 97 MB, of which idle is 28). The actions are
 read a frame at a time as they are shown, and take next to nothing. On disk the pack is
-about 13 MB, more than half of it Apple Tree: fleece is all fine detail, which does not pack down
+about 15 MB, more than half of it Apple Tree: fleece is all fine detail, which does not pack down
 without loss, so these clips are saved the way a photo is, where Domo's flat colour is
-saved exactly. Apple Tree, 406 frames of a big picture, is saved a little more roughly
+saved exactly. Apple Tree, 553 frames of a big picture, is saved a little more roughly
 than the rest (`SAVE` in Domo's script), which does not show in fleece.
 
 ## Changing things

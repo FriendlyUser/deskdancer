@@ -39,9 +39,10 @@ stuck out towards you, so what shows is the sole of each foot, and his hands res
 them.
 
 **The face.** The eyes are beads with a shine along the top. A blink flattens them;
-asleep and happy they are a curved line. The mouth is set by one number, how far open it
-is. The teeth grow from the lips and stop short of the middle, so when the mouth shuts
-the two rows meet point to point and still show.
+asleep and happy they are a curved line, and dizzy they are spirals that go round. The
+mouth is set by one number, how far open it is. The teeth grow from the lips and stop
+short of the middle, so when the mouth shuts the two rows meet point to point and still
+show.
 
 **The arms.** Each arm is a tube that can lift and curl, with a round hand. A clip does
 not pose the arms frame by frame. It says where they should be, and a spring carries them
@@ -88,7 +89,7 @@ A change to a clip here changes both, once each pack has been rebuilt.
 | `dance_chomp.webp`, `dance_stomp.webp` | Their own entries under **Dance move**, **Chomp** and **Monster Stomp**. Clip dances get no motion from the app, so the hops and stomps are drawn in. Each loops in one second, which is two beats at the usual 120 BPM. |
 | `action_bubble_tea.webp` | **Bubble Tea** under **Actions**. He brings out a cup and gives it a shake, takes three long pulls at the straw, lowers it with a happy sigh and sways, then goes back for four more until the tea is all but gone. He peers in at the one pearl left at the bottom, shakes the cup, gives up with a glum sigh and puts it away. 8.6 seconds. |
 | `action_fart.webp` | **Fart** under **Actions**. He glances one way and the other, strains, and nothing comes. He looks round behind him, puzzled, tries again harder and lets one go with a hop, looks relieved, wafts the cloud away for a good while, and then looks off into the distance as if nothing had happened. 7.3 seconds. |
-| `action_apple_tree.webp` | **Apple Tree** under **Actions**. Twinkles gather out of thin air, a shoot pops out of the ground beside him, and all at once it is an apple tree with its leaves bursting out over his head. He ducks and gawps at it. One apple buds on it, small and green, swells and turns red while he watches; he reaches for it; it swings, hangs still and drops in front of him. He jumps out of his skin and stands there with his teeth chattering, the tree vanishes, which is too much, and he bolts with the apple rolling after him. He looks back and it is far behind, relaxes, looks back again and it is at his heels, and jumps: it bowls on underneath him and stops. He watches it. It starts back towards him, so he bolts the way he came, and it bounds after him in bigger and bigger hops until it hits something, sails over and lands in his open mouth. He skids to a stop with it between his teeth, blinks and swallows it. 16.8 seconds, 25 frames a second. |
+| `action_apple_tree.webp` | **Apple Tree** under **Actions**. Twinkles gather out of thin air, a shoot pops out of the ground beside him, and all at once it is an apple tree with its leaves bursting out over his head. He ducks and gawps at it. One apple buds on it, small and green, swells and turns red while he watches; he reaches for it; it swings, hangs still and drops in front of him. He jumps out of his skin and stands there with his teeth chattering, the tree vanishes, which is too much, and he bolts with the apple rolling after him. He looks back and it is far behind, relaxes, looks back again and it is at his heels, and jumps: it bowls on underneath him and stops. He watches it. It starts back towards him, so he bolts the way he came, and it bounds after him in bigger and bigger hops until it hits something, sails over and lands in his open mouth. He skids to a stop with it between his teeth, blinks and swallows it. It disagrees with him: he hiccups, his eyes go round and round, and he totters two steps, sways, goes stiff and keels over like a felled tree. He hits the floor with a bounce and a puff of dust and lies on his side with his mouth hanging open and stars going round over his head, one foot twitching. Then he comes round, bounces back up onto his feet, shakes his head and blinks. 23 seconds, 25 frames a second. |
 | `drag.webp` | Being carried. |
 | `fall.webp` | Dropping through the air. |
 
@@ -112,6 +113,13 @@ from before he sets off: anything standing on the ground would have to be drawn 
 out of the picture, 25 times a second, while the app moves him 60 times a second, and
 would judder. The apple does not, because it is never far from keeping pace with him.
 
+**Fainting.** Lying on his side he is as long as he was tall, which reaches further from
+his feet than the app's window does. So before he keels over he totters `TOTTER` units
+to the right in the picture (not in `travel`, as he is standing on the spot), and when
+he gets up he bounces back to where he started. He tips over the edge of his foot and
+then his side, and lies on them, the way something solid would: `tipped` says where he
+has to be for that at each angle, and `off_floor` keeps every bit of him above the floor.
+
 Frames are not free. The app keeps the idle clip unpacked in memory the whole time, and
 each other clip but the actions while it is being shown and for a minute afterwards.
 `make_frames.py` prints the total for those when it finishes: about 96 MB, of which idle
@@ -119,18 +127,19 @@ is 28. Two things keep it down: each clip is cropped to what it uses, and a fram
 for as long as nothing has visibly moved, so standing still costs one frame, not hundreds.
 The actions are not counted, because the app does not unpack them. It reads a long clip
 that is played once through a frame at a time as it is shown, which is what lets Apple
-Tree be 406 big frames; unpacked, they would be 500 MB, and the app cuts a clip it unpacks
-off at 400 frames. On disk the pack is about 5 MB, 3.5 of them Apple Tree: flat colour
+Tree be 553 big frames; unpacked, they would be 800 MB, and the app cuts a clip it unpacks
+off at 400 frames. On disk the pack is about 6 MB, 4 of them Apple Tree: flat colour
 packs down well without any loss.
 
 ## Changing things
 
 Each clip is a short function near the end of `make_frames.py` (`idle`, `walk`,
 `sitting`, `asleep`, `happy_arms`, `chomp`, `stomp`, `bubble_tea`, `fart`, `apple_tree`,
-`carried`, `falling`). It is given the time in seconds and returns a pose. A pose can set:
+`carried`, `falling`; the end of Apple Tree, from when the apple disagrees with him, is
+`fainting`). It is given the time in seconds and returns a pose. A pose can set:
 
-- `eyes`: a pair, each `"open"`, `"wide"`, `"happy"`, `"closed"`, or a number from 0 to 1
-  for how far shut
+- `eyes`: a pair, each `"open"`, `"wide"`, `"happy"`, `"closed"`, `("dizzy", degrees)` for
+  a spiral turned that far, or a number from 0 to 1 for how far shut
 - `look`: how far the face is moved right and down, for a glance
 - `mouth`: 0 is teeth together, 1 is how he usually has it, and up to about 1.35 is a roar
 - `arms`: degrees each arm is lifted from hanging straight down (90 is straight out to
@@ -177,5 +186,6 @@ The arms' springiness is set by `ARM_HZ`, `ARM_DAMPING`, `ARM_PUSH` and `ARM_CUR
 above the clips. His proportions and colours are the constants at the top: `BODY`,
 `SHOULDER`, `LEG`, `EYES`, `MOUTH`, `FUR` and the rest, with the cup's, the cloud's, the
 tree's (`TRUNK`, `BOUGHS`, `CLUMPS`, `FRUIT` and so on) and the apple's after them. When
-things happen in Apple Tree is the list of times above `apple_tree`, and how fast he and
-the apple go is `his_speed` and `apple_speed`. `OUT` sets how large the frames are saved.
+things happen in Apple Tree, the faint included, is the list of times above `apple_tree`,
+and how fast he and the apple go is `his_speed` and `apple_speed`. `OUT` sets how large
+the frames are saved.
