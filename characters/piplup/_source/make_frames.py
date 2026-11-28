@@ -28,6 +28,7 @@ lag behind a hop and flap when Piplup lands.
 Needs numpy and pillow. This folder starts with "_", so the app does not load anything
 from it.
 """
+import functools
 import json
 import math
 import os
@@ -113,6 +114,7 @@ TAIL = (180.0, -3.5)
 HIP, HIP_BACK = 43.1, 25.4               # the feet: either side of the middle, and behind it
 THIGH = (11.5, 39.5, 1.0)                # the top of a leg, a round lump low on the body over each foot: how big it is,
                                          # how far above the floor, and how far out from the hip
+LEG = (9.0, 6.5)                         # the leg below it, down to the ankle: how thick it is at the top and at the bottom
 SPLAY = 42.8                             # how far each foot turns out
 FOOT_LONG, FOOT_HEEL, FOOT_HALF = 44.5, 5.8, 14.4     # a foot: heel to toe, half across the heel, and half across the toes
 FOOT_FAN = 0.61                          # how far along it is at its widest: from there on, its front is round
@@ -153,6 +155,7 @@ DROP_EDGE = rgb(70, 140, 222)
 SPARK = rgb(252, 204, 18)
 SPARK_LIGHT = rgb(255, 236, 112)
 DASH = rgb(168, 212, 248)
+WATER = rgb(120, 190, 246)                           # a sheet of water on the floor, seen through
 
 # The light comes from up, to the left and in front. The sheen lies along the top of a
 # part, a little towards the light, from where the surface has turned SHEEN_FROM of the
@@ -821,12 +824,18 @@ def thighs(p):
         return []
     yaw, b, lumps = math.radians(p.body_yaw), p.body, []
     for side in (-1, 1):
-        lifted = p.pose["feet"][0 if side < 0 else 1][1]
-        along = side * (HIP + THIGH[2]) * math.cos(yaw) - HIP_BACK * math.sin(yaw)
-        middle = b.c + b.lin @ np.array([along - p.pose["hips"][0], -THIGH[1] - BODY_Y - p.pose["hips"][1] - 0.35 * lifted])
+        middle = thigh_at(p, side)
         nearness = -side * HIP * math.sin(yaw)              # how far towards us this hip is
         lumps.append((middle, CIRCLE[::2] * THIGH[0] @ b.lin.T + middle, nearness))
     return sorted(lumps, key=lambda lump: lump[2])         # the nearer one last
+
+
+def thigh_at(p, side):
+    """The middle of the top of a leg, on the body: right (1) or left (-1)."""
+    yaw, b = math.radians(p.body_yaw), p.body
+    lifted = p.pose["feet"][0 if side < 0 else 1][1]
+    along = side * (HIP + THIGH[2]) * math.cos(yaw) - HIP_BACK * math.sin(yaw)
+    return b.c + b.lin @ np.array([along - p.pose["hips"][0], -THIGH[1] - BODY_Y - p.pose["hips"][1] - 0.35 * lifted])
 
 
 def draw_body(sheet, p, shadows=()):
@@ -1054,7 +1063,32 @@ def foot(p, side):
         f = np.linspace(begin, FOOT_LONG, 16)
         across_it = k * (2.6 + (FOOT_TOES * FOOT_HALF - 2.6) * (f / FOOT_LONG) ** 1.15)
         lines.append(place(f, across_it, foot_high(f, np.clip(np.abs(across_it) / np.maximum(foot_wide(f), 1e-6), 0.0, 1.0))))
-    return dict(shapes=solid(-1.0, 1.0, -FOOT_HEEL, FOOT_LONG), shade=shade, lines=lines)
+    return dict(shapes=solid(-1.0, 1.0, -FOOT_HEEL, FOOT_LONG), shade=shade, lines=lines, side=side,
+                ankle=place(0.0, 0.0, foot_high(0.0) - 0.5 * LEG[1]))
+
+
+def leg_shape(p, f):
+    """The leg from the round lump at its top, on the body, down into the ankle of a foot:
+    short and tapering. Standing still it is hidden by the body and the foot; it shows when
+    the foot is put out further than that, or the body leans away from it, and keeps the
+    two joined."""
+    top = CIRCLE[::2] * LEG[0] @ p.body.lin.T + thigh_at(p, f["side"])
+    bottom = CIRCLE[::2] * LEG[1] @ p.feet_whole[:, :2].T + f["ankle"]
+    return hull(np.concatenate([top, bottom]))
+
+
+def draw_leg(sheet, p, f):
+    """A leg, blue like the body, rounded off at its edges, and in the body's shadow where
+    it goes in under it."""
+    shape = leg_shape(p, f)
+    c = sheet.window(shape, ROOM)
+    k = OUT * SS
+    solid = c.mask([shape])
+    coat = Coat(c)
+    coat.fill(solid, BODY)
+    hollow = 0.5 * blur(amount(c.mask([p.body.outline(1.0, tuple(p.body.lin @ np.array([0.0, 4.0])))])), 3.0 * k)
+    c.lay(solid, lit(coat, puffed(amount(solid), 0.5 * LEG[0] * k, steep=2.4), hollow))
+    c.onto(sheet)
 
 
 def draw_foot(sheet, p, f):
@@ -1073,11 +1107,55 @@ def draw_foot(sheet, p, f):
     c.onto(sheet)
 
 
+# A sheet of water lying on the floor, as we see it: we look down on the floor a little, so
+# it is far wider than it is deep. Its half depth is so much of its half width, and at least so many units.
+PUDDLE_DEEP, PUDDLE_LEAST = 0.11, 7.0
+
+
+def puddle_outline(x, y, half, deep=None, n=72):
+    """The edge of a sheet of water on the floor, round its middle (x, y): long and low, with
+    a gently wavy edge, so that it looks poured and not drawn with a compass."""
+    deep = deep or max(PUDDLE_LEAST, PUDDLE_DEEP * half)
+    a = np.linspace(0, 2 * math.pi, n, endpoint=False)
+    wave = 1 + 0.10 * np.sin(3 * a + 0.7) + 0.06 * np.sin(5 * a + 2.1)
+    return np.stack([x + half * np.cos(a) * (1 + 0.04 * np.sin(4 * a)), y + deep * np.sin(a) * wave], 1)
+
+
 def draw_fx(sheet, fx):
-    """Bubbles, sparkles, drops and lines of speed, soft and bright, with no line round them."""
+    """Bubbles, sparkles, drops, water and lines of speed, soft and bright, with no line round them."""
     k = OUT * SS
     for kind, x, y, size, extra in fx:
         if size <= 0.3:
+            continue
+        if kind == "water":                              # a sheet of water: size is half its width, extra how much of it is left
+            c = sheet.window(puddle_outline(x, y, size), ROOM / 2)
+            solid = c.mask([puddle_outline(x, y, size)])
+            body = amount(solid)
+            rim = np.clip(2.5 * (1 - blur(body, 2.0 * k)), 0.0, 1.0) * body      # deeper in colour round its edge
+            deep = max(PUDDLE_LEAST, PUDDLE_DEEP * size)
+            gloss = amount(c.mask([oval(x - 0.18 * size, y - 0.35 * deep, 0.42 * size, 0.16 * deep),
+                                   oval(x + 0.42 * size, y - 0.30 * deep, 0.16 * size, 0.12 * deep)])) * body
+            colours = np.broadcast_to(WATER, body.shape + (3,)) + (DROP_EDGE - WATER) * (0.7 * rim)[..., None]
+            colours = colours + (SHINE - colours) * (0.85 * gloss)[..., None]
+            c.glaze(colours, np.maximum(body * (0.5 + 0.4 * rim), 0.9 * gloss) * extra)
+            c.onto(sheet)
+            continue
+        if kind == "wave":                               # water piling up in front of it as it slides: size is how wide, extra how high
+            a = np.linspace(math.pi, 2 * math.pi, 40)
+            top = np.stack([x + size * np.cos(a), y + extra * np.sin(a) * (1 + 0.25 * np.sin(3 * a))], 1)
+            shape = np.concatenate([top, [(x + size, y + 3.0), (x - size, y + 3.0)]])
+            c = sheet.window(shape, ROOM / 2)
+            body = amount(c.mask([shape]))
+            foam = amount(c.strokes([top[4:-4] + (0.0, 0.8)], 2.2)) * body
+            colours = np.broadcast_to(WATER, body.shape + (3,)) + (SHINE - WATER) * (0.9 * foam)[..., None]
+            c.glaze(colours, np.maximum(0.62 * body, 0.9 * foam))
+            c.onto(sheet)
+            continue
+        if kind == "ripple":                             # a ring spreading across the water: size is how far, extra how strong
+            ring = puddle_outline(x, y, size, max(2.0, PUDDLE_DEEP * 1.6 * size))
+            c = sheet.window(ring, ROOM / 2)
+            c.glaze(np.broadcast_to(SHINE, c.img.size[::-1] + (3,)), amount(c.strokes([np.concatenate([ring, ring[:1]])], 1.4)) * extra)
+            c.onto(sheet)
             continue
         c = sheet.window([(x - abs(extra) - 2.6 * size, y - 2.6 * size), (x + abs(extra) + 2.6 * size, y + 2.6 * size)]
                          if kind in ("dash", "pop") else [(x - 1.8 * size, y - 1.8 * size), (x + 1.8 * size, y + 1.8 * size)], ROOM / 2)
@@ -1098,7 +1176,7 @@ def draw_fx(sheet, fx):
         elif kind == "spark":                             # extra: turned, degrees
             c.paint(c.mask([star(x, y, size, extra)]), SPARK)
             c.paint(c.mask([star(x, y, size * 0.55, extra, thin=0.3)]), SPARK_LIGHT)
-        elif kind == "drop":                              # extra: turned, degrees
+        elif kind in ("drop", "far drop"):                # extra: turned, degrees. A far drop is on the far side of Piplup
             solid = c.mask([drop(x, y, size, extra)])
             edge = np.clip(2 * (1 - blur(amount(solid), 1.2 * k)), 0.0, 1.0)
             c.lay(solid, BUBBLE + (DROP_EDGE - BUBBLE) * (0.8 * edge)[..., None])
@@ -1108,11 +1186,14 @@ def draw_fx(sheet, fx):
         c.onto(sheet)
 
 
+BEHIND = ("water", "ripple", "dash", "far drop")    # what is drawn behind Piplup
+
+
 def render(pose):
     """The pose, drawn, from the back of the picture to the front."""
     p = Piplup(pose)
     c = Canvas()
-    draw_fx(c, [f for f in p.pose["fx"] if f[0] == "dash"])
+    draw_fx(c, [f for f in p.pose["fx"] if f[0] in BEHIND])       # behind everything
     tail_behind = p.body.spin(globe(p.tail_at, TAIL[1]), limb=True)[2] < 0.25
     flippers = sorted((flipper_shape(p, side) for side in (-1, 1)), key=lambda f: f["depth"])
     behind, before = [f for f in flippers if f["depth"] < 0.08], [f for f in flippers if f["depth"] >= 0.08]
@@ -1124,6 +1205,7 @@ def render(pose):
         draw_flipper(c, p, f, near=False)
     if not seated:
         for f in feet:
+            draw_leg(c, p, f)
             draw_foot(c, p, f)
     draw_body(c, p, shadows=[f["shape"] for f in before])
     if not tail_behind:
@@ -1135,7 +1217,7 @@ def render(pose):
         draw_flipper(c, p, f, near=True)
     draw_cape(c, p)
     draw_head(c, p)
-    draw_fx(c, [f for f in p.pose["fx"] if f[0] != "dash"])
+    draw_fx(c, [f for f in p.pose["fx"] if f[0] not in BEHIND])
     return c.finish()
 
 
@@ -1241,6 +1323,15 @@ def about_middle(lean):
     many degrees turns it about the middle of its body instead of about its feet."""
     centre = np.array([BODY_X, BODY_Y])
     return centre - turn(lean) @ centre
+
+
+def about_hips(lean):
+    """How far to move the body over its feet, right and down, in units (as `hips`), so
+    that leaning it over by so many degrees bends it at the hips, which stay over its feet,
+    instead of tipping it over about the floor. For a lean small enough that the feet stay
+    flat on the floor."""
+    hips = np.array([BODY_X, -THIGH[1]])
+    return turn(-lean) @ hips - hips
 
 
 def blink(t, at):
@@ -1402,9 +1493,123 @@ def pirouette(t):
 
 def belly_slide(t):
     """Four beats. It hops back for a run-up, turning side on, and dives: up, over and down on
-    its belly, head up and looking where it is going. Off it slides, flippers swept back and
-    feet fluttering behind, slowing all the way, until it is back over the spot it started
-    from; there it pushes itself up, hops for joy and turns to face us again."""
+    its belly, head up and looking where it is going, with a splash. Off it slides through
+    the water, flippers swept back and feet fluttering behind, throwing up spray and slowing
+    all the way, until it is back over the spot it started from; there it pushes itself up,
+    dripping, hops for joy with a last splash and turns to face us again, and the water it
+    slid through dries up."""
+    pose = _belly_pose(t)
+    fx = []
+    speed = (1 - min(max((t - 0.64) / 0.70, 0.0), 1.0)) * (0.64 <= t < 1.34)      # 0..1 of its top speed
+    if speed > 0.2:                                       # lines of speed behind it
+        p = Piplup(pose)
+        rear = min(float(s[:, 0].min()) for s in [p.body.outline()] + [s for which in (-1, 1) for s in foot(p, which)["shapes"]])
+        fx += [("dash", q(rear - 10 - 12 * k, 1), -24.0 - 36 * k, 3.6, q(-(16 + 26 * speed - 6 * k), 1)) for k in range(2)]
+    pose["fx"] = tuple(fx) + slide_water(t)
+    return pose
+
+
+SPLASH = 0.635                            # when its belly hits the floor in the Belly Slide
+GRAVITY = 1500.0                          # how fast a drop of water picks up speed as it falls, units a second every second
+
+
+@functools.lru_cache(maxsize=None)
+def _belly_floor(t):
+    """Where Piplup's belly is on the floor in the Belly Slide at a time: how far back and
+    how far forward it touches (None if it does not), and its lowest point."""
+    p = Piplup(_belly_pose(t))
+    rim = np.concatenate([p.body.outline(), p.head.outline()])
+    low = rim[int(np.argmax(rim[:, 1]))]
+    touching = rim[rim[:, 1] > -8.0]
+    span = (float(touching[:, 0].min()), float(touching[:, 0].max())) if len(touching) else None
+    return span, (float(low[0]), float(low[1]))
+
+
+def jitter(i, seed):
+    """A number from 0 to 1 that looks random but is always the same for the same i and seed."""
+    return math.sin(12.9898 * i + 78.233 * seed) * 43758.5453 % 1.0
+
+
+def flung(t, born, x, y, vx, vy, size, far=False, towards=0.0):
+    """A drop of water thrown from (x, y) at a speed (units a second) at time `born`, as fx:
+    it flies, falls and is gone when it reaches the floor. Pointed the way it came from. A
+    far one is on the far side of Piplup and goes behind it; `towards` is how fast it comes
+    towards us, which, as we look down on the floor a little, takes it lower in the picture
+    and lets it come down on the floor in front."""
+    dt = t - born
+    if dt < 0:
+        return []
+    fx, fy = x + vx * dt, y + vy * dt + 0.5 * GRAVITY * dt * dt
+    floor = FOOT_SEEN * towards * dt                      # where the floor under it is in the picture
+    if fy + floor > floor - 1.0 or dt > 1.2:
+        return []
+    angle = math.degrees(math.atan2(-vx, vy + GRAVITY * dt))
+    return [("far drop" if far else "drop", q(fx, 0.5), q(fy + floor, 0.5), q(size * (1 - 0.25 * min(dt / 0.4, 1.0)), 0.25), q(angle, 5))]
+
+
+def slide_water(t):
+    """The water of the Belly Slide, as fx: a splash as its belly hits the floor and a sheet
+    of water spreading out under it, which it slides along, throwing spray up from its
+    chest while it is going fast; ripples; drips off its belly when it gets up, and a little
+    splash where its feet come down from its hop for joy. The water then dries up, so that
+    the dance begins again on a dry floor."""
+    if t < SPLASH - 0.01:
+        return ()
+    (rear0, front0), _ = _belly_floor(SPLASH + 0.01)
+    centre0 = 0.5 * (rear0 + front0)
+    fx = []
+    # The sheet of water: it splashes out round where its belly lands, and runs on ahead of
+    # it as far as it slides.
+    left = ease(t, SPLASH - 0.01, SPLASH + 0.05) * (1 - ease(t, 1.60, 1.95))
+    if left > 0.02:
+        spread = swing(t, SPLASH, 0.16)
+        front = max(_belly_floor(q(min(max(t, SPLASH + 0.01), 1.34), 0.01))[0][1], front0)
+        back = rear0 - 16 * spread
+        ahead = front + 14 * spread
+        half = 0.5 * (ahead - back) * (1 - 0.12 * ease(t, 1.60, 1.95))
+        fx.append(("water", q(0.5 * (back + ahead), 0.5), 3.0, q(half, 0.5), q(left, 0.02)))
+    # Ripples: where its belly lands, and where its feet come down from the hop for joy.
+    for born, x, near, far, long in ((SPLASH, centre0, 16, 52, 0.55), (SPLASH + 0.14, centre0, 10, 40, 0.5), (1.72, 6.0, 10, 40, 0.26)):
+        u = (t - born) / long
+        if 0 <= u < 1 and left > 0.02:
+            fx.append(("ripple", q(x, 0.5), 3.0, q(near + (far - near) * (1 - (1 - u) ** 2), 0.5), q(0.75 * (1 - u) * left, 0.02)))
+    # The splash as it lands. On the far side the water under it goes up high, in a crown
+    # that rises over its back; on the near side a few drops fly out low towards us, off
+    # both ends of it, and come down on the floor in front.
+    for i in range(11):
+        a, b, c, d = jitter(i, 1), jitter(i, 2), jitter(i, 7), jitter(i, 8)
+        x = rear0 + (front0 - rear0) * (i + 0.5 * a) / 11
+        fx += flung(t, SPLASH + 0.04 * d, x, -4.0, -160 + 400 * i / 10 + 60 * (b - 0.5), -(560 + 220 * c), 3.5 + 3.5 * a, far=True)
+    for i, (x, vx) in enumerate(((rear0 - 6, -150.0), (rear0 + 4, -90.0), (front0 + 4, 120.0), (front0 + 10, 190.0), (front0 - 4, 60.0))):
+        a, b = jitter(i, 9), jitter(i, 10)
+        fx += flung(t, SPLASH + 0.03 * a, x, -3.0, vx * (0.8 + 0.4 * b), -(180 + 120 * a), 3.0 + 2.0 * b, towards=260.0)
+    # Spray off its chest while it goes fast, a drop every few hundredths of a second, and
+    # the water piling up in front of it.
+    speed = (1 - min(max((t - 0.64) / 0.70, 0.0), 1.0)) * (SPLASH + 0.02 <= t < 1.34)
+    if speed > 0.08:
+        fx.append(("wave", q(_belly_floor(q(t, 0.01))[0][1] + 6.0, 0.5), 2.0, q(14 + 10 * speed, 0.5), q(5 + 15 * speed, 0.5)))
+    for i, born in enumerate(np.arange(0.68, 1.28, 0.035)):
+        going = 1 - min(max((born - 0.64) / 0.70, 0.0), 1.0)
+        if going < 0.15 or born > t:
+            continue
+        x = _belly_floor(q(float(born), 0.005))[0][1] + 8.0
+        a, b = jitter(i, 3), jitter(i, 4)
+        fx += flung(t, float(born), x, -4.0, 200 + 300 * going + 80 * a, -(60 + 110 * going) * (0.7 + 0.6 * b), 2.5 + 3.0 * going,
+                    towards=120.0 * (b - 0.3))           # skimming on ahead of it, under its head
+    # Drips off its belly as it gets up and hops.
+    for born, along in ((1.55, -18.0), (1.585, 14.0), (1.62, -2.0)):
+        if t >= born:
+            x, y = _belly_floor(born)[1]
+            fx += flung(t, born, x + along, y - 2.0, 0.0, 0.0, 3.2)
+    # A little splash where its feet come down from the hop, down again before the dance
+    # comes round to its start.
+    for i, (x, vx) in enumerate(((-44.0, -110.0), (-30.0, -50.0), (-16.0, -90.0), (40.0, 60.0), (54.0, 120.0), (66.0, 80.0))):
+        fx += flung(t, 1.72, x, -2.0, vx, -(120 + 60 * jitter(i, 5)), 2.4 + 1.2 * jitter(i, 6))
+    return tuple(fx)
+
+
+def _belly_pose(t):
+    """The Belly Slide's pose at a time, but for its water and its lines of speed."""
     side = ease(t, 0.02, 0.30) * (1 - ease(t, 1.42, 1.70))           # 0 three-quarters on, 1 side on
     flat = ease(t, 0.38, 0.64) * (1 - ease(t, 1.32, 1.56))           # 0 upright, 1 flat on its belly
     back, dive, joy = arc(t, 0.06, 0.26), arc(t, 0.36, 0.30), arc(t, 1.50, 0.22)      # its three hops
@@ -1413,7 +1618,6 @@ def belly_slide(t):
     # all the way and ends where it started, over its shadow.
     sliding = min(max((t - 0.64) / 0.70, 0.0), 1.0)
     along = -100 * ease(t, 0.06, 0.32) + 40 * ease(t, 0.36, 0.64) + 60 * (1 - (1 - sliding) ** 2)
-    speed = (1 - sliding) * (0.64 <= t < 1.34)                        # 0..1 of its top speed
     kick = math.sin(2 * math.pi * 5 * t) * flat
     lean = 86 * flat                                                   # side on, leaning right over is lying on its front
     mx, my = about_middle(lean)
@@ -1428,10 +1632,6 @@ def belly_slide(t):
                 dx=q(mx + along, 0.5), dy=my)
     # Down on the floor, whatever part of it is lowest, and lifted from there by the hops.
     pose["dy"] = q(my - lowest({**DEFAULT, **pose, "fx": ()}) - 22 * back - 30 * dive - 22 * joy, 0.5)
-    if speed > 0.2:                                       # lines of speed behind it
-        p = Piplup(pose)
-        rear = min(float(s[:, 0].min()) for s in [p.body.outline()] + [s for which in (-1, 1) for s in foot(p, which)["shapes"]])
-        pose["fx"] = tuple(("dash", q(rear - 10 - 12 * k, 1), -24.0 - 36 * k, 3.6, q(-(16 + 26 * speed - 6 * k), 1)) for k in range(2))
     return pose
 
 
@@ -1484,8 +1684,10 @@ def take_a_bow(t):
     bow = ease(t, 1.5, 1.95) * (1 - swing(t, 2.7, 0.5))
     hop = math.sin(math.pi * min(max((t - 3.0) / 0.32, 0.0), 1.0))
     eyes = blink(t, 3.5) or (HAPPY if proud > 0.3 else (CLOSED if bow > 0.3 else OPEN))
+    lean = q(-3 * proud + 15 * bow, 0.25)
+    hx, hy = about_hips(lean)                             # it bends at the hips, over its feet
     return dict(eyes=eyes, puff=q(proud, 0.05), nod=q(-13 * proud + 34 * bow - 5 * hop, 0.5), turn=q(-10 * bow, 0.5),
-                lean=q(-3 * proud + 15 * bow, 0.25), bob=(q(6 * bow, 0.5), q(10 * bow, 0.5)),
+                lean=lean, hips=(q(hx, 0.25), q(hy, 0.25)), bob=(q(6 * bow, 0.5), q(10 * bow, 0.5)),
                 flippers=flap(14 * proud + 26 * bow + 80 * hop, 14 * proud + 40 * bow + 80 * hop),
                 sweep=(q(55 * bow, 1), q(-45 * bow, 1)), beak=q(0.4 * bump(t, 0.6, 0.1, 0.3, 0.15) + 0.6 * hop, 0.05),
                 dy=q(-14 * hop, 0.5), squash=q(0.05 * bump(t, 3.30, 0.03, 0.0, 0.1), 0.005), tail=q(10 * math.sin(2 * math.pi * 5 * t) * hop, 1),
